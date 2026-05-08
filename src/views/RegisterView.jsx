@@ -46,32 +46,40 @@ export default function RegisterView() {
   }
 
   return (
-    <div className="min-h-[100dvh] flex items-center justify-center bg-slate-50 p-4 relative overflow-hidden">
+    <div className="min-h-[100dvh] flex items-center justify-center bg-background p-4 relative overflow-hidden">
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
-          backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(148,163,184,0.35) 0.5px, transparent 0)',
+          backgroundImage: 'radial-gradient(circle at 1px 1px, var(--color-outline-variant) 0.5px, transparent 0)',
           backgroundSize: '40px 40px',
-          opacity: 0.2,
+          opacity: 0.15,
         }}
       />
 
-      <div className="w-full max-w-md relative z-10">
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 space-y-8">
-          <div className="text-center h-28 overflow-hidden flex items-center justify-center">
-            <img src={myLogo} alt="Logo" className="w-full h-full object-contain scale-[1.6]" />
+      <div className="w-full max-w-md relative z-10 animate-fade-in-up">
+        <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/60 shadow-whisper-lg p-8 space-y-7">
+          <div className="flex flex-col items-center gap-3 pt-2 pb-1">
+            <img src={myLogo} alt="Logo" className="w-16 h-16 object-contain" />
+            <div className="text-center space-y-1">
+              <h1 className="text-2xl font-bold text-charcoal-ink tracking-tight">
+                Create account
+              </h1>
+              <p className="text-sm text-muted-steel">
+                Set up your tenant and start managing your store.
+              </p>
+            </div>
           </div>
 
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-2.5 rounded-lg flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />
+            <div className="animate-scale-in bg-error-container/20 border border-error/20 text-error text-body-sm px-4 py-2.5 rounded-xl flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-error animate-pulse-soft flex-shrink-0" />
               {error}
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-1.5">
-              <label htmlFor="reg-full-name" className="text-xs text-slate-500 block uppercase tracking-wider">
+              <label htmlFor="reg-full-name" className="text-label-sm text-muted-steel block uppercase tracking-wider">
                 Full Name
               </label>
               <input
@@ -80,14 +88,14 @@ export default function RegisterView() {
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 placeholder="Enter your full name"
-                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all duration-200"
+                className="w-full px-4 py-2.5 rounded-xl border border-outline-variant/60 bg-surface-container-lowest text-sm text-charcoal-ink placeholder:text-outline focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all duration-200"
                 autoComplete="name"
                 autoFocus
               />
             </div>
 
             <div className="space-y-1.5">
-              <label htmlFor="reg-company-name" className="text-xs text-slate-500 block uppercase tracking-wider">
+              <label htmlFor="reg-company-name" className="text-label-sm text-muted-steel block uppercase tracking-wider">
                 Company Name
               </label>
               <input
@@ -96,13 +104,13 @@ export default function RegisterView() {
                 value={companyName}
                 onChange={(e) => setCompanyName(e.target.value)}
                 placeholder="Enter your company name"
-                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all duration-200"
+                className="w-full px-4 py-2.5 rounded-xl border border-outline-variant/60 bg-surface-container-lowest text-sm text-charcoal-ink placeholder:text-outline focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all duration-200"
                 autoComplete="organization"
               />
             </div>
 
             <div className="space-y-1.5">
-              <label htmlFor="reg-username" className="text-xs text-slate-500 block uppercase tracking-wider">
+              <label htmlFor="reg-username" className="text-label-sm text-muted-steel block uppercase tracking-wider">
                 Email / Username
               </label>
               <input
@@ -111,13 +119,13 @@ export default function RegisterView() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="Enter your email or username"
-                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all duration-200"
+                className="w-full px-4 py-2.5 rounded-xl border border-outline-variant/60 bg-surface-container-lowest text-sm text-charcoal-ink placeholder:text-outline focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all duration-200"
                 autoComplete="username"
               />
             </div>
 
             <div className="space-y-1.5">
-              <label htmlFor="reg-password" className="text-xs text-slate-500 block uppercase tracking-wider">
+              <label htmlFor="reg-password" className="text-label-sm text-muted-steel block uppercase tracking-wider">
                 Password
               </label>
               <div className="relative">
@@ -127,13 +135,13 @@ export default function RegisterView() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Create a password"
-                  className="w-full px-4 py-2.5 pr-11 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all duration-200"
+                  className="w-full px-4 py-2.5 pr-11 rounded-xl border border-outline-variant/60 bg-surface-container-lowest text-sm text-charcoal-ink placeholder:text-outline focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all duration-200"
                   autoComplete="new-password"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-indigo-600 transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-steel hover:text-accent transition-colors cursor-pointer"
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
@@ -141,7 +149,7 @@ export default function RegisterView() {
             </div>
 
             <div className="space-y-1.5">
-              <label htmlFor="reg-confirm" className="text-xs text-slate-500 block uppercase tracking-wider">
+              <label htmlFor="reg-confirm" className="text-label-sm text-muted-steel block uppercase tracking-wider">
                 Confirm Password
               </label>
               <input
@@ -150,7 +158,7 @@ export default function RegisterView() {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Confirm your password"
-                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all duration-200"
+                className="w-full px-4 py-2.5 rounded-xl border border-outline-variant/60 bg-surface-container-lowest text-sm text-charcoal-ink placeholder:text-outline focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all duration-200"
                 autoComplete="new-password"
               />
             </div>
@@ -158,7 +166,7 @@ export default function RegisterView() {
             <button
               type="submit"
               disabled={loading || !fullName || !companyName || !username || !password || !confirmPassword}
-              className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 rounded-lg transition-all duration-200 shadow-sm focus:ring-2 focus:ring-offset-2 focus:ring-indigo-300 focus:outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+              className="w-full flex items-center justify-center gap-2 bg-accent hover:bg-accent-hover text-on-primary font-medium py-2.5 rounded-xl transition-all duration-200 shadow-sm focus:ring-2 focus:ring-offset-2 focus:ring-accent/40 focus:outline-none disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer btn-tactile mt-1"
             >
               {loading ? (
                 <>
@@ -174,19 +182,29 @@ export default function RegisterView() {
             </button>
           </form>
 
-          <div className="text-center">
-            <p className="text-sm text-slate-500">
+          <div className="pt-4 border-t border-outline-variant/30 text-center">
+            <p className="text-sm text-muted-steel">
               Already have an account?{' '}
-              <Link to="/login" className="text-indigo-600 font-medium hover:underline">
+              <Link to="/login" className="text-accent font-semibold hover:underline transition-all">
                 Log in
               </Link>
             </p>
           </div>
         </div>
 
-        <p className="text-center text-xs text-slate-400 mt-6">
-          Doctor-M Dental Store • ERP System
-        </p>
+        <div className="mt-6 flex flex-col items-center gap-3">
+          <p className="text-body-sm text-muted-steel/50">Multi-Tenant ERP System</p>
+          <a
+            href="https://amir-elrifai.vercel.app/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 group"
+          >
+            <span className="text-[11px] text-muted-steel/40 group-hover:text-muted-steel/70 transition-colors">Built by</span>
+            <img src={myLogo} alt="Amir El-Rifai" className="h-5 w-5 object-contain opacity-40 group-hover:opacity-80 transition-opacity" />
+            <span className="text-[11px] font-semibold text-muted-steel/50 group-hover:text-accent transition-colors tracking-wide">Amir El-Rifai</span>
+          </a>
+        </div>
       </div>
     </div>
   );

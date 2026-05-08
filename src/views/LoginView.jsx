@@ -27,7 +27,9 @@ export default function LoginView() {
         try {
           const profile = await api.getMe();
           localStorage.setItem('erp_user', JSON.stringify(profile));
-        } catch (_) {}
+        } catch (_) {
+          void 0;
+        }
         navigate('/dashboard');
       } else {
         setError('Invalid credentials. Please try again.');
