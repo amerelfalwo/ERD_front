@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Loader2, ArrowRight } from 'lucide-react';
 import api from '../services/api';
 import myLogo from '../assets/my.png';
@@ -130,6 +130,15 @@ export default function LoginView() {
               )}
             </button>
           </form>
+
+          <div className="pt-4 border-t border-outline-variant/30 text-center">
+            <p className="text-sm text-muted-steel">
+              Don't have an account?{' '}
+              <Link to="/register" className="text-accent font-semibold hover:underline transition-all">
+                Create Account
+              </Link>
+            </p>
+          </div>
         </div>
 
         <div className="mt-6 flex flex-col items-center gap-3">
