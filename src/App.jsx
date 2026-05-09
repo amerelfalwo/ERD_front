@@ -27,13 +27,19 @@ function PrivateRoute({ children }) {
   return children;
 }
 
+function PublicRoute({ children }) {
+  const token = localStorage.getItem('access_token');
+  if (token) return <Navigate to="/dashboard" replace />;
+  return children;
+}
+
 export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/login" element={<LoginView />} />
-          <Route path="/register" element={<RegisterView />} />
+          <Route path="/login" element={<PublicRoute><LoginView /></PublicRoute>} />
+          <Route path="/register" element={<PublicRoute><RegisterView /></PublicRoute>} />
           <Route element={<PrivateRoute><Layout /></PrivateRoute>}>
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<Suspense fallback={<RouteSpinner />}><DashboardView /></Suspense>} />

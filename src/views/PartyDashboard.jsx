@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, DollarSign, CreditCard, AlertCircle,
-  Package, Printer, X, Loader2, Edit, Trash2, Undo2, TrendingUp, Download
+  Package, Printer, X, Loader2, Edit, Trash2, Undo2, TrendingUp, Download, Plus
 } from 'lucide-react';
 import api from '../services/api';
 import InvoicePrintTemplate from '../components/InvoicePrintTemplate';
@@ -24,6 +24,11 @@ export default function PartyDashboard() {
   const [invoiceToDelete, setInvoiceToDelete] = useState(null);
   const [returnInvoice, setReturnInvoice] = useState(null);
   const [paperSize, setPaperSize] = useState('a4');
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentSubmitting, setPaymentSubmitting] = useState(false);
+  const [paymentError, setPaymentError] = useState('');
+  const [toastMessage, setToastMessage] = useState('');
 
   const { user } = useAuth();
   const tenantName = user?.tenant?.company_name || 'ERP Dashboard';
@@ -44,6 +49,32 @@ export default function PartyDashboard() {
   useEffect(() => {
     loadSummary();
   }, [partyId, navigate]);
+
+  async function handleRecordPayment() {
+    setPaymentError('');
+    const amt = Number(paymentAmount);
+    if (!amt || amt <= 0) {
+      setPaymentError('Enter a valid amount.');
+      return;
+    }
+    if (amt > summary.financials.balance) {
+      setPaymentError('Amount cannot exceed outstanding balance.');
+      return;
+    }
+    setPaymentSubmitting(true);
+    try {
+      await api.createPartyPayment(partyId, { amount_paid: amt });
+      setToastMessage('Payment recorded successfully!');
+      setTimeout(() => setToastMessage(''), 3000);
+      setIsPaymentModalOpen(false);
+      setPaymentAmount('');
+      loadSummary();
+    } catch (err) {
+      setPaymentError(err.response?.data?.detail || 'Failed to record payment.');
+    } finally {
+      setPaymentSubmitting(false);
+    }
+  }
 
   async function handleDeleteInvoice(invoiceId) {
     try {
@@ -100,15 +131,26 @@ export default function PartyDashboard() {
   return (
     <>
       <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
-        <div className="flex items-center gap-4">
-          <button onClick={() => navigate('/parties')}
-            className="p-2 rounded-xl text-muted-steel hover:bg-surface-container-low transition-all cursor-pointer btn-tactile">
-            <ArrowLeft size={20} />
-          </button>
-          <div>
-            <h1 className="text-h1 text-charcoal-ink">{party.name}</h1>
-            <p className="text-label-sm text-muted-steel capitalize">{party.party_type}</p>
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-4">
+            <button onClick={() => navigate('/parties')}
+              className="p-2 rounded-xl text-muted-steel hover:bg-surface-container-low transition-all cursor-pointer btn-tactile">
+              <ArrowLeft size={20} />
+            </button>
+            <div>
+              <h1 className="text-h1 text-charcoal-ink">{party.name}</h1>
+              <p className="text-label-sm text-muted-steel capitalize">{party.party_type}</p>
+            </div>
           </div>
+          {financials.balance > 0 && (
+            <button 
+              onClick={() => setIsPaymentModalOpen(true)}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-label-md bg-accent text-on-primary hover:bg-accent-hover shadow-sm transition-all cursor-pointer btn-tactile"
+            >
+              <Plus size={18} />
+              Record Payment
+            </button>
+          )}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -369,6 +411,73 @@ export default function PartyDashboard() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {isPaymentModalOpen && (
+        <div className="fixed inset-0 z-[100] bg-charcoal-ink/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-surface-container-lowest rounded-2xl shadow-2xl border border-outline-variant/60 w-full max-w-md overflow-hidden animate-fade-in-up">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-h3 text-charcoal-ink">Record Payment</h3>
+                <button onClick={() => setIsPaymentModalOpen(false)} className="p-2 text-muted-steel hover:bg-surface-container-low rounded-xl transition-all btn-tactile">
+                  <X size={20} />
+                </button>
+              </div>
+              
+              <div className="mb-6 space-y-4">
+                <div className="bg-surface-container-low p-4 rounded-xl border border-outline-variant/30 flex justify-between items-center">
+                  <span className="text-label-sm text-muted-steel">Outstanding Balance:</span>
+                  <span className="text-label-md text-error font-mono-tabular">EGP {Number(financials.balance).toLocaleString()}</span>
+                </div>
+                
+                <div>
+                  <label className="block text-label-sm text-charcoal-ink mb-1.5">Payment Amount (EGP)</label>
+                  <input 
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max={financials.balance}
+                    value={paymentAmount}
+                    onChange={(e) => {
+                      setPaymentAmount(e.target.value);
+                      if (paymentError) setPaymentError('');
+                    }}
+                    placeholder="Enter amount..."
+                    className="w-full px-4 py-2.5 bg-surface-container-lowest border border-outline-variant focus:border-accent focus:ring-1 focus:ring-accent rounded-xl outline-none transition-all text-charcoal-ink"
+                  />
+                  {paymentError && <p className="text-error text-xs mt-1.5">{paymentError}</p>}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  onClick={() => setIsPaymentModalOpen(false)}
+                  disabled={paymentSubmitting}
+                  className="px-5 py-2.5 rounded-xl text-label-md text-muted-steel hover:bg-surface-container-low transition-all cursor-pointer btn-tactile"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleRecordPayment}
+                  disabled={paymentSubmitting || !paymentAmount || Number(paymentAmount) <= 0 || Number(paymentAmount) > financials.balance}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-label-md bg-accent text-on-primary hover:bg-accent-hover shadow-sm transition-all cursor-pointer btn-tactile disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {paymentSubmitting && <Loader2 size={16} className="animate-spin" />}
+                  Record Payment
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-[200] bg-emerald-600 text-white px-6 py-3 rounded-xl shadow-lg font-medium text-sm flex items-center gap-3 animate-fade-in-up">
+          <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
+            <CreditCard size={14} />
+          </div>
+          {toastMessage}
         </div>
       )}
     </>

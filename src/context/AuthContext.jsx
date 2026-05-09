@@ -12,15 +12,23 @@ export function AuthProvider({ children }) {
       return null;
     }
   });
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) {
-      api.getMe().then((profile) => {
-        localStorage.setItem('erp_user', JSON.stringify(profile));
-        setUser(profile);
-      }).catch(() => {});
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      setIsLoading(false);
+      return;
     }
-  }, [user]);
+    api.getMe().then((profile) => {
+      localStorage.setItem('erp_user', JSON.stringify(profile));
+      setUser(profile);
+      setIsLoading(false);
+    }).catch(() => {
+      setUser(null);
+      setIsLoading(false);
+    });
+  }, []);
 
   const updateTenantContext = (newTenantData) => {
     setUser((prev) => {
@@ -36,6 +44,14 @@ export function AuthProvider({ children }) {
       return updatedUser;
     });
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-surface-container-lowest">
+        <div className="w-10 h-10 border-4 border-accent border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <AuthContext.Provider value={{ user, setUser, updateTenantContext }}>

@@ -31,7 +31,6 @@ async function request(endpoint, options = {}) {
   if (response.status === 401) {
     localStorage.removeItem('access_token');
     localStorage.removeItem('erp_user');
-    window.location.href = '/login';
     throw new Error('Unauthorized');
   }
 
@@ -53,13 +52,16 @@ export const api = {
   register: (data) => request('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
   getMe: () => request('/auth/me'),
 
-  getParties: () => request('/parties'),
+  getParties: (skip = 0, limit = 100) => request(`/parties?skip=${skip}&limit=${limit}`),
+  getPartiesSelect: () => request('/parties/select'),
   createParty: (data) => request('/parties', { method: 'POST', body: JSON.stringify(data) }),
   deleteParty: (partyId) => request(`/parties/${partyId}`, { method: 'DELETE' }),
   getPartyBalance: (partyId) => request(`/parties/${partyId}/balance`),
   getPartySummary: (partyId) => request(`/parties/${partyId}/summary`),
+  createPartyPayment: (partyId, data) => request(`/parties/${partyId}/payments`, { method: 'POST', body: JSON.stringify(data) }),
 
-  getProducts: () => request('/products'),
+  getProducts: (skip = 0, limit = 100) => request(`/products?skip=${skip}&limit=${limit}`),
+  getProductsSelect: () => request('/products/select'),
   createProduct: (data) => request('/products', { method: 'POST', body: JSON.stringify(data) }),
   updateProduct: (productId, data) => request(`/products/${productId}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteProduct: (productId) => request(`/products/${productId}`, { method: 'DELETE' }),
@@ -67,7 +69,11 @@ export const api = {
   getBatchesByProduct: (productId) => request(`/batches/product/${productId}`),
   updateBatch: (batchId, data) => request(`/batches/${batchId}`, { method: 'PATCH', body: JSON.stringify(data) }),
 
-  getInvoices: (partyId) => request(partyId ? `/invoices?party_id=${partyId}` : '/invoices'),
+  getInvoices: (partyId, skip = 0, limit = 100) => {
+    const params = new URLSearchParams({ skip, limit });
+    if (partyId) params.append('party_id', partyId);
+    return request(`/invoices?${params.toString()}`);
+  },
   createPurchaseInvoice: (data) => request('/invoices/purchase', { method: 'POST', body: JSON.stringify(data) }),
   createSaleInvoice: (data) => request('/invoices/sale', { method: 'POST', body: JSON.stringify(data) }),
   getInvoice: (invoiceId) => request(`/invoices/${invoiceId}`),
