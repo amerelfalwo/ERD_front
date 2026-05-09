@@ -1,12 +1,5 @@
 import { Building2 } from 'lucide-react';
 
-// ── Paper size config ────────────────────────────────────────────────────────
-const PAPER = {
-  a4:      { width: '210mm', minHeight: '297mm', px: '40px', pt: '40px', pb: '24px', fontSize: '14px' },
-  a5:      { width: '148mm', minHeight: '210mm', px: '28px', pt: '28px', pb: '18px', fontSize: '12px' },
-  receipt: { width: '80mm',  minHeight: '0',     px: '12px', pt: '16px', pb: '12px', fontSize: '11px' },
-};
-
 const fmt = (n, digits = 2) =>
   Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
 
@@ -27,340 +20,295 @@ export default function InvoicePrintTemplate({
   logoUrl,
   defaultFooterText,
   taxNumber,
-  paperSize = 'a4',
+  paperSize = '80mm',
 }) {
   if (!invoice) return null;
 
-  const cfg        = PAPER[paperSize] || PAPER.a4;
-  const isReceipt  = paperSize === 'receipt';
-  const isA5       = paperSize === 'a5';
   const isSale     = ['sale', 'SALE'].includes(invoice.invoice_type);
   const isReturn   = ['sale_return', 'purchase_return', 'SALE_RETURN', 'PURCHASE_RETURN'].includes(invoice.invoice_type);
 
   const invoiceDate   = new Date(invoice.created_at).toLocaleDateString('ar-EG', { year: 'numeric', month: '2-digit', day: '2-digit' });
+  const invoiceTime   = new Date(invoice.created_at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
   const invoiceNumber = String(invoice.id).padStart(5, '0');
+  
   const total         = Number(invoice.total_amount   || 0);
   const paid          = Number(invoice.paid_amount    || 0);
   const balance       = Number(invoice.balance        ?? (total - paid));
-  const prevBalance   = Number(invoice.previous_balance ?? 0);
-  const totalAfter    = Number(invoice.total_balance_after ?? balance);
   const deliveryFee   = Number(invoice.delivery_fee   || 0);
   const subtotal      = total - deliveryFee;
+  const previousBalance = Number(invoice.previous_balance || 0);
+  const totalBalanceAfter = Number(invoice.total_balance_after ?? (total + previousBalance));
   const footerText    = invoice.footer_custom_text || defaultFooterText || null;
   const resolvedLogo  = resolveLogoUrl(logoUrl);
 
-  // Badge colours
-  const badgeBg    = isReturn ? '#fef2f2' : isSale ? '#f0fdf4' : '#eff6ff';
-  const badgeColor = isReturn ? '#dc2626' : isSale ? '#16a34a' : '#2563eb';
-  const badgeBorder= isReturn ? '#fecaca' : isSale ? '#bbf7d0' : '#bfdbfe';
-  const badgeLabel = isReturn ? 'إشعار مرتجع' : isSale ? 'فاتورة بيع' : 'فاتورة شراء';
+  const badgeLabel = isReturn ? 'إشعار مرتجع' : isSale ? 'فاتورة مبيعات' : 'فاتورة مشتريات';
 
-  const logoSize = isReceipt ? '60px' : isA5 ? '86px' : '110px';
+  const isReceipt = paperSize === 'receipt' || paperSize === '80mm';
+  const isA5 = paperSize === 'a5';
+
+  if (isReceipt) {
+    return (
+      <div
+        id="invoice-print-area"
+        className="max-w-[300px] w-[80mm] mx-auto bg-white text-gray-900 print:max-w-none print:w-full print:shadow-none print:m-0"
+        style={{ direction: 'rtl', printColorAdjust: 'exact', WebkitPrintColorAdjust: 'exact', fontFamily: '"Readex Pro", sans-serif' }}
+      >
+        <div className="p-3 text-[12px] leading-relaxed">
+          
+          {/* Top Section */}
+          <div className="flex flex-col items-center mb-4">
+            {resolvedLogo ? (
+              <img src={resolvedLogo} alt="Logo" className="w-16 h-16 rounded-full object-contain mb-2" />
+            ) : (
+              <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center mb-2">
+                <Building2 size={28} className="text-white" />
+              </div>
+            )}
+            
+            <h1 className="text-xl font-bold text-center mb-1">{badgeLabel}</h1>
+            {tenantName && <p className="text-sm font-semibold text-center mb-1">{tenantName}</p>}
+            <p className="text-xs text-gray-600 text-center font-mono">#{invoiceNumber}</p>
+          </div>
+
+          <hr className="border-t border-dashed border-gray-400 my-2" />
+
+          {/* Meta Section */}
+          <div className="mb-4 text-[11px]">
+            <div className="flex flex-col gap-y-1">
+              <div className="flex items-baseline gap-x-1.5">
+                <span className="font-semibold text-gray-500 shrink-0">تاريخ الشراء:</span>
+                <span className="font-mono" dir="ltr">{invoiceDate} {invoiceTime}</span>
+              </div>
+              <div className="flex items-baseline gap-x-1.5">
+                <span className="font-semibold text-gray-500 shrink-0">فاتورة باسم:</span>
+                <span className="font-bold">د/ {partyName || 'نقدي'}</span>
+              </div>
+              {partyPhone && (
+                <div className="flex items-baseline gap-x-1.5">
+                  <span className="font-semibold text-gray-500 shrink-0">رقم الجوال:</span>
+                  <span className="font-mono" style={{ direction: 'ltr', unicodeBidi: 'embed' }}>{partyPhone}</span>
+                </div>
+              )}
+              {partyAddress && (
+                <div className="flex items-baseline gap-x-1.5">
+                  <span className="font-semibold text-gray-500 shrink-0">العنوان:</span>
+                  <span className="break-words">{partyAddress}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <hr className="border-t border-dashed border-gray-400 my-2" />
+
+          {/* Items Table */}
+          <table className="w-full text-right mb-4 text-[11px]">
+            <thead>
+              <tr className="border-b border-gray-300">
+                <th className="py-1 px-1 font-bold">الصنف</th>
+                <th className="py-1 px-1 text-center font-bold">كمية</th>
+                <th className="py-1 px-1 text-center font-bold">سعر</th>
+                <th className="py-1 px-1 text-left font-bold">إجمالي</th>
+              </tr>
+            </thead>
+            <tbody>
+              {invoice.items.map((item, idx) => {
+                const qty       = Number(item.quantity);
+                const unitPrice = Number(item.unit_price);
+                const lineTotal = qty * unitPrice;
+                return (
+                  <tr key={idx} className="border-b border-gray-100 last:border-b-0 break-inside-avoid">
+                    <td className="py-1 px-1 font-semibold">{item.product_name || item.name || `#${item.batch_id}`}</td>
+                    <td className="py-1 px-1 text-center font-mono" dir="ltr">{qty}</td>
+                    <td className="py-1 px-1 text-center font-mono" dir="ltr">{fmt(unitPrice)}</td>
+                    <td className="py-1 px-1 text-left font-mono font-bold" dir="ltr">{fmt(lineTotal)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          <hr className="border-t border-dashed border-gray-400 my-2" />
+
+          {/* Totals Section */}
+          <div className="flex flex-col space-y-1 mb-4 text-[12px]">
+            <div className="flex justify-between">
+              <span className="text-gray-600">إجمالي الأصناف:</span>
+              <span className="font-mono font-bold" dir="ltr">{fmt(subtotal)}</span>
+            </div>
+            {deliveryFee > 0 && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">رسوم التوصيل:</span>
+                <span className="font-mono" dir="ltr">{fmt(deliveryFee)}</span>
+              </div>
+            )}
+            <div className="flex justify-between items-center py-1 mt-1 border-t border-gray-200">
+              <span className="font-bold text-sm">الإجمالي الكلي:</span>
+              <span className="font-mono font-bold text-sm" dir="ltr">EGP {fmt(total)}</span>
+            </div>
+            {previousBalance > 0 && (
+              <>
+                <div className="flex justify-between items-center py-1 mt-1 border-t border-gray-200">
+                  <span className="font-bold text-xs text-gray-700">الحساب السابق:</span>
+                  <span className="font-mono font-bold text-xs text-gray-700" dir="ltr">EGP {fmt(previousBalance)}</span>
+                </div>
+                <div className="flex justify-between items-center py-1 mt-1 border-t border-gray-300 bg-gray-100 rounded px-1">
+                  <span className="font-bold text-sm">إجمالي الحساب:</span>
+                  <span className="font-mono font-bold text-sm" dir="ltr">EGP {fmt(totalBalanceAfter)}</span>
+                </div>
+              </>
+            )}
+          </div>
+
+          <hr className="border-t border-dashed border-gray-400 my-2" />
+
+          {/* Footer */}
+          <div className="text-center flex flex-col items-center mt-4 space-y-1 text-[11px]">
+            {taxNumber && (
+              <div className="bg-gray-100 px-2 py-1 rounded w-full flex justify-between">
+                <span className="text-gray-600">الرقم الضريبي:</span>
+                <span className="font-mono font-bold">{taxNumber}</span>
+              </div>
+            )}
+            {footerText ? (
+              <p className="font-semibold text-gray-800 mt-2 whitespace-pre-wrap">{footerText}</p>
+            ) : (
+              <p className="text-[10px] text-gray-500 mt-4">
+                شكراً لتعاملكم معنا
+              </p>
+            )}
+          </div>
+
+        </div>
+      </div>
+    );
+  }
+
+  // --- A4 / A5 Layout ---
+  const containerSizeClass = isA5 ? 'max-w-[148mm] w-[148mm]' : 'max-w-[210mm] w-[210mm]';
+  const paddingClass       = isA5 ? 'p-6' : 'p-10';
+  const baseTextSize       = isA5 ? 'text-sm' : 'text-base';
+  const logoSizeClass      = isA5 ? 'w-20 h-20' : 'w-28 h-28';
+  const iconSize           = isA5 ? 36 : 48;
+  const titleTextSize      = isA5 ? 'text-lg' : 'text-xl';
+  const tableTextSize      = isA5 ? 'text-xs' : 'text-sm';
 
   return (
     <div
       id="invoice-print-area"
-      style={{
-        width: cfg.width,
-        minHeight: cfg.minHeight,
-        backgroundColor: '#ffffff',
-        color: '#111827',
-        fontFamily: "'Tajawal', 'Cairo', 'Inter', sans-serif",
-        fontSize: cfg.fontSize,
-        direction: 'rtl',
-        margin: '0 auto',
-        printColorAdjust: 'exact',
-        WebkitPrintColorAdjust: 'exact',
-        pageBreakAfter: 'always',
-      }}
+      className={`${containerSizeClass} mx-auto bg-white text-gray-900 print:max-w-none print:w-full print:shadow-none print:m-0`}
+      style={{ direction: 'rtl', printColorAdjust: 'exact', WebkitPrintColorAdjust: 'exact', fontFamily: '"Readex Pro", sans-serif' }}
     >
-      <div style={{ padding: `${cfg.pt} ${cfg.px} ${cfg.pb}` }}>
-
-        {/* ════════════════════ HEADER ════════════════════ */}
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: isReceipt ? '12px' : '20px',
-          paddingBottom: isReceipt ? '12px' : '20px',
-          borderBottom: isReceipt ? '1px dashed #9ca3af' : '2px solid #e5e7eb',
-        }}>
-          {/* Right: party info */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-            <p style={{ margin: 0, fontSize: isReceipt ? '11px' : '12px', color: '#9ca3af', fontWeight: 500, letterSpacing: '0.03em' }}>
-              فاتورة باسم
-            </p>
-            <p style={{ margin: 0, fontSize: isReceipt ? '15px' : isA5 ? '18px' : '22px', fontWeight: 800, color: '#111827' }}>
-              Dr. / {partyName || 'نقدي'}
-            </p>
-            {partyPhone && (
-              <p style={{ margin: 0, fontSize: isReceipt ? '11px' : '12px', color: '#6b7280' }}>
-                هاتف: <span dir="ltr">{partyPhone}</span>
-              </p>
-            )}
-            {partyAddress && (
-              <p style={{ margin: 0, fontSize: isReceipt ? '11px' : '12px', color: '#6b7280' }}>
-                عنوان: {partyAddress}
-              </p>
-            )}
+      <div className={`${paddingClass} ${baseTextSize} leading-relaxed`}>
+        
+        {/* Header & Customer Info */}
+        <div className="grid grid-cols-3 gap-4 items-start mb-6 border-b border-gray-200 pb-6">
+          
+          {/* Right: Customer Info & Invoice Number */}
+          <div className="text-right">
+            <p className="text-gray-500 mb-3">رقم الفاتورة: <span className="font-mono font-semibold text-gray-800">#{invoiceNumber}</span></p>
+            <div>
+              <h3 className="font-bold text-gray-700 mb-1">بيانات العميل:</h3>
+              <p className="font-bold text-gray-800">د/ {partyName || 'نقدي'}</p>
+              {partyPhone && <p className="font-mono text-gray-800 mt-1" dir="ltr">{partyPhone}</p>}
+              {partyAddress && <p className="text-gray-800 mt-1 text-sm">{partyAddress}</p>}
+            </div>
           </div>
 
-          {/* Left: Logo block — logo centered above company name + date */}
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '6px',
-            minWidth: isReceipt ? '90px' : isA5 ? '140px' : '170px',
-          }}>
+          {/* Center: Invoice Type */}
+          <div className="text-center flex flex-col items-center">
+            <h2 className={`${titleTextSize} font-bold text-slate-800 mb-1`}>{badgeLabel}</h2>
+            {taxNumber && <p className="text-gray-500 mt-1 text-sm">الرقم الضريبي: <span className="font-mono">{taxNumber}</span></p>}
+          </div>
+
+          {/* Left: Logo & Date */}
+          <div className="text-left flex flex-col items-end">
             {resolvedLogo ? (
-              <img
-                src={resolvedLogo}
-                alt="Logo"
-                style={{
-                  height: isReceipt ? '64px' : isA5 ? '90px' : '110px',
-                  width: 'auto',
-                  maxWidth: isReceipt ? '110px' : isA5 ? '160px' : '200px',
-                  objectFit: 'contain',
-                  display: 'block',
-                  printColorAdjust: 'exact',
-                  WebkitPrintColorAdjust: 'exact',
-                }}
-              />
+              <img src={resolvedLogo} alt="Logo" className={`${logoSizeClass} rounded-lg object-contain border border-gray-100 p-1 mb-2`} />
             ) : (
-              <div style={{
-                width: isReceipt ? '64px' : isA5 ? '90px' : '110px',
-                height: isReceipt ? '64px' : isA5 ? '90px' : '110px',
-                borderRadius: '14px',
-                backgroundColor: '#1e293b',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                printColorAdjust: 'exact',
-                WebkitPrintColorAdjust: 'exact',
-              }}>
-                <Building2 size={isReceipt ? 26 : 42} color="#ffffff" strokeWidth={1.5} />
+              <div className={`${logoSizeClass} rounded-lg bg-slate-800 flex items-center justify-center mb-2`}>
+                <Building2 size={iconSize} className="text-white" />
               </div>
             )}
-            {tenantName && (
-              <p style={{
-                margin: 0,
-                fontSize: isReceipt ? '11px' : '13px',
-                fontWeight: 700,
-                color: '#1e293b',
-                textAlign: 'center',
-              }}>
-                {tenantName}
-              </p>
+            <p className="text-gray-500 text-sm">التاريخ: <span className="font-mono text-gray-800">{invoiceDate}</span></p>
+            <p className="font-mono text-gray-800 text-sm">{invoiceTime}</p>
+          </div>
+          
+        </div>
+
+        {/* Items Table */}
+        <div className="mb-6 rounded-lg overflow-hidden border border-gray-200">
+          <table className="w-full text-right">
+            <thead className="bg-slate-50 border-b border-gray-200">
+              <tr>
+                <th className={`py-3 px-4 font-bold text-gray-700 w-1/2 ${tableTextSize}`}>الصنف</th>
+                <th className={`py-3 px-4 text-center font-bold text-gray-700 w-1/6 ${tableTextSize}`}>الكمية</th>
+                <th className={`py-3 px-4 text-center font-bold text-gray-700 w-1/6 ${tableTextSize}`}>السعر</th>
+                <th className={`py-3 px-4 text-left font-bold text-gray-700 w-1/6 ${tableTextSize}`}>الإجمالي</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {invoice.items.map((item, idx) => {
+                const qty       = Number(item.quantity);
+                const unitPrice = Number(item.unit_price);
+                const lineTotal = qty * unitPrice;
+                return (
+                  <tr key={idx} className="bg-white">
+                    <td className={`py-3 px-4 font-semibold text-gray-800 ${tableTextSize}`}>{item.product_name || item.name || `#${item.batch_id}`}</td>
+                    <td className={`py-3 px-4 text-center font-mono text-gray-600 ${tableTextSize}`} dir="ltr">{qty}</td>
+                    <td className={`py-3 px-4 text-center font-mono text-gray-600 ${tableTextSize}`} dir="ltr">{fmt(unitPrice)}</td>
+                    <td className={`py-3 px-4 text-left font-mono font-bold text-gray-800 ${tableTextSize}`} dir="ltr">{fmt(lineTotal)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Totals & Footer */}
+        <div className="flex flex-col gap-6">
+          <div className="flex w-full">
+            <div className="w-1/2 mr-auto bg-slate-50 rounded-lg p-4 border border-gray-200">
+              <div className="flex justify-between mb-2">
+                <span className="text-gray-600">إجمالي الأصناف:</span>
+                <span className="font-mono font-semibold" dir="ltr">{fmt(subtotal)}</span>
+              </div>
+              {deliveryFee > 0 && (
+                <div className="flex justify-between mb-2">
+                  <span className="text-gray-600">رسوم التوصيل:</span>
+                  <span className="font-mono font-semibold" dir="ltr">{fmt(deliveryFee)}</span>
+                </div>
+              )}
+              <div className="flex justify-between items-center py-2 border-t border-gray-200 mt-2">
+                <span className={`font-bold ${isA5 ? 'text-lg' : 'text-xl'} text-slate-800`}>الإجمالي الكلي:</span>
+                <span className={`font-mono font-bold ${isA5 ? 'text-lg' : 'text-xl'} text-slate-800`} dir="ltr">EGP {fmt(total)}</span>
+              </div>
+
+              {/* Previous Balance Logic */}
+              {previousBalance > 0 && (
+                <>
+                  <div className="flex justify-between items-center py-2 border-t border-gray-200 mt-2">
+                    <span className="font-bold text-gray-700">الحساب السابق:</span>
+                    <span className="font-mono font-bold text-gray-700" dir="ltr">EGP {fmt(previousBalance)}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-t border-gray-200 mt-2 bg-gray-100 rounded px-2">
+                    <span className={`font-bold ${isA5 ? 'text-lg' : 'text-xl'} text-slate-900`}>إجمالي الحساب:</span>
+                    <span className={`font-mono font-bold ${isA5 ? 'text-lg' : 'text-xl'} text-slate-900`} dir="ltr">EGP {fmt(totalBalanceAfter)}</span>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          <div className="text-center w-full mt-4">
+            {footerText && (
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-100 mb-4 inline-block min-w-[50%]">
+                <p className="font-semibold text-gray-700 whitespace-pre-wrap leading-relaxed">{footerText}</p>
+              </div>
             )}
-            <p style={{
-              margin: 0,
-              fontSize: isReceipt ? '11px' : '13px',
-              fontWeight: 600,
-              color: '#374151',
-              textAlign: 'center',
-              direction: 'ltr',
-            }}>
-              {invoiceDate}
+            <p className={`${isA5 ? 'text-xs' : 'text-sm'} text-gray-400`}>
+              شكراً لتعاملكم معنا — هذه الوثيقة منشأة آلياً
             </p>
           </div>
-
-        </div>
-
-        {/* ════════════════════ BADGE ════════════════════ */}
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: isReceipt ? '10px' : '18px' }}>
-          <div style={{
-            padding: isReceipt ? '3px 12px' : '5px 20px',
-            borderRadius: '999px',
-            backgroundColor: badgeBg,
-            color: badgeColor,
-            border: `1px solid ${badgeBorder}`,
-            fontWeight: 700,
-            fontSize: isReceipt ? '11px' : '13px',
-            printColorAdjust: 'exact',
-            WebkitPrintColorAdjust: 'exact',
-          }}>
-            {badgeLabel} — #{invoiceNumber}
-          </div>
-        </div>
-
-        {/* ════════════════════ ITEMS TABLE ════════════════════ */}
-        <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '14px', fontSize: isReceipt ? '11px' : 'inherit' }}>
-          <thead>
-            <tr style={{ backgroundColor: '#f8fafc', printColorAdjust: 'exact', WebkitPrintColorAdjust: 'exact' }}>
-              {!isReceipt && (
-                <th style={{ padding: '8px 6px', textAlign: 'right', fontWeight: 700, color: '#374151', borderBottom: '2px solid #d1d5db', width: '28px' }}>#</th>
-              )}
-              <th style={{ padding: '8px 6px', textAlign: 'right', fontWeight: 700, color: '#374151', borderBottom: '2px solid #d1d5db' }}>الصنف</th>
-              <th style={{ padding: '8px 6px', textAlign: 'center', fontWeight: 700, color: '#374151', borderBottom: '2px solid #d1d5db', width: '50px' }}>كمية</th>
-              <th style={{ padding: '8px 6px', textAlign: 'center', fontWeight: 700, color: '#374151', borderBottom: '2px solid #d1d5db', width: '70px' }}>سعر</th>
-              {!isReceipt && (
-                <th style={{ padding: '8px 6px', textAlign: 'center', fontWeight: 700, color: '#374151', borderBottom: '2px solid #d1d5db', width: '80px' }}>إجمالي</th>
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            {invoice.items.map((item, idx) => {
-              const qty       = Number(item.quantity);
-              const unitPrice = Number(item.unit_price);
-              const lineTotal = qty * unitPrice;
-              return (
-                <tr key={idx} style={{ borderBottom: '1px solid #e5e7eb', breakInside: 'avoid' }}>
-                  {!isReceipt && (
-                    <td style={{ padding: '7px 6px', color: '#9ca3af', fontFamily: 'monospace', textAlign: 'center' }}>{idx + 1}</td>
-                  )}
-                  <td style={{ padding: '7px 6px', fontWeight: 600, color: '#1f2937' }}>
-                    {item.product_name || item.name || `#${item.batch_id}`}
-                  </td>
-                  <td style={{ padding: '7px 6px', textAlign: 'center', fontFamily: 'monospace', color: '#374151' }} dir="ltr">{qty}</td>
-                  <td style={{ padding: '7px 6px', textAlign: 'center', fontFamily: 'monospace', color: '#374151' }} dir="ltr">{fmt(unitPrice)}</td>
-                  {!isReceipt && (
-                    <td style={{ padding: '7px 6px', textAlign: 'center', fontFamily: 'monospace', fontWeight: 700, color: '#111827' }} dir="ltr">{fmt(lineTotal)}</td>
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-
-        {/* ════════════════════ TOTALS BLOCK ════════════════════ */}
-        <div style={{
-          borderRadius: '10px',
-          border: '1px solid #e2e8f0',
-          overflow: 'hidden',
-          marginBottom: '16px',
-          printColorAdjust: 'exact',
-          WebkitPrintColorAdjust: 'exact',
-        }}>
-          {/* Subtotal */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', backgroundColor: '#f8fafc' }}>
-            <span style={{ fontWeight: 600, color: '#374151' }}>إجمالي الأصناف</span>
-            <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827' }} dir="ltr">EGP {fmt(subtotal)}</span>
-          </div>
-
-          {/* Delivery */}
-          {deliveryFee > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 14px', borderTop: '1px solid #e5e7eb' }}>
-              <span style={{ color: '#6b7280' }}>رسوم التوصيل</span>
-              <span style={{ fontFamily: 'monospace', color: '#374151' }} dir="ltr">{fmt(deliveryFee)}</span>
-            </div>
-          )}
-
-          {/* Grand total */}
-          {deliveryFee > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderTop: '1px solid #e5e7eb', backgroundColor: '#f1f5f9' }}>
-              <span style={{ fontWeight: 700, color: '#111827' }}>الإجمالي الكلي</span>
-              <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '15px', color: '#111827' }} dir="ltr">EGP {fmt(total)}</span>
-            </div>
-          )}
-
-          {/* Paid */}
-          <div style={{
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            padding: '10px 14px', borderTop: '1px solid #e5e7eb',
-            backgroundColor: paid >= total ? '#f0fdf4' : '#fefce8',
-            printColorAdjust: 'exact', WebkitPrintColorAdjust: 'exact',
-          }}>
-            <span style={{ fontWeight: 600, color: paid >= total ? '#15803d' : '#92400e' }}>
-              المدفوع
-            </span>
-            <span style={{ fontFamily: 'monospace', fontWeight: 700, color: paid >= total ? '#15803d' : '#92400e' }} dir="ltr">
-              EGP {fmt(paid)}
-            </span>
-          </div>
-
-          {/* Remaining balance */}
-          {balance > 0 && (
-            <div style={{
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              padding: '10px 14px', borderTop: '1px solid #e5e7eb',
-              backgroundColor: '#fef2f2',
-              printColorAdjust: 'exact', WebkitPrintColorAdjust: 'exact',
-            }}>
-              <span style={{ fontWeight: 700, color: '#dc2626' }}>المتبقي</span>
-              <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#dc2626' }} dir="ltr">
-                EGP {fmt(balance)}
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* ════════════════════ FINANCIAL SUMMARY ════════════════════ */}
-        {!isReceipt && (
-          <div style={{ marginTop: '16px', paddingTop: '14px', borderTop: '2px solid #e5e7eb' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
-              {/* Previous balance */}
-              <div style={{
-                textAlign: 'center', padding: '10px', borderRadius: '8px',
-                backgroundColor: '#f9fafb', border: '1px solid #e5e7eb',
-                printColorAdjust: 'exact', WebkitPrintColorAdjust: 'exact',
-              }}>
-                <p style={{ margin: '0 0 4px 0', fontSize: '11px', color: '#6b7280', fontWeight: 600 }}>الرصيد السابق</p>
-                <p style={{ margin: 0, fontFamily: 'monospace', fontWeight: 700, color: '#374151' }} dir="ltr">
-                  {fmt(prevBalance)}
-                </p>
-              </div>
-              {/* Invoice total */}
-              <div style={{
-                textAlign: 'center', padding: '10px', borderRadius: '8px',
-                backgroundColor: '#f9fafb', border: '1px solid #e5e7eb',
-                printColorAdjust: 'exact', WebkitPrintColorAdjust: 'exact',
-              }}>
-                <p style={{ margin: '0 0 4px 0', fontSize: '11px', color: '#6b7280', fontWeight: 600 }}>إجمالي الفاتورة</p>
-                <p style={{ margin: 0, fontFamily: 'monospace', fontWeight: 700, color: '#374151' }} dir="ltr">
-                  {fmt(total)}
-                </p>
-              </div>
-              {/* Total outstanding */}
-              <div style={{
-                textAlign: 'center', padding: '10px', borderRadius: '8px',
-                backgroundColor: totalAfter > 0 ? '#1e293b' : '#14532d',
-                printColorAdjust: 'exact', WebkitPrintColorAdjust: 'exact',
-              }}>
-                <p style={{ margin: '0 0 4px 0', fontSize: '11px', color: '#9ca3af', fontWeight: 600 }}>
-                  {totalAfter > 0 ? 'الرصيد المستحق' : 'مسدد بالكامل'}
-                </p>
-                <p style={{ margin: 0, fontFamily: 'monospace', fontWeight: 700, color: '#ffffff', fontSize: '15px' }} dir="ltr">
-                  EGP {fmt(totalAfter)}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Receipt: simple outstanding */}
-        {isReceipt && totalAfter > 0 && (
-          <div style={{
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            padding: '8px 10px', borderRadius: '6px', marginTop: '8px',
-            backgroundColor: '#1e293b', printColorAdjust: 'exact', WebkitPrintColorAdjust: 'exact',
-          }}>
-            <span style={{ color: '#d1d5db', fontSize: '11px', fontWeight: 600 }}>الرصيد المستحق</span>
-            <span style={{ color: '#ffffff', fontFamily: 'monospace', fontWeight: 700 }} dir="ltr">EGP {fmt(totalAfter)}</span>
-          </div>
-        )}
-
-        {/* ════════════════════ FOOTER ════════════════════ */}
-        <div style={{ marginTop: isReceipt ? '14px' : '22px', paddingTop: '12px', borderTop: '1px solid #e5e7eb', textAlign: 'center' }}>
-          {taxNumber && (
-            <div style={{
-              display: 'inline-flex', alignItems: 'center', gap: '8px',
-              padding: '5px 14px', borderRadius: '6px', marginBottom: '10px',
-              backgroundColor: '#f1f5f9', border: '1px solid #e2e8f0',
-              printColorAdjust: 'exact', WebkitPrintColorAdjust: 'exact',
-            }}>
-              <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>رقم الحساب / الضريبي:</span>
-              <span style={{ fontSize: '13px', color: '#1e293b', fontWeight: 700, fontFamily: 'monospace' }} dir="ltr">{taxNumber}</span>
-            </div>
-          )}
-          {footerText && (
-            <p style={{ margin: '0 0 6px 0', fontSize: isReceipt ? '11px' : '13px', fontWeight: 600, color: '#374151', lineHeight: 1.6 }} dir="auto">
-              {footerText}
-            </p>
-          )}
-          <p style={{ margin: 0, fontSize: '10px', color: '#9ca3af' }}>
-            شكراً لتعاملكم معنا — هذه الوثيقة منشأة آلياً
-          </p>
         </div>
 
       </div>

@@ -8,6 +8,7 @@ import api from '../services/api';
 import { useInvoiceStore } from '../store/useInvoiceStore';
 import InvoicePrintTemplate from '../components/InvoicePrintTemplate';
 import EditInvoiceModal from '../components/EditInvoiceModal';
+import { useAuth } from '../context/AuthContext';
 
 
 function InvoiceItemRow({ item, products, invoiceType, onQuantityChange, onRemove }) {
@@ -56,14 +57,6 @@ function InvoiceItemRow({ item, products, invoiceType, onQuantityChange, onRemov
   );
 }
 
-function getStoredUser() {
-  try {
-    const raw = localStorage.getItem('erp_user');
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
 
 export default function InvoicesView() {
   const {
@@ -104,20 +97,12 @@ export default function InvoicesView() {
   const [newPartyAddress, setNewPartyAddress] = useState('');
   const [hasDelivery, setHasDelivery] = useState(false);
 
-  const user = getStoredUser();
+  const { user } = useAuth();
   const tenantName = user?.tenant?.company_name || 'ERP Dashboard';
   const defaultFooterText = user?.tenant?.default_footer_text || user?.tenant?.print_notes || null;
-  const [logoUrl, setLogoUrl] = useState(user?.tenant?.logo_url || null);
-  const [taxNumber, setTaxNumber] = useState(user?.tenant?.tax_number || null);
+  const logoUrl = user?.tenant?.logo_url || null;
+  const taxNumber = user?.tenant?.tax_number || null;
   const [downloadingPdf, setDownloadingPdf] = useState(false);
-
-  // Fetch fresh tenant data from API (localStorage may be stale)
-  useEffect(() => {
-    api.getMyTenant().then((t) => {
-      if (t?.logo_url) setLogoUrl(t.logo_url);
-      if (t?.tax_number) setTaxNumber(t.tax_number);
-    }).catch(() => {});
-  }, []);
 
   function loadHistory() {
     api.getInvoices().then(setInvoiceHistory).catch(() => {});

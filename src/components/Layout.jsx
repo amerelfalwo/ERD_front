@@ -1,11 +1,11 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Package, Users, FileText, Settings,
   Search, Bell, HelpCircle, Menu, X, LogOut, Building2, ChevronDown,
 } from 'lucide-react';
-import api from '../services/api';
 import myLogo from '../assets/my.png';
+import { useAuth } from '../context/AuthContext';
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -14,28 +14,10 @@ const navItems = [
   { path: '/invoices', label: 'Invoices', icon: FileText },
 ];
 
-function getStoredUser() {
-  try {
-    const raw = localStorage.getItem('erp_user');
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
-
 export default function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [user, setUser] = useState(getStoredUser);
+  const { user } = useAuth();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-
-  useEffect(() => {
-    if (!user) {
-      api.getMe().then((profile) => {
-        localStorage.setItem('erp_user', JSON.stringify(profile));
-        setUser(profile);
-      }).catch(() => {});
-    }
-  }, [user]);
 
   const companyName = user?.tenant?.company_name || 'ERP Dashboard';
   const displayName = user?.username || 'User';
@@ -71,8 +53,12 @@ export default function Layout() {
       >
         <div className="px-5 pt-7 pb-5 flex justify-between items-start">
           <div className="flex items-center gap-3 min-w-0 flex-1">
-            <div className="w-9 h-9 rounded-xl bg-accent flex items-center justify-center flex-shrink-0 shadow-sm">
-              <Building2 size={18} className="text-on-primary" strokeWidth={1.8} />
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm overflow-hidden ${user?.tenant?.logo_url ? 'bg-transparent' : 'bg-accent'}`}>
+              {user?.tenant?.logo_url ? (
+                <img src={user.tenant.logo_url} alt="Logo" className="w-full h-full object-contain" />
+              ) : (
+                <Building2 size={18} className="text-on-primary" strokeWidth={1.8} />
+              )}
             </div>
             <div className="min-w-0 flex-1">
               <h1 className="text-label-md text-on-surface font-semibold truncate leading-tight">

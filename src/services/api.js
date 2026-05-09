@@ -61,6 +61,7 @@ export const api = {
 
   getProducts: () => request('/products'),
   createProduct: (data) => request('/products', { method: 'POST', body: JSON.stringify(data) }),
+  updateProduct: (productId, data) => request(`/products/${productId}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteProduct: (productId) => request(`/products/${productId}`, { method: 'DELETE' }),
 
   getBatchesByProduct: (productId) => request(`/batches/product/${productId}`),

@@ -1,31 +1,67 @@
 import { useState, useEffect } from 'react';
 import { Settings as SettingsIcon, Save, Loader2, CheckCircle, FileText, Server, ImageIcon, Upload } from 'lucide-react';
 import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 const RAW_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 const API_BASE_URL = RAW_BASE_URL.replace(/\/+$/, '');
 
 export default function SettingsView() {
-  const [settings, setSettings] = useState({ store_name: '', phone: '', address: '', tax_number: '', print_notes: '' });
+  const [formData, setFormData] = useState({ company_name: '', phone: '', address: '', tax_number: '', default_invoice_footer: '' });
   const [logoUrl, setLogoUrl] = useState('');
   const [logoFile, setLogoFile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savingLogo, setSavingLogo] = useState(false);
   const [showSaved, setShowSaved] = useState(false);
+  const { updateTenantContext } = useAuth();
 
   useEffect(() => {
     api.getMyTenant()
-      .then((t) => { setSettings(t); setLogoUrl(t.logo_url || ''); })
+      .then((t) => { 
+        setFormData({
+          company_name: t.company_name || t.store_name || '',
+          phone: t.phone || '',
+          address: t.address || '',
+          tax_number: t.tax_number || '',
+          default_invoice_footer: t.default_footer_text || t.print_notes || ''
+        });
+        setLogoUrl(t.logo_url || ''); 
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
 
-  async function handleSave() {
+  async function handleSaveSettings() {
     setSaving(true);
     try {
-      const updated = await api.updateSettings(settings);
-      setSettings(updated);
+      const token = localStorage.getItem('access_token');
+      const res = await fetch(`${API_BASE_URL}/tenants/settings`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify(formData),
+      });
+      
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.detail || 'Save failed');
+      }
+      
+      const updated = await res.json();
+      setFormData({
+        company_name: updated.company_name || updated.store_name || '',
+        phone: updated.phone || '',
+        address: updated.address || '',
+        tax_number: updated.tax_number || '',
+        default_invoice_footer: updated.default_footer_text || updated.print_notes || ''
+      });
+      updateTenantContext({
+        company_name: updated.company_name || updated.store_name || '',
+        default_footer_text: updated.default_footer_text || updated.print_notes || null,
+      });
       setShowSaved(true);
       setTimeout(() => setShowSaved(false), 2500);
     } catch (err) { alert(err?.message || 'Error'); }
@@ -51,11 +87,8 @@ export default function SettingsView() {
       const updatedTenant = await res.json();
       setLogoUrl(updatedTenant.logo_url || '');
       setLogoFile(null);
-      const stored = JSON.parse(localStorage.getItem('erp_user') || '{}');
-      if (stored?.tenant) {
-        stored.tenant.logo_url = updatedTenant.logo_url;
-        localStorage.setItem('erp_user', JSON.stringify(stored));
-      }
+      updateTenantContext({ logo_url: updatedTenant.logo_url });
+      
       setShowSaved(true);
       setTimeout(() => setShowSaved(false), 2500);
     } catch (err) { alert(err?.message || 'Error'); }
@@ -79,10 +112,10 @@ export default function SettingsView() {
           <h2 className="text-h1 text-charcoal-ink">Settings</h2>
           <p className="text-body-base text-muted-steel mt-1">Configure your store information and preferences.</p>
         </div>
-        <button onClick={handleSave} disabled={saving}
+        <button onClick={handleSaveSettings} disabled={saving}
           className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-label-md bg-accent text-on-primary hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm cursor-pointer btn-tactile">
           {saving ? <Loader2 size={16} className="animate-spin" /> : showSaved ? <CheckCircle size={16} /> : <Save size={16} />}
-          {showSaved ? 'Saved!' : 'Save Changes'}
+          {showSaved ? 'Saved!' : 'Save Settings'}
         </button>
       </div>
 
@@ -96,19 +129,19 @@ export default function SettingsView() {
         <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-5">
           <div>
             <label className="block text-label-sm text-muted-steel mb-1.5 uppercase tracking-wider">Store Name</label>
-            <input value={settings.store_name} onChange={(e) => setSettings({ ...settings, store_name: e.target.value })} placeholder="Your store name" className={inputClass} />
+            <input value={formData.company_name} onChange={(e) => setFormData({ ...formData, company_name: e.target.value })} placeholder="Your store name" className={inputClass} />
           </div>
           <div>
             <label className="block text-label-sm text-muted-steel mb-1.5 uppercase tracking-wider">Phone</label>
-            <input value={settings.phone} onChange={(e) => setSettings({ ...settings, phone: e.target.value })} placeholder="Phone number" className={inputClass} />
+            <input value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} placeholder="Phone number" className={inputClass} />
           </div>
           <div className="sm:col-span-2">
             <label className="block text-label-sm text-muted-steel mb-1.5 uppercase tracking-wider">Address</label>
-            <input value={settings.address} onChange={(e) => setSettings({ ...settings, address: e.target.value })} placeholder="Store address" className={inputClass} />
+            <input value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} placeholder="Store address" className={inputClass} />
           </div>
           <div>
             <label className="block text-label-sm text-muted-steel mb-1.5 uppercase tracking-wider">Tax Number</label>
-            <input value={settings.tax_number} onChange={(e) => setSettings({ ...settings, tax_number: e.target.value })} placeholder="Tax registration number" className={inputClass} />
+            <input value={formData.tax_number} onChange={(e) => setFormData({ ...formData, tax_number: e.target.value })} placeholder="Tax registration number" className={inputClass} />
           </div>
         </div>
       </section>
@@ -163,7 +196,7 @@ export default function SettingsView() {
         </div>
         <div className="p-6">
           <label className="block text-label-sm text-muted-steel mb-1.5 uppercase tracking-wider">Default Invoice Footer</label>
-          <textarea value={settings.print_notes} onChange={(e) => setSettings({ ...settings, print_notes: e.target.value })} placeholder="Notes shown on printed invoices..." rows={4}
+          <textarea value={formData.default_invoice_footer} onChange={(e) => setFormData({ ...formData, default_invoice_footer: e.target.value })} placeholder="Notes shown on printed invoices..." rows={4}
             className={`${inputClass} resize-none`}
           />
         </div>

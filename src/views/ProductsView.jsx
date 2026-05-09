@@ -1,9 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, Search, Package, ChevronDown, ChevronUp, X, Loader2, Trash2 } from 'lucide-react';
+import { Plus, Search, Package, ChevronDown, ChevronUp, X, Loader2, Trash2, Pencil } from 'lucide-react';
 import api from '../services/api';
 
 function AddProductModal({ isOpen, onClose, onCreated }) {
   const [name, setName] = useState('');
+  const [purchasePrice, setPurchasePrice] = useState('');
+  const [sellPrice, setSellPrice] = useState('');
   const [submitting, setSubmitting] = useState(false);
   if (!isOpen) return null;
 
@@ -12,8 +14,14 @@ function AddProductModal({ isOpen, onClose, onCreated }) {
     if (!name.trim()) return;
     setSubmitting(true);
     try {
-      await api.createProduct({ name: name.trim() });
+      await api.createProduct({ 
+        name: name.trim(),
+        purchase_price: purchasePrice ? parseFloat(purchasePrice) : 0,
+        sell_price: sellPrice ? parseFloat(sellPrice) : 0
+      });
       setName('');
+      setPurchasePrice('');
+      setSellPrice('');
       onCreated();
       onClose();
     } catch (err) { alert(err?.message || 'Error'); }
@@ -35,12 +43,97 @@ function AddProductModal({ isOpen, onClose, onCreated }) {
               className="w-full px-4 py-2.5 rounded-xl border border-outline-variant/60 bg-surface-container-lowest text-sm text-charcoal-ink placeholder:text-outline focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all duration-200"
             />
           </div>
+          <div>
+            <label className="block text-label-sm text-muted-steel mb-1.5 uppercase tracking-wider">Purchase Price</label>
+            <input type="number" step="any" value={purchasePrice} onChange={(e) => setPurchasePrice(e.target.value)} placeholder="0.00"
+              className="w-full px-4 py-2.5 rounded-xl border border-outline-variant/60 bg-surface-container-lowest text-sm text-charcoal-ink placeholder:text-outline focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all duration-200"
+            />
+          </div>
+          <div>
+            <label className="block text-label-sm text-muted-steel mb-1.5 uppercase tracking-wider">Sell Price</label>
+            <input type="number" step="any" value={sellPrice} onChange={(e) => setSellPrice(e.target.value)} placeholder="0.00"
+              className="w-full px-4 py-2.5 rounded-xl border border-outline-variant/60 bg-surface-container-lowest text-sm text-charcoal-ink placeholder:text-outline focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all duration-200"
+            />
+          </div>
           <div className="flex items-center justify-end gap-2 pt-4">
             <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-label-md text-muted-steel hover:bg-surface-container-low transition-colors cursor-pointer btn-tactile">Cancel</button>
             <button type="submit" disabled={submitting || !name.trim()}
               className="flex items-center gap-1.5 px-5 py-2 rounded-xl text-label-md bg-accent text-on-primary hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm cursor-pointer btn-tactile">
               {submitting && <Loader2 size={16} className="animate-spin" />}
               Create Product
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function EditProductModal({ isOpen, onClose, product, onUpdated }) {
+  const [name, setName] = useState('');
+  const [purchasePrice, setPurchasePrice] = useState('');
+  const [sellPrice, setSellPrice] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (product) {
+      setName(product.name || '');
+      setPurchasePrice(product.purchase_price != null ? String(product.purchase_price) : '');
+      setSellPrice(product.sell_price != null ? String(product.sell_price) : '');
+    }
+  }, [product]);
+
+  if (!isOpen || !product) return null;
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setSubmitting(true);
+    try {
+      await api.updateProduct(product.id, { 
+        name: name.trim(),
+        purchase_price: purchasePrice ? parseFloat(purchasePrice) : 0,
+        sell_price: sellPrice ? parseFloat(sellPrice) : 0
+      });
+      onUpdated();
+      onClose();
+    } catch (err) { alert(err?.message || 'Error'); }
+    finally { setSubmitting(false); }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-charcoal-ink/15 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-surface-container-lowest rounded-2xl border border-outline-variant/60 shadow-whisper-lg w-full max-w-md animate-scale-in">
+        <div className="flex items-center justify-between p-6 border-b border-outline-variant/40">
+          <h3 className="text-h3 text-charcoal-ink tracking-tight">Edit Product</h3>
+          <button onClick={onClose} className="p-1.5 rounded-xl text-muted-steel hover:bg-surface-container-low transition-colors cursor-pointer btn-tactile"><X size={18} /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="block text-label-sm text-muted-steel mb-1.5 uppercase tracking-wider">Product Name</label>
+            <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter product name" autoFocus
+              className="w-full px-4 py-2.5 rounded-xl border border-outline-variant/60 bg-surface-container-lowest text-sm text-charcoal-ink placeholder:text-outline focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all duration-200"
+            />
+          </div>
+          <div>
+            <label className="block text-label-sm text-muted-steel mb-1.5 uppercase tracking-wider">Purchase Price</label>
+            <input type="number" step="any" value={purchasePrice} onChange={(e) => setPurchasePrice(e.target.value)} placeholder="0.00"
+              className="w-full px-4 py-2.5 rounded-xl border border-outline-variant/60 bg-surface-container-lowest text-sm text-charcoal-ink placeholder:text-outline focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all duration-200"
+            />
+          </div>
+          <div>
+            <label className="block text-label-sm text-muted-steel mb-1.5 uppercase tracking-wider">Sell Price</label>
+            <input type="number" step="any" value={sellPrice} onChange={(e) => setSellPrice(e.target.value)} placeholder="0.00"
+              className="w-full px-4 py-2.5 rounded-xl border border-outline-variant/60 bg-surface-container-lowest text-sm text-charcoal-ink placeholder:text-outline focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all duration-200"
+            />
+          </div>
+          <div className="flex items-center justify-end gap-2 pt-4">
+            <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-label-md text-muted-steel hover:bg-surface-container-low transition-colors cursor-pointer btn-tactile">Cancel</button>
+            <button type="submit" disabled={submitting || !name.trim()}
+              className="flex items-center gap-1.5 px-5 py-2 rounded-xl text-label-md bg-accent text-on-primary hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm cursor-pointer btn-tactile">
+              {submitting && <Loader2 size={16} className="animate-spin" />}
+              Save Changes
             </button>
           </div>
         </form>
@@ -60,21 +153,15 @@ function BatchRow({ batch }) {
   );
 }
 
-function ProductRow({ product, inventoryProduct, onDelete }) {
+function ProductRow({ product, inventoryProduct, onDelete, onEdit }) {
   const [expanded, setExpanded] = useState(false);
   const [batches, setBatches] = useState([]);
   const [loadingBatches, setLoadingBatches] = useState(false);
 
   const totalQty = inventoryProduct?.batches?.reduce((sum, b) => sum + parseFloat(b.remaining_quantity || 0), 0) || 0;
-  const highestBatchAvailable = inventoryProduct?.batches?.filter(b => Number(b.remaining_quantity) > 0).reduce((acc, b) => {
-    if (!acc) return b;
-    return Number(b.selling_price) > Number(acc.selling_price) ? b : acc;
-  }, null);
-  const highestBatchOverall = inventoryProduct?.batches?.reduce((acc, b) => {
-    if (!acc) return b;
-    return Number(b.selling_price) > Number(acc.selling_price) ? b : acc;
-  }, null);
-  const latestPrice = highestBatchAvailable?.selling_price || highestBatchOverall?.selling_price || '0';
+  
+  const displayPurchasePrice = product.purchase_price || 0;
+  const displaySellPrice = product.sell_price || 0;
 
   async function toggleExpand() {
     if (!expanded && batches.length === 0) {
@@ -90,15 +177,22 @@ function ProductRow({ product, inventoryProduct, onDelete }) {
     <div className="border-b border-outline-variant/30 last:border-0">
       <div className="grid grid-cols-12 gap-2 items-center py-3.5 px-6 cursor-pointer hover:bg-surface-container-low/50 transition-colors duration-200 group" onClick={toggleExpand}>
         <div className="col-span-1 font-mono-tabular text-label-sm text-muted-steel">{product.id}</div>
-        <div className="col-span-5 min-w-0">
+        <div className="col-span-3 min-w-0">
           <span className="text-label-md text-charcoal-ink truncate" dir="auto">{product.name}</span>
         </div>
-        <div className="col-span-2 font-mono-tabular text-body-sm text-muted-steel text-right">{Number(latestPrice).toLocaleString()}</div>
+        <div className="col-span-2 font-mono-tabular text-body-sm text-muted-steel text-right">{Number(displayPurchasePrice).toLocaleString()}</div>
+        <div className="col-span-2 font-mono-tabular text-body-sm text-muted-steel text-right">{Number(displaySellPrice).toLocaleString()}</div>
         <div className="col-span-2 font-mono-tabular text-body-sm text-muted-steel text-right">{totalQty.toLocaleString()}</div>
         <div className="col-span-2 flex items-center justify-end gap-2">
           <span className={`text-label-sm px-2 py-0.5 rounded-lg ${totalQty > 0 ? 'bg-accent-surface text-accent' : 'bg-error-container/30 text-error'}`}>
             {totalQty > 0 ? 'In Stock' : 'Out'}
           </span>
+          <button
+            onClick={(e) => { e.stopPropagation(); onEdit(product); }}
+            className="p-1.5 rounded-xl text-muted-steel hover:bg-surface-container-low hover:text-accent transition-all duration-200 opacity-0 group-hover:opacity-100 cursor-pointer btn-tactile"
+          >
+            <Pencil size={16} />
+          </button>
           <button
             onClick={(e) => { e.stopPropagation(); onDelete(product); }}
             className="p-1.5 rounded-xl text-muted-steel hover:bg-error-container/30 hover:text-error transition-all duration-200 opacity-0 group-hover:opacity-100 cursor-pointer btn-tactile"
@@ -137,6 +231,7 @@ export default function ProductsView() {
   const [sortBy, setSortBy] = useState('name_asc');
   const [showModal, setShowModal] = useState(false);
   const [productToDelete, setProductToDelete] = useState(null);
+  const [productToEdit, setProductToEdit] = useState(null);
   const [deletingProduct, setDeletingProduct] = useState(false);
 
   async function fetchProducts() {
@@ -228,7 +323,8 @@ export default function ProductsView() {
       <div className="animate-fade-in-up stagger-2 bg-surface-container-lowest rounded-2xl shadow-whisper border border-outline-variant/60 overflow-hidden">
         <div className="grid grid-cols-12 gap-2 items-center py-3 px-6 border-b border-outline-variant/40 bg-surface-container-low/30">
           <span className="col-span-1 text-label-sm uppercase tracking-wider text-muted-steel/70">ID</span>
-          <span className="col-span-5 text-label-sm uppercase tracking-wider text-muted-steel/70">Product Name</span>
+          <span className="col-span-3 text-label-sm uppercase tracking-wider text-muted-steel/70">Product Name</span>
+          <span className="col-span-2 text-label-sm uppercase tracking-wider text-muted-steel/70 text-right">Purchase Price</span>
           <span className="col-span-2 text-label-sm uppercase tracking-wider text-muted-steel/70 text-right">Sell Price</span>
           <span className="col-span-2 text-label-sm uppercase tracking-wider text-muted-steel/70 text-right">Quantity</span>
           <span className="col-span-2 text-label-sm uppercase tracking-wider text-muted-steel/70 text-right">Status</span>
@@ -237,7 +333,8 @@ export default function ProductsView() {
           <div>{[1,2,3,4,5].map((i) => (
             <div key={i} className="grid grid-cols-12 gap-2 items-center py-3.5 px-6 border-b border-outline-variant/20">
               <div className="col-span-1"><div className="w-8 h-4 rounded-lg animate-shimmer" /></div>
-              <div className="col-span-5"><div className="w-32 h-4 rounded-lg animate-shimmer" /></div>
+              <div className="col-span-3"><div className="w-32 h-4 rounded-lg animate-shimmer" /></div>
+              <div className="col-span-2"><div className="w-16 h-4 rounded-lg animate-shimmer ml-auto" /></div>
               <div className="col-span-2"><div className="w-16 h-4 rounded-lg animate-shimmer ml-auto" /></div>
               <div className="col-span-2"><div className="w-12 h-4 rounded-lg animate-shimmer ml-auto" /></div>
               <div className="col-span-2"><div className="w-16 h-4 rounded-lg animate-shimmer ml-auto" /></div>
@@ -250,6 +347,7 @@ export default function ProductsView() {
               product={product}
               inventoryProduct={inventoryMap[product.id]}
               onDelete={setProductToDelete}
+              onEdit={setProductToEdit}
             />
           ))
         ) : (
@@ -262,6 +360,8 @@ export default function ProductsView() {
       </div>
 
       <AddProductModal isOpen={showModal} onClose={() => setShowModal(false)} onCreated={fetchProducts} />
+      <EditProductModal isOpen={!!productToEdit} product={productToEdit} onClose={() => setProductToEdit(null)} onUpdated={fetchProducts} />
+      
       {productToDelete && (
         <div className="fixed inset-0 z-[70] bg-charcoal-ink/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-surface-container-lowest rounded-2xl shadow-2xl border border-outline-variant/60 w-full max-w-md overflow-hidden animate-fade-in-up">

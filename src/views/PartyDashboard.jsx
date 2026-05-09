@@ -8,13 +8,9 @@ import api from '../services/api';
 import InvoicePrintTemplate from '../components/InvoicePrintTemplate';
 import EditInvoiceModal from '../components/EditInvoiceModal';
 import ReturnInvoiceModal from '../components/ReturnInvoiceModal';
+import { useAuth } from '../context/AuthContext';
 
-function getStoredUser() {
-  try {
-    const raw = localStorage.getItem('erp_user');
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
-}
+
 
 export default function PartyDashboard() {
   const { partyId } = useParams();
@@ -29,20 +25,12 @@ export default function PartyDashboard() {
   const [returnInvoice, setReturnInvoice] = useState(null);
   const [paperSize, setPaperSize] = useState('a4');
 
-  const user = getStoredUser();
+  const { user } = useAuth();
   const tenantName = user?.tenant?.company_name || 'ERP Dashboard';
   const defaultFooterText = user?.tenant?.default_footer_text || user?.tenant?.print_notes || null;
-  const [logoUrl, setLogoUrl] = useState(user?.tenant?.logo_url || null);
-  const [taxNumber, setTaxNumber] = useState(user?.tenant?.tax_number || null);
+  const logoUrl = user?.tenant?.logo_url || null;
+  const taxNumber = user?.tenant?.tax_number || null;
   const [downloadingPdf, setDownloadingPdf] = useState(false);
-
-  // Fetch fresh tenant data from API (localStorage may be stale)
-  useEffect(() => {
-    api.getMyTenant().then((t) => {
-      if (t?.logo_url) setLogoUrl(t.logo_url);
-      if (t?.tax_number) setTaxNumber(t.tax_number);
-    }).catch(() => {});
-  }, []);
 
   const loadSummary = () => {
     setLoading(true);
