@@ -37,7 +37,7 @@ export default function InvoicePrintTemplate({
   const deliveryFee   = Number(invoice.delivery_fee   || 0);
   const subtotal      = total - deliveryFee;
   const previousBalance = Number(invoice.previous_balance || 0);
-  const totalBalanceAfter = Number(invoice.total_balance_after ?? (total + previousBalance));
+  const totalBalanceAfter = Number(invoice.total_balance_after ?? (balance + previousBalance));
   const footerText    = invoice.footer_custom_text || defaultFooterText || null;
   const resolvedLogo  = resolveLogoUrl(logoUrl);
 
@@ -49,8 +49,7 @@ export default function InvoicePrintTemplate({
   if (isReceipt) {
     return (
       <div
-        id="invoice-print-area"
-        className="max-w-[300px] w-[80mm] mx-auto bg-white text-gray-900 print:max-w-none print:w-full print:shadow-none print:m-0"
+        className="invoice-print-area max-w-[300px] w-[80mm] mx-auto bg-white text-gray-900 print:max-w-none print:w-full print:shadow-none print:m-0"
         style={{ direction: 'rtl', printColorAdjust: 'exact', WebkitPrintColorAdjust: 'exact', fontFamily: '"Readex Pro", sans-serif' }}
       >
         <div className="p-3 text-[12px] leading-relaxed">
@@ -145,6 +144,8 @@ export default function InvoicePrintTemplate({
               <span className="font-bold text-sm">الإجمالي الكلي:</span>
               <span className="font-mono font-bold text-sm" dir="ltr">EGP {fmt(total)}</span>
             </div>
+
+
             {previousBalance > 0 && (
               <>
                 <div className="flex justify-between items-center py-1 mt-1 border-t border-gray-200">
@@ -194,8 +195,7 @@ export default function InvoicePrintTemplate({
 
   return (
     <div
-      id="invoice-print-area"
-      className={`${containerSizeClass} mx-auto bg-white text-gray-900 print:max-w-none print:w-full print:shadow-none print:m-0`}
+      className={`invoice-print-area ${containerSizeClass} mx-auto bg-white text-gray-900 print:max-w-none print:w-full print:shadow-none print:m-0`}
       style={{ direction: 'rtl', printColorAdjust: 'exact', WebkitPrintColorAdjust: 'exact', fontFamily: '"Readex Pro", sans-serif' }}
     >
       <div className={`${paddingClass} ${baseTextSize} leading-relaxed`}>
@@ -282,6 +282,9 @@ export default function InvoicePrintTemplate({
                 <span className={`font-bold ${isA5 ? 'text-lg' : 'text-xl'} text-slate-800`}>الإجمالي الكلي:</span>
                 <span className={`font-mono font-bold ${isA5 ? 'text-lg' : 'text-xl'} text-slate-800`} dir="ltr">EGP {fmt(total)}</span>
               </div>
+
+
+
 
               {/* Previous Balance Logic */}
               {previousBalance > 0 && (

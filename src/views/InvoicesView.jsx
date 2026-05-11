@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ShoppingCart, Plus, Minus, Trash2, Printer, Loader2,
   CheckCircle2, Package, UserSquare2, X, Edit, Undo2, Search,
@@ -9,19 +10,18 @@ import { useInvoiceStore } from '../store/useInvoiceStore';
 import InvoicePrintTemplate from '../components/InvoicePrintTemplate';
 import EditInvoiceModal from '../components/EditInvoiceModal';
 import { useAuth } from '../context/AuthContext';
+import html2pdf from 'html2pdf.js';
 
 
-function InvoiceItemRow({ item, products, invoiceType, onQuantityChange, onRemove }) {
+function InvoiceItemRow({ item, products, invoiceType, onQuantityChange, onRemove, onEdit }) {
   const product = products.find((p) => p.id === item.product_id);
   const displayName = item.product_name || product?.name || `#${item.product_id ?? item.batch_id}`;
-  const profit =
-    invoiceType === 'sale' && item.sale_price != null && item.purchase_price != null
-      ? (Number(item.sale_price) - Number(item.purchase_price)) * Number(item.quantity)
-      : null;
+  const unitPrice = invoiceType === 'sale' ? Number(item.sale_price || 0) : Number(item.purchase_price || 0);
+  const lineTotal = unitPrice * Number(item.quantity);
 
   return (
     <div className="grid grid-cols-12 gap-2 items-center px-4 py-2.5 border-b border-outline-variant/20 hover:bg-surface-container-low/40 transition-colors group">
-      <div className="col-span-5 flex flex-col">
+      <div className="col-span-4 flex flex-col">
         <span className="text-label-md text-charcoal-ink truncate">{displayName}</span>
         {invoiceType === 'purchase' && item.purchase_price !== undefined && (
           <span className="font-mono-tabular text-label-sm text-muted-steel mt-0.5">
@@ -29,29 +29,24 @@ function InvoiceItemRow({ item, products, invoiceType, onQuantityChange, onRemov
           </span>
         )}
         {invoiceType === 'sale' && item.sale_price != null && (
-          <div className="flex items-center gap-2 mt-0.5">
-            <span className="font-mono-tabular text-label-sm text-muted-steel">
-              {item.purchase_price != null ? `Cost: ${Number(item.purchase_price).toLocaleString()} | ` : ''}Price: {Number(item.sale_price).toLocaleString()}
-            </span>
-            {profit !== null && (
-              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
-                profit > 0 ? 'bg-emerald-100 text-emerald-700' : profit < 0 ? 'bg-red-100 text-red-600' : 'bg-surface-container-low text-muted-steel'
-              }`}>
-                {profit > 0 ? '+' : ''}{Number(profit).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
-            )}
-          </div>
+          <span className="font-mono-tabular text-label-sm text-muted-steel mt-0.5">
+            Price: {Number(item.sale_price).toLocaleString()}
+          </span>
         )}
       </div>
-      <div className="col-span-4 flex justify-center">
+      <div className="col-span-3 flex justify-center">
         <div className="flex items-center gap-0 bg-surface-container-lowest border border-outline-variant/60 rounded-xl overflow-hidden">
           <button onClick={() => onQuantityChange(item.product_id, Math.max(1, item.quantity - 1))} className="p-1.5 text-muted-steel hover:text-accent hover:bg-accent-surface transition-colors cursor-pointer"><Minus size={14} /></button>
           <span className="w-8 text-center font-mono-tabular text-label-md text-charcoal-ink border-x border-outline-variant/40 py-1">{item.quantity}</span>
           <button onClick={() => onQuantityChange(item.product_id, item.quantity + 1)} className="p-1.5 text-muted-steel hover:text-accent hover:bg-accent-surface transition-colors cursor-pointer"><Plus size={14} /></button>
         </div>
       </div>
-      <div className="col-span-3 flex justify-end">
-        <button onClick={() => onRemove(item.product_id)} className="p-1.5 rounded-xl text-error/50 hover:bg-error-container/20 hover:text-error transition-all opacity-0 group-hover:opacity-100 cursor-pointer btn-tactile"><Trash2 size={15} /></button>
+      <div className="col-span-3 text-right">
+        <span className="font-mono-tabular text-label-md text-charcoal-ink font-medium">EGP {lineTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+      </div>
+      <div className="col-span-2 flex justify-end gap-1">
+        <button onClick={() => onEdit(item)} className="p-1.5 rounded-xl text-muted-steel/50 hover:bg-accent-surface hover:text-accent transition-all opacity-0 group-hover:opacity-100 cursor-pointer btn-tactile" title="Edit"><Edit size={14} /></button>
+        <button onClick={() => onRemove(item.product_id)} className="p-1.5 rounded-xl text-error/50 hover:bg-error-container/20 hover:text-error transition-all opacity-0 group-hover:opacity-100 cursor-pointer btn-tactile" title="Delete"><Trash2 size={14} /></button>
       </div>
     </div>
   );
@@ -62,7 +57,7 @@ export default function InvoicesView() {
   const {
     invoiceType, selectedParty, items,
     setInvoiceType, setSelectedParty,
-    addItem: storeAddItem, updateQuantity, removeItem, clearCart,
+    addItem: storeAddItem, updateItem, updateQuantity, removeItem, clearCart,
   } = useInvoiceStore();
 
   const [parties, setParties] = useState([]);
@@ -76,6 +71,8 @@ export default function InvoicesView() {
   const [sellingPrice, setSellingPrice] = useState('');
   const [salePrice, setSalePrice] = useState('');
   const [autoFetchedCost, setAutoFetchedCost] = useState(null);
+  const [editingItemId, setEditingItemId] = useState(null);
+  const [itemQuantity, setItemQuantity] = useState('1');
   const [submitting, setSubmitting] = useState(false);
   const [lastInvoice, setLastInvoice] = useState(null);
   const [templates, setTemplates] = useState([]);
@@ -147,23 +144,56 @@ export default function InvoicesView() {
 
   const addItem = useCallback(() => {
     if (!selectedProduct) return;
-    const newItem = { product_id: parseInt(selectedProduct), quantity: 1 };
-    if (invoiceType === 'purchase') {
-      newItem.purchase_price = parseFloat(purchasePrice) || 0;
-      newItem.selling_price = parseFloat(sellingPrice) || 0;
+    const qty = parseInt(itemQuantity) || 1;
+
+    if (editingItemId) {
+      const updates = { quantity: qty };
+      if (invoiceType === 'purchase') {
+        updates.purchase_price = parseFloat(purchasePrice) || 0;
+        updates.selling_price = parseFloat(sellingPrice) || 0;
+      }
+      if (invoiceType === 'sale') {
+        updates.sale_price = parseFloat(salePrice) || undefined;
+        updates.purchase_price = autoFetchedCost != null ? autoFetchedCost : undefined;
+      }
+      updateItem(editingItemId, updates);
+      setEditingItemId(null);
+    } else {
+      const newItem = { product_id: parseInt(selectedProduct), quantity: qty };
+      if (invoiceType === 'purchase') {
+        newItem.purchase_price = parseFloat(purchasePrice) || 0;
+        newItem.selling_price = parseFloat(sellingPrice) || 0;
+      }
+      if (invoiceType === 'sale') {
+        newItem.sale_price = parseFloat(salePrice) || undefined;
+        newItem.purchase_price = autoFetchedCost != null ? autoFetchedCost : undefined;
+      }
+      storeAddItem(newItem);
     }
-    if (invoiceType === 'sale') {
-      newItem.sale_price = parseFloat(salePrice) || undefined;
-      newItem.purchase_price = autoFetchedCost != null ? autoFetchedCost : undefined;
-    }
-    storeAddItem(newItem);
     setSelectedProduct('');
     setProductSearch('');
     setPurchasePrice('');
     setSellingPrice('');
     setSalePrice('');
+    setItemQuantity('1');
     setAutoFetchedCost(null);
-  }, [selectedProduct, invoiceType, purchasePrice, sellingPrice, salePrice, autoFetchedCost, storeAddItem]);
+  }, [selectedProduct, invoiceType, purchasePrice, sellingPrice, salePrice, itemQuantity, autoFetchedCost, storeAddItem, updateItem, editingItemId]);
+
+  function handleEditItem(item) {
+    const prod = products.find(p => p.id === item.product_id);
+    setSelectedProduct(String(item.product_id));
+    setProductSearch(prod?.name || '');
+    setItemQuantity(String(item.quantity));
+    setEditingItemId(item.product_id);
+    if (invoiceType === 'purchase') {
+      setPurchasePrice(String(item.purchase_price || ''));
+      setSellingPrice(String(item.selling_price || ''));
+    }
+    if (invoiceType === 'sale') {
+      setSalePrice(String(item.sale_price || ''));
+      setAutoFetchedCost(item.purchase_price != null ? Number(item.purchase_price) : null);
+    }
+  }
 
 
   async function handleCreateNewProduct() {
@@ -257,8 +287,19 @@ export default function InvoicesView() {
     setBulkInvoicesToPrint([]);
   }
 
+  const printPortalRef = useRef(null);
+  const invoicePrintRef = useRef(null);
+
   function handleConfirmPrint() {
-    window.print();
+    const portal = printPortalRef.current;
+    if (!portal) { window.print(); return; }
+    portal.style.display = 'block';
+    document.body.classList.add('printing');
+    requestAnimationFrame(() => {
+      window.print();
+      portal.style.display = 'none';
+      document.body.classList.remove('printing');
+    });
   }
 
   function toggleSelect(id) {
@@ -499,21 +540,18 @@ export default function InvoicesView() {
                   </div>
                   {invoiceType === 'purchase' && (
                     <>
-                      <input type="number" value={purchasePrice} onChange={(e) => setPurchasePrice(e.target.value)} placeholder="Buy Price" className={`sm:w-28 ${inputClass}`} />
-                      <input type="number" value={sellingPrice} onChange={(e) => setSellingPrice(e.target.value)} placeholder="Sell Price" className={`sm:w-28 ${inputClass}`} />
+                      <input type="number" value={purchasePrice} onChange={(e) => setPurchasePrice(e.target.value)} placeholder="سعر الشراء" className={`sm:w-28 ${inputClass}`} />
                     </>
                   )}
                   {invoiceType === 'sale' && (
                     <div className="flex flex-col gap-1">
-                      <div className="relative">
-                        <input
-                          type="number"
-                          value={salePrice}
-                          onChange={(e) => setSalePrice(e.target.value)}
-                          placeholder="Sale Price / سعر البيع"
-                          className={`sm:w-36 ${inputClass}`}
-                        />
-                      </div>
+                      <input
+                        type="number"
+                        value={salePrice}
+                        onChange={(e) => setSalePrice(e.target.value)}
+                        placeholder="سعر البيع"
+                        className={`sm:w-32 ${inputClass}`}
+                      />
                       {autoFetchedCost != null && (
                         <span className="text-[10px] text-muted-steel px-1">
                           Cost: <span className="font-mono font-semibold text-charcoal-ink">{autoFetchedCost.toLocaleString()}</span>
@@ -522,28 +560,47 @@ export default function InvoicesView() {
                               parseFloat(salePrice) - autoFetchedCost > 0 ? 'text-emerald-600' : 'text-red-500'
                             }`}>
                               {parseFloat(salePrice) - autoFetchedCost > 0 ? '+' : ''}
-                              {(parseFloat(salePrice) - autoFetchedCost).toLocaleString(undefined, { maximumFractionDigits: 2 })} / unit
+                              {(parseFloat(salePrice) - autoFetchedCost).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                             </span>
                           )}
                         </span>
                       )}
                     </div>
                   )}
-                  <button onClick={addItem} disabled={!selectedProduct}
-                    className="px-4 py-2 rounded-xl bg-accent text-on-primary text-label-md hover:bg-accent-hover shadow-sm transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer btn-tactile">
-                    <Plus size={16} /> Add
-                  </button>
+                  <input
+                    type="number"
+                    value={itemQuantity}
+                    onChange={(e) => setItemQuantity(e.target.value)}
+                    placeholder="الكمية"
+                    min="1"
+                    className={`sm:w-20 ${inputClass} text-center`}
+                  />
+                  <div className="flex items-center gap-1">
+                    <button onClick={addItem} disabled={!selectedProduct}
+                      className={`px-4 py-2 rounded-xl text-on-primary text-label-md shadow-sm transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer btn-tactile ${
+                        editingItemId ? 'bg-amber-500 hover:bg-amber-600' : 'bg-accent hover:bg-accent-hover'
+                      }`}>
+                      {editingItemId ? <><Edit size={14} /> Update</> : <><Plus size={16} /> Add</>}
+                    </button>
+                    {editingItemId && (
+                      <button onClick={() => { setEditingItemId(null); setSelectedProduct(''); setProductSearch(''); setPurchasePrice(''); setSellingPrice(''); setSalePrice(''); setItemQuantity('1'); setAutoFetchedCost(null); }}
+                        className="p-2 rounded-xl text-muted-steel border border-outline-variant/60 hover:bg-surface-container-low transition-all cursor-pointer btn-tactile">
+                        <X size={16} />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="border border-outline-variant/40 rounded-xl overflow-hidden">
                   <div className="grid grid-cols-12 gap-2 px-4 py-2.5 bg-surface-container-low/30 border-b border-outline-variant/30 text-label-sm text-muted-steel/70 uppercase tracking-wider">
-                    <div className="col-span-6">Product</div>
+                    <div className="col-span-4">Product</div>
                     <div className="col-span-3 text-center">Qty</div>
-                    <div className="col-span-3 text-right">Actions</div>
+                    <div className="col-span-3 text-right">Total</div>
+                    <div className="col-span-2 text-right">Actions</div>
                   </div>
                   <div className="bg-surface-container-lowest">
                     {items.length > 0 ? (
-                      items.map((item) => <InvoiceItemRow key={item.product_id} item={item} products={products} invoiceType={invoiceType} onQuantityChange={updateQuantity} onRemove={removeItem} />)
+                      items.map((item) => <InvoiceItemRow key={item.product_id} item={item} products={products} invoiceType={invoiceType} onQuantityChange={updateQuantity} onRemove={removeItem} onEdit={handleEditItem} />)
                     ) : (
                       <div className="flex flex-col items-center justify-center py-10 text-muted-steel">
                         <ShoppingCart size={32} strokeWidth={1.2} className="mb-3 opacity-30" />
@@ -795,28 +852,22 @@ export default function InvoicesView() {
                 </button>
                 <button
                   onClick={async () => {
+                    const el = invoicePrintRef.current?.querySelector('.invoice-print-area');
+                    if (!el) return;
                     setDownloadingPdf(true);
                     try {
-                      const el = document.getElementById('invoice-print-area');
-                      if (!el) return;
-                      if (!window.html2pdf) {
-                        await new Promise((resolve, reject) => {
-                          const s = document.createElement('script');
-                          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js';
-                          s.onload = resolve; s.onerror = reject;
-                          document.head.appendChild(s);
-                        });
-                      }
-                      await window.html2pdf().set({
-                        margin: 0,
-                        filename: `invoice-${String(invoiceToPrint.id).padStart(5, '0')}.pdf`,
-                        image: { type: 'jpeg', quality: 0.98 },
-                        html2canvas: { scale: 2, useCORS: true },
-                        jsPDF: { unit: 'mm', format: paperSize === 'a5' ? 'a5' : 'a4', orientation: 'portrait' },
-                      }).from(el).save();
+                      await html2pdf()
+                        .set({
+                          margin: 0,
+                          filename: `Invoice_#${invoiceToPrint.id}.pdf`,
+                          image: { type: 'jpeg', quality: 0.98 },
+                          html2canvas: { scale: 2, useCORS: true },
+                          jsPDF: { unit: 'mm', format: paperSize === 'a5' ? 'a5' : 'a4', orientation: 'portrait' },
+                        })
+                        .from(el)
+                        .save();
                     } catch (err) {
-                      console.error('PDF download error:', err);
-                      alert('Error downloading PDF. Please use Print → Save as PDF instead.');
+                      console.error('PDF generation failed:', err);
                     } finally {
                       setDownloadingPdf(false);
                     }
@@ -835,7 +886,7 @@ export default function InvoicesView() {
               </div>
             </div>
             <div className="flex-1 overflow-y-auto py-8 flex justify-center">
-              <div className="shadow-2xl rounded-xl overflow-hidden border border-outline-variant/30 self-start">
+              <div ref={invoicePrintRef} className="shadow-2xl rounded-xl overflow-hidden border border-outline-variant/30 self-start">
                 <InvoicePrintTemplate
                   key={`${invoiceToPrint?.id || 'preview'}-${paperSize}`}
                   invoice={invoiceToPrint}
@@ -852,20 +903,23 @@ export default function InvoicesView() {
             </div>
           </div>
 
-          <div className="hidden print:block fixed inset-0 z-[200] bg-white">
-            <InvoicePrintTemplate
-              key={`print-${invoiceToPrint?.id || 'preview'}-${paperSize}`}
-              invoice={invoiceToPrint}
-              tenantName={tenantName}
-              partyName={partyForPrint?.name || 'Unknown'}
-              partyPhone={partyForPrint?.phone || null}
-              partyAddress={partyForPrint?.address || null}
-              logoUrl={logoUrl}
-              defaultFooterText={defaultFooterText}
-              taxNumber={taxNumber}
-              paperSize={paperSize}
-            />
-          </div>
+          {createPortal(
+            <div ref={printPortalRef} className="print-portal" style={{ display: 'none' }}>
+              <InvoicePrintTemplate
+                key={`print-${invoiceToPrint?.id || 'preview'}-${paperSize}`}
+                invoice={invoiceToPrint}
+                tenantName={tenantName}
+                partyName={partyForPrint?.name || 'Unknown'}
+                partyPhone={partyForPrint?.phone || null}
+                partyAddress={partyForPrint?.address || null}
+                logoUrl={logoUrl}
+                defaultFooterText={defaultFooterText}
+                taxNumber={taxNumber}
+                paperSize={paperSize}
+              />
+            </div>,
+            document.body
+          )}
         </>
       )}
 
@@ -907,20 +961,23 @@ export default function InvoicesView() {
             </div>
           </div>
 
-          <div className="hidden print:block fixed inset-0 z-[200] bg-white">
-            {bulkInvoicesToPrint.map((inv) => (
-              <InvoicePrintTemplate
-                key={inv.id}
-                invoice={inv}
-                tenantName={tenantName}
-                partyName={parties.find(p => p.id === inv.party_id)?.name || 'Unknown'}
-                logoUrl={logoUrl}
-                defaultFooterText={defaultFooterText}
-                taxNumber={taxNumber}
-                paperSize={paperSize}
-              />
-            ))}
-          </div>
+          {createPortal(
+            <div ref={printPortalRef} className="print-portal" style={{ display: 'none' }}>
+              {bulkInvoicesToPrint.map((inv) => (
+                <InvoicePrintTemplate
+                  key={inv.id}
+                  invoice={inv}
+                  tenantName={tenantName}
+                  partyName={parties.find(p => p.id === inv.party_id)?.name || 'Unknown'}
+                  logoUrl={logoUrl}
+                  defaultFooterText={defaultFooterText}
+                  taxNumber={taxNumber}
+                  paperSize={paperSize}
+                />
+              ))}
+            </div>,
+            document.body
+          )}
         </>
       )}
 

@@ -8,6 +8,7 @@ function AddPartyModal({ isOpen, onClose, onCreated }) {
   const [partyType, setPartyType] = useState('client');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
+  const [initialBalance, setInitialBalance] = useState('');
   const [submitting, setSubmitting] = useState(false);
   if (!isOpen) return null;
 
@@ -16,11 +17,18 @@ function AddPartyModal({ isOpen, onClose, onCreated }) {
     if (!name.trim()) return;
     setSubmitting(true);
     try {
-      await api.createParty({ name: name.trim(), party_type: partyType, phone: phone.trim() || null, address: address.trim() || null });
+      await api.createParty({
+        name: name.trim(),
+        party_type: partyType,
+        phone: phone.trim() || null,
+        address: address.trim() || null,
+        initial_balance: parseFloat(initialBalance) || 0,
+      });
       setName('');
       setPartyType('client');
       setPhone('');
       setAddress('');
+      setInitialBalance('');
       onCreated();
       onClose();
     } catch (err) {
@@ -87,6 +95,14 @@ function AddPartyModal({ isOpen, onClose, onCreated }) {
                 placeholder="Street, City"
               />
             </div>
+          </div>
+          <div>
+            <label className="block text-label-sm text-muted-steel mb-1.5 uppercase tracking-wider">Opening Balance (EGP)</label>
+            <input
+              type="number" min="0" step="0.01" value={initialBalance} onChange={(e) => setInitialBalance(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-xl border border-outline-variant/60 bg-surface-container-lowest text-sm text-charcoal-ink placeholder:text-outline focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all duration-200"
+              placeholder="0.00 — leave blank if no prior debt"
+            />
           </div>
           <div className="flex items-center justify-end gap-2 pt-4">
             <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-label-md text-muted-steel hover:bg-surface-container-low transition-colors cursor-pointer btn-tactile">Cancel</button>

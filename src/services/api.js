@@ -59,6 +59,7 @@ export const api = {
   getPartyBalance: (partyId) => request(`/parties/${partyId}/balance`),
   getPartySummary: (partyId) => request(`/parties/${partyId}/summary`),
   createPartyPayment: (partyId, data) => request(`/parties/${partyId}/payments`, { method: 'POST', body: JSON.stringify(data) }),
+  createStockReturn: (partyId, data) => request(`/parties/${partyId}/stock-return`, { method: 'POST', body: JSON.stringify(data) }),
 
   getProducts: (skip = 0, limit = 100) => request(`/products?skip=${skip}&limit=${limit}`),
   getProductsSelect: () => request('/products/select'),

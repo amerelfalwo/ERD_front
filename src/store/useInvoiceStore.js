@@ -24,6 +24,13 @@ export const useInvoiceStore = create(
           return { items: [...state.items, item] };
         }),
 
+      updateItem: (productId, updates) =>
+        set((state) => ({
+          items: state.items.map((i) =>
+            i.product_id === productId ? { ...i, ...updates } : i
+          ),
+        })),
+
       updateQuantity: (productId, qty) =>
         set((state) => ({
           items: state.items.map((i) =>

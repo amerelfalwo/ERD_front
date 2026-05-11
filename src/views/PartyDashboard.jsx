@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, DollarSign, CreditCard, AlertCircle,
-  Package, Printer, X, Loader2, Edit, Trash2, Undo2, TrendingUp, Download, Plus
+  Package, Printer, X, Loader2, Edit, Trash2, Undo2, TrendingUp, Download, Plus,
+  ChevronDown, ChevronRight, RotateCcw
 } from 'lucide-react';
 import api from '../services/api';
 import InvoicePrintTemplate from '../components/InvoicePrintTemplate';
@@ -29,6 +31,20 @@ export default function PartyDashboard() {
   const [paymentSubmitting, setPaymentSubmitting] = useState(false);
   const [paymentError, setPaymentError] = useState('');
   const [toastMessage, setToastMessage] = useState('');
+  const [expandedRows, setExpandedRows] = useState(new Set());
+  const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
+  const [returnItems, setReturnItems] = useState([]);
+  const [returnSubmitting, setReturnSubmitting] = useState(false);
+  const [returnError, setReturnError] = useState('');
+  const [isTotalExpanded, setIsTotalExpanded] = useState(false);
+
+  function toggleRow(id) {
+    setExpandedRows(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
 
   const { user } = useAuth();
   const tenantName = user?.tenant?.company_name || 'ERP Dashboard';
@@ -76,6 +92,56 @@ export default function PartyDashboard() {
     }
   }
 
+  function openReturnModal() {
+    if (!summary || !summary.products || summary.products.length === 0) return;
+    setReturnItems(
+      summary.products
+        .filter(p => p.remaining_stock > 0)
+        .map(p => ({
+          product_id: p.id,
+          product_name: p.name,
+          available_stock: p.remaining_stock,
+          return_qty: 0,
+          unit_price: p.last_purchase_price || 0,
+        }))
+    );
+    setReturnError('');
+    setIsReturnModalOpen(true);
+  }
+
+  async function handleStockReturn() {
+    setReturnError('');
+    const validItems = returnItems.filter(i => i.return_qty > 0);
+    if (validItems.length === 0) {
+      setReturnError('Select at least one product to return.');
+      return;
+    }
+    for (const item of validItems) {
+      if (item.return_qty > item.available_stock) {
+        setReturnError(`Cannot return more than available stock for "${item.product_name}".`);
+        return;
+      }
+    }
+    setReturnSubmitting(true);
+    try {
+      const result = await api.createStockReturn(partyId, {
+        items: validItems.map(i => ({
+          product_id: i.product_id,
+          quantity: i.return_qty,
+          unit_price: i.unit_price,
+        }))
+      });
+      setSummary(result);
+      setToastMessage('Return processed successfully!');
+      setTimeout(() => setToastMessage(''), 3000);
+      setIsReturnModalOpen(false);
+    } catch (err) {
+      setReturnError(err.message || 'Failed to process return.');
+    } finally {
+      setReturnSubmitting(false);
+    }
+  }
+
   async function handleDeleteInvoice(invoiceId) {
     try {
       await api.deleteInvoice(invoiceId);
@@ -118,15 +184,9 @@ export default function PartyDashboard() {
 
   const { party, financials, invoices, products } = summary;
 
-  const totalProfit = Number(financials.total_profit || 0);
-
-  const kpis = [
-    { label: 'Total Invoiced', value: `EGP ${Number(financials.total_invoiced).toLocaleString()}`, icon: DollarSign, color: 'text-accent bg-accent-surface' },
-    { label: 'Total Paid', value: `EGP ${Number(financials.total_paid).toLocaleString()}`, icon: CreditCard, color: 'text-emerald-600 bg-emerald-50' },
-    { label: 'Outstanding', value: `EGP ${Number(financials.balance).toLocaleString()}`, icon: AlertCircle, color: financials.balance > 0 ? 'text-error bg-error-container/30' : 'text-accent bg-accent-surface' },
-    { label: 'Total Profit', value: `EGP ${totalProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, icon: TrendingUp, color: totalProfit >= 0 ? 'text-emerald-600 bg-emerald-50' : 'text-error bg-error-container/30' },
-    { label: 'Total Invoices', value: invoices.length, icon: Package, color: 'text-indigo-600 bg-indigo-50' },
-  ];
+  const fmt = (n) => `EGP ${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+  const balance = Number(financials.balance || 0);
+  const totalBeforePayments = Number(financials.initial_balance || 0) + Number(financials.total_purchases || 0) - Number(financials.total_returns || 0);
 
   return (
     <>
@@ -142,29 +202,108 @@ export default function PartyDashboard() {
               <p className="text-label-sm text-muted-steel capitalize">{party.party_type}</p>
             </div>
           </div>
-          {financials.balance > 0 && (
-            <button 
-              onClick={() => setIsPaymentModalOpen(true)}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-label-md bg-accent text-on-primary hover:bg-accent-hover shadow-sm transition-all cursor-pointer btn-tactile"
-            >
-              <Plus size={18} />
-              Record Payment
-            </button>
-          )}
+          <div className="flex items-center gap-3">
+            {products.length > 0 && (
+              <button
+                onClick={openReturnModal}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-label-md bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm transition-all cursor-pointer btn-tactile"
+              >
+                <RotateCcw size={18} />
+                Return / استرجاع
+              </button>
+            )}
+            {balance > 0 && (
+              <button
+                onClick={() => setIsPaymentModalOpen(true)}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-label-md bg-accent text-on-primary hover:bg-accent-hover shadow-sm transition-all cursor-pointer btn-tactile"
+              >
+                <Plus size={18} />
+                Record Payment
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          {kpis.map((kpi, idx) => (
-            <div key={idx} className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl p-5 shadow-whisper animate-fade-in-up" style={{ animationDelay: `${idx * 60}ms` }}>
-              <div className="flex items-center gap-3 mb-3">
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${kpi.color}`}>
-                  <kpi.icon size={18} />
+        {/* ── 3-Card Financial Summary ── */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-in-up">
+          
+          {/* Card 1: Total Before Payments */}
+          <div className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl shadow-whisper p-6 flex flex-col justify-start">
+            <div 
+              className="flex items-center justify-between cursor-pointer group"
+              onClick={() => setIsTotalExpanded(!isTotalExpanded)}
+            >
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Package size={20} className="text-muted-steel" />
+                  <span className="text-sm font-medium text-charcoal-ink/70">Total Amount</span>
                 </div>
-                <span className="text-label-sm text-muted-steel">{kpi.label}</span>
+                <p className="text-3xl font-bold font-mono-tabular tracking-tight text-charcoal-ink">
+                  {fmt(totalBeforePayments)}
+                </p>
               </div>
-              <p className="text-h2 text-charcoal-ink font-mono-tabular">{kpi.value}</p>
+              <div className="p-2 rounded-full bg-surface-container-low group-hover:bg-surface-container transition-colors">
+                {isTotalExpanded ? <ChevronDown size={20} className="text-charcoal-ink" /> : <ChevronRight size={20} className="text-charcoal-ink" />}
+              </div>
             </div>
-          ))}
+            
+            {isTotalExpanded && (
+              <div className="mt-6 pt-6 border-t border-outline-variant/30 space-y-4 animate-fade-in-up">
+                {Number(financials.initial_balance || 0) > 0 && (
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-muted-steel">Initial Balance</span>
+                    <span className="font-mono-tabular font-medium text-amber-600">{fmt(financials.initial_balance)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-muted-steel">Total Purchases <span className="text-charcoal-ink/30 ml-1">(+)</span></span>
+                  <span className="font-mono-tabular font-medium text-charcoal-ink">{fmt(financials.total_purchases)}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-muted-steel">Total Returns <span className="text-indigo-400 ml-1">(−)</span></span>
+                  <span className="font-mono-tabular font-medium text-indigo-500">{fmt(financials.total_returns)}</span>
+                </div>
+                <div className="flex justify-between items-center pt-3 border-t border-outline-variant/20 text-sm font-bold">
+                  <span className="text-charcoal-ink">Final Total <span className="text-charcoal-ink/30 ml-1">(=)</span></span>
+                  <span className="font-mono-tabular text-charcoal-ink">{fmt(totalBeforePayments)}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Card 2: Total Paid */}
+          <div className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl shadow-whisper p-6 flex flex-col justify-start">
+            <div className="flex items-center gap-2 mb-2">
+              <CreditCard size={20} className="text-emerald-500" />
+              <span className="text-sm font-medium text-charcoal-ink/70">Total Paid</span>
+            </div>
+            <p className="text-3xl font-bold font-mono-tabular tracking-tight text-emerald-600">
+              {fmt(financials.total_paid)}
+            </p>
+          </div>
+
+          {/* Card 3: Outstanding Balance */}
+          <div className={`p-6 rounded-2xl flex flex-col justify-start ${
+            balance > 0
+              ? 'bg-gradient-to-br from-error-container/40 to-error-container/10 border border-error/10 shadow-sm'
+              : 'bg-gradient-to-br from-accent/10 to-accent/5 border border-accent/10 shadow-sm'
+          }`}>
+            <div className="flex items-center gap-2 mb-2">
+              <AlertCircle size={20} className={balance > 0 ? 'text-error' : 'text-accent'} />
+              <span className="text-sm font-medium text-charcoal-ink/70">Outstanding Balance</span>
+            </div>
+            <p className={`text-3xl font-bold font-mono-tabular tracking-tight ${
+              balance > 0 ? 'text-error' : 'text-accent'
+            }`}>
+              {fmt(balance)}
+            </p>
+            {balance === 0 && (
+              <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-accent/10 text-accent text-xs font-semibold w-fit">
+                <span>✓</span> Fully settled
+              </div>
+            )}
+          </div>
+          
         </div>
 
         <div className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl shadow-whisper animate-fade-in-up">
@@ -188,62 +327,92 @@ export default function PartyDashboard() {
                     <th className="py-3 px-4 text-left">ID</th>
                     <th className="py-3 px-4 text-left">Type</th>
                     <th className="py-3 px-4 text-right">Total</th>
-                    <th className="py-3 px-4 text-right">Profit</th>
-                    <th className="py-3 px-4 text-right">Paid</th>
-                    <th className="py-3 px-4 text-center">Status</th>
                     <th className="py-3 px-4 text-left">Date</th>
                     <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {invoices.map((inv) => (
-                    <tr key={inv.id} className="border-b border-outline-variant/20 hover:bg-surface-container-low/40 transition-colors">
-                      <td className="py-3 px-4">
-                        <input type="checkbox" checked={selectedIds.has(inv.id)} onChange={() => toggleSelect(inv.id)}
-                          className="w-4 h-4 rounded border-outline-variant/60 text-accent focus:ring-accent/20 cursor-pointer" />
-                      </td>
-                      <td className="py-3 px-4 font-mono-tabular text-charcoal-ink">#{String(inv.id).padStart(5, '0')}</td>
-                      <td className="py-3 px-4 capitalize text-muted-steel">{inv.invoice_type}</td>
-                      <td className="py-3 px-4 text-right font-mono-tabular">EGP {Number(inv.total_amount).toLocaleString()}</td>
-                      <td className="py-3 px-4 text-right font-mono-tabular">
-                        {inv.invoice_profit != null && inv.invoice_profit !== 0 ? (
-                          <span className={`text-xs font-bold px-2 py-0.5 rounded-lg ${Number(inv.invoice_profit) >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>
-                            {Number(inv.invoice_profit) > 0 ? '+' : ''}{Number(inv.invoice_profit).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </span>
-                        ) : (
-                          <span className="text-muted-steel text-xs">—</span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 text-right font-mono-tabular text-emerald-600">EGP {Number(inv.paid_amount).toLocaleString()}</td>
-                      <td className="py-3 px-4 text-center">
-                        <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-lg ${inv.status === 'paid' ? 'bg-accent-surface text-accent' : inv.status === 'partial' ? 'bg-amber-100 text-amber-700' : 'bg-error-container/30 text-error'}`}>{inv.status}</span>
-                      </td>
-                      <td className="py-3 px-4 font-mono-tabular text-muted-steel text-xs">{inv.created_at ? new Date(inv.created_at).toLocaleDateString() : '-'}</td>
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          {['sale', 'purchase'].includes(inv.invoice_type) && (
-                            <button onClick={() => setReturnInvoice(inv)}
-                              className="p-1.5 rounded-xl text-muted-steel hover:bg-accent-surface hover:text-accent transition-all cursor-pointer btn-tactile"
-                              title="Return">
-                              <Undo2 size={16} />
+                  {invoices.map((inv) => {
+                    const isExpanded = expandedRows.has(inv.id);
+                    const hasItems = Array.isArray(inv.items) && inv.items.length > 0;
+                    const typeLabel = (inv.invoice_type || '').replace('_', ' ');
+                    const isReturn = typeLabel.includes('return');
+                    return (
+                      <>
+                        <tr key={inv.id} className="border-b border-outline-variant/20 hover:bg-surface-container-low/40 transition-colors">
+                          <td className="py-3 px-4">
+                            <input type="checkbox" checked={selectedIds.has(inv.id)} onChange={() => toggleSelect(inv.id)}
+                              className="w-4 h-4 rounded border-outline-variant/60 text-accent focus:ring-accent/20 cursor-pointer" />
+                          </td>
+                          <td className="py-3 px-4">
+                            <button
+                              onClick={() => hasItems && toggleRow(inv.id)}
+                              className={`flex items-center gap-1.5 font-mono-tabular text-charcoal-ink transition-colors ${hasItems ? 'cursor-pointer hover:text-accent' : 'cursor-default opacity-60'}`}
+                              title={hasItems ? (isExpanded ? 'Collapse items' : 'Expand items') : 'No items'}
+                            >
+                              {hasItems
+                                ? (isExpanded ? <ChevronDown size={14} className="text-accent" /> : <ChevronRight size={14} />)
+                                : <span className="w-[14px]" />}
+                              #{String(inv.id).padStart(5, '0')}
                             </button>
-                          )}
-                          <button onClick={() => setEditingInvoice(inv)}
-                            className="p-1.5 rounded-xl text-muted-steel hover:bg-accent-surface hover:text-accent transition-all cursor-pointer btn-tactile">
-                            <Edit size={16} />
-                          </button>
-                          <button onClick={() => setInvoiceToPrint(inv)}
-                            className="p-1.5 rounded-xl text-muted-steel hover:bg-accent-surface hover:text-accent transition-all cursor-pointer btn-tactile">
-                            <Printer size={16} />
-                          </button>
-                          <button onClick={() => setInvoiceToDelete(inv)}
-                            className="p-1.5 rounded-xl text-muted-steel hover:bg-error-container/30 hover:text-error transition-all cursor-pointer btn-tactile">
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg capitalize ${
+                              isReturn
+                                ? 'bg-indigo-50 text-indigo-600'
+                                : typeLabel === 'purchase'
+                                  ? 'bg-amber-50 text-amber-700'
+                                  : 'bg-emerald-50 text-emerald-700'
+                            }`}>
+                              {typeLabel}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono-tabular font-medium text-charcoal-ink">EGP {Number(inv.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                          <td className="py-3 px-4 font-mono-tabular text-muted-steel text-xs">{inv.created_at ? new Date(inv.created_at).toLocaleDateString('en-GB') : '-'}</td>
+                          <td className="py-3 px-4 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <button onClick={() => setEditingInvoice(inv)}
+                                className="p-1.5 rounded-xl text-muted-steel hover:bg-accent-surface hover:text-accent transition-all cursor-pointer btn-tactile"
+                                title="Edit / تعديل">
+                                <Edit size={16} />
+                              </button>
+                              <button onClick={() => setInvoiceToPrint(inv)}
+                                className="p-1.5 rounded-xl text-muted-steel hover:bg-accent-surface hover:text-accent transition-all cursor-pointer btn-tactile"
+                                title="Print / طباعة">
+                                <Printer size={16} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                        {isExpanded && hasItems && (
+                          <tr key={`${inv.id}-items`} className="bg-surface-container-low/60">
+                            <td colSpan={6} className="px-10 py-3">
+                              <table className="w-full text-xs border border-outline-variant/20 rounded-xl overflow-hidden">
+                                <thead>
+                                  <tr className="bg-surface-container border-b border-outline-variant/20 text-muted-steel uppercase tracking-wider">
+                                    <th className="py-2 px-3 text-left">Product</th>
+                                    <th className="py-2 px-3 text-right">Qty</th>
+                                    <th className="py-2 px-3 text-right">Unit Price</th>
+                                    <th className="py-2 px-3 text-right">Subtotal</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {inv.items.map((item, idx) => (
+                                    <tr key={idx} className="border-b border-outline-variant/10 last:border-0 hover:bg-surface-container transition-colors">
+                                      <td className="py-2 px-3 text-charcoal-ink font-medium">{item.product_name || item.name || `Product #${item.product_id}`}</td>
+                                      <td className="py-2 px-3 text-right font-mono-tabular">{item.quantity}</td>
+                                      <td className="py-2 px-3 text-right font-mono-tabular">EGP {Number(item.unit_price).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                      <td className="py-2 px-3 text-right font-mono-tabular font-semibold">EGP {Number(item.total_price ?? item.unit_price * item.quantity).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </td>
+                          </tr>
+                        )}
+                      </>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -289,8 +458,11 @@ export default function PartyDashboard() {
                 <button
                   onClick={async () => {
                     setDownloadingPdf(true);
+                    const container = document.getElementById('print-only-container');
                     try {
-                      const el = document.getElementById('invoice-print-area');
+                      if (container) container.style.display = 'block';
+                      await new Promise(r => setTimeout(r, 100));
+                      const el = container?.querySelector('#invoice-print-area') || document.getElementById('invoice-print-area');
                       if (!el) return;
                       if (!window.html2pdf) {
                         await new Promise((resolve, reject) => {
@@ -310,7 +482,10 @@ export default function PartyDashboard() {
                     } catch (err) {
                       console.error('PDF error:', err);
                       alert('Error downloading PDF. Use Print → Save as PDF instead.');
-                    } finally { setDownloadingPdf(false); }
+                    } finally {
+                      if (container) container.style.display = 'none';
+                      setDownloadingPdf(false);
+                    }
                   }}
                   disabled={downloadingPdf}
                   className="flex items-center gap-2 px-4 py-2 rounded-xl text-label-md bg-charcoal-ink text-white hover:opacity-90 shadow-sm transition-all cursor-pointer btn-tactile disabled:opacity-50"
@@ -327,9 +502,12 @@ export default function PartyDashboard() {
               </div>
             </div>
           </div>
-          <div className="hidden print:block fixed inset-0 z-[200] bg-white">
-            <InvoicePrintTemplate invoice={invoiceToPrint} tenantName={tenantName} partyName={party.name} partyPhone={party.phone} partyAddress={party.address} logoUrl={logoUrl} defaultFooterText={defaultFooterText} taxNumber={taxNumber} paperSize={paperSize} />
-          </div>
+          {createPortal(
+            <div id="print-only-container" style={{ display: 'none' }}>
+              <InvoicePrintTemplate invoice={invoiceToPrint} tenantName={tenantName} partyName={party.name} partyPhone={party.phone} partyAddress={party.address} logoUrl={logoUrl} defaultFooterText={defaultFooterText} taxNumber={taxNumber} paperSize={paperSize} />
+            </div>,
+            document.body
+          )}
         </>
       )}
 
@@ -351,11 +529,14 @@ export default function PartyDashboard() {
               ))}
             </div>
           </div>
-          <div className="hidden print:block fixed inset-0 z-[200] bg-white">
-            {bulkInvoicesToPrint.map((inv) => (
-              <InvoicePrintTemplate key={inv.id} invoice={inv} tenantName={tenantName} partyName={party.name} partyPhone={party.phone} partyAddress={party.address} logoUrl={logoUrl} defaultFooterText={defaultFooterText} taxNumber={taxNumber} paperSize={paperSize} />
-            ))}
-          </div>
+          {createPortal(
+            <div id="print-only-container" style={{ display: 'none' }}>
+              {bulkInvoicesToPrint.map((inv) => (
+                <InvoicePrintTemplate key={inv.id} invoice={inv} tenantName={tenantName} partyName={party.name} partyPhone={party.phone} partyAddress={party.address} logoUrl={logoUrl} defaultFooterText={defaultFooterText} taxNumber={taxNumber} paperSize={paperSize} />
+              ))}
+            </div>,
+            document.body
+          )}
         </>
       )}
 
@@ -465,6 +646,115 @@ export default function PartyDashboard() {
                 >
                   {paymentSubmitting && <Loader2 size={16} className="animate-spin" />}
                   Record Payment
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isReturnModalOpen && (
+        <div className="fixed inset-0 z-[100] bg-charcoal-ink/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-surface-container-lowest rounded-2xl shadow-2xl border border-outline-variant/60 w-full max-w-2xl overflow-hidden animate-fade-in-up">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center">
+                    <RotateCcw size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-h3 text-charcoal-ink">Stock Return / استرجاع</h3>
+                    <p className="text-xs text-muted-steel mt-0.5">Select products and quantities to return</p>
+                  </div>
+                </div>
+                <button onClick={() => setIsReturnModalOpen(false)} className="p-2 text-muted-steel hover:bg-surface-container-low rounded-xl transition-all btn-tactile">
+                  <X size={20} />
+                </button>
+              </div>
+
+              {returnItems.length === 0 ? (
+                <p className="text-muted-steel text-sm py-8 text-center">No products with available stock.</p>
+              ) : (
+                <div className="max-h-[50vh] overflow-y-auto mb-4">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-outline-variant/30 text-label-sm text-muted-steel uppercase tracking-wider">
+                        <th className="py-2.5 px-3 text-left">Product</th>
+                        <th className="py-2.5 px-3 text-right">Stock</th>
+                        <th className="py-2.5 px-3 text-right">Unit Price</th>
+                        <th className="py-2.5 px-3 text-center w-32">Return Qty</th>
+                        <th className="py-2.5 px-3 text-right">Subtotal</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {returnItems.map((item, idx) => (
+                        <tr key={item.product_id} className="border-b border-outline-variant/20 hover:bg-surface-container-low/40 transition-colors">
+                          <td className="py-3 px-3 text-charcoal-ink font-medium">{item.product_name}</td>
+                          <td className="py-3 px-3 text-right font-mono-tabular text-muted-steel">{item.available_stock}</td>
+                          <td className="py-3 px-3 text-right">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={item.unit_price}
+                              onChange={(e) => {
+                                const val = Math.max(0, Number(e.target.value));
+                                setReturnItems(prev => prev.map((it, i) => i === idx ? { ...it, unit_price: val } : it));
+                              }}
+                              className="w-24 bg-surface-container-low border border-outline-variant/60 rounded-lg px-2 py-1.5 text-right text-charcoal-ink font-mono-tabular focus:border-accent outline-none transition-all"
+                            />
+                          </td>
+                          <td className="py-3 px-3 flex justify-center">
+                            <input
+                              type="number"
+                              min="0"
+                              max={item.available_stock}
+                              value={item.return_qty || ''}
+                              onChange={(e) => {
+                                const val = Math.max(0, Math.min(item.available_stock, Number(e.target.value)));
+                                setReturnItems(prev => prev.map((it, i) => i === idx ? { ...it, return_qty: val } : it));
+                              }}
+                              placeholder="0"
+                              className="w-24 bg-surface-container-low border border-outline-variant/60 rounded-lg px-2 py-1.5 text-center text-charcoal-ink font-mono-tabular focus:border-indigo-500 outline-none transition-all"
+                            />
+                          </td>
+                          <td className="py-3 px-3 text-right font-mono-tabular font-medium text-charcoal-ink">
+                            {item.return_qty > 0 ? `EGP ${(item.return_qty * item.unit_price).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '-'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {(() => {
+                const returnTotal = returnItems.reduce((sum, i) => sum + (i.return_qty * i.unit_price), 0);
+                return returnTotal > 0 ? (
+                  <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 mb-4 flex justify-between items-center">
+                    <span className="text-sm font-medium text-indigo-700">Return Total / إجمالي الاسترجاع</span>
+                    <span className="text-lg font-bold font-mono-tabular text-indigo-700">EGP {returnTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  </div>
+                ) : null;
+              })()}
+
+              {returnError && <p className="text-error text-xs mb-3">{returnError}</p>}
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  onClick={() => setIsReturnModalOpen(false)}
+                  disabled={returnSubmitting}
+                  className="px-5 py-2.5 rounded-xl text-label-md text-muted-steel hover:bg-surface-container-low transition-all cursor-pointer btn-tactile"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleStockReturn}
+                  disabled={returnSubmitting || returnItems.every(i => i.return_qty <= 0)}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-label-md bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm transition-all cursor-pointer btn-tactile disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {returnSubmitting && <Loader2 size={16} className="animate-spin" />}
+                  Confirm Return / تأكيد الاسترجاع
                 </button>
               </div>
             </div>

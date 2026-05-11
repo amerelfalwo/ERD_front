@@ -221,6 +221,79 @@ input[type="number"] { -moz-appearance: textfield; }
 .shadow-whisper-lg { box-shadow: 0 4px 16px -2px rgba(0, 0, 0, 0.06), 0 2px 4px -2px rgba(0, 0, 0, 0.03); }
 
 /* ── Print ── */
+
+/* JS-driven print state: body gets .printing class before window.print() */
+body.printing #root {
+  display: none !important;
+}
+body.printing .print-portal {
+  display: block !important;
+  visibility: visible !important;
+  position: static !important;
+  overflow: visible !important;
+  height: auto !important;
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  border: none !important;
+  background: white !important;
+}
+body.printing .print-portal * {
+  visibility: visible !important;
+}
+
 @media print {
-  .print\:hidden { display: none !important; }
+  @page {
+    margin: 0;
+    size: auto;
+  }
+
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    overflow: visible !important;
+    height: auto !important;
+    width: 100% !important;
+  }
+
+  #root {
+    display: none !important;
+  }
+
+  .print-portal {
+    display: block !important;
+    visibility: visible !important;
+    position: static !important;
+    overflow: visible !important;
+    height: auto !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    background: white !important;
+  }
+
+  .print-portal * {
+    visibility: visible !important;
+  }
+
+  .print-portal .invoice-print-area {
+    position: static !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 auto !important;
+    box-shadow: none !important;
+    border: none !important;
+    page-break-after: always;
+  }
+
+  table { page-break-inside: avoid; }
+  tr { page-break-inside: avoid; }
 }
