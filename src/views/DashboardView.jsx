@@ -4,7 +4,7 @@ import {
   Download, Filter, Package, ArrowUpRight, ArrowDownRight,
 } from 'lucide-react';
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
 import api from '../services/api';
 import { SkeletonCard } from '../components/Skeleton';
@@ -20,14 +20,29 @@ function KPICard({ title, value, icon: Icon, trend, trendValue, accent = false, 
           <Icon size={18} strokeWidth={1.8} />
         </div>
       </div>
-      <div className="mt-auto">
-        <div className="text-h2 text-charcoal-ink font-mono-tabular tracking-tight">{value}</div>
-        {trendValue && (
-          <div className={`flex items-center gap-1 mt-1 ${isPositive ? 'text-accent' : 'text-error'}`}>
-            {isPositive ? <ArrowUpRight size={14} strokeWidth={2.2} /> : <ArrowDownRight size={14} strokeWidth={2.2} />}
-            <span className="text-label-sm">{trendValue}</span>
-          </div>
-        )}
+      <div className="mt-4 flex items-end justify-between">
+        <div>
+          <div className="text-h2 text-charcoal-ink font-mono-tabular tracking-tight">{value}</div>
+          {trendValue && (
+            <div className={`flex items-center gap-1 mt-1 ${isPositive ? 'text-accent' : 'text-error'}`}>
+              {isPositive ? <ArrowUpRight size={14} strokeWidth={2.2} /> : <ArrowDownRight size={14} strokeWidth={2.2} />}
+              <span className="text-label-sm">{trendValue}</span>
+            </div>
+          )}
+        </div>
+        <svg width="60" height="24" viewBox="0 0 60 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="opacity-80">
+          <path d="M2 20 C 15 15, 25 22, 40 10 C 50 2, 55 8, 58 4" stroke={isPositive ? "url(#spark-positive)" : "url(#spark-negative)"} strokeWidth="2.5" fill="none" strokeLinecap="round" />
+          <defs>
+            <linearGradient id="spark-positive" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="#4F46E5" stopOpacity="0.3" />
+              <stop offset="100%" stopColor="#4F46E5" stopOpacity="1" />
+            </linearGradient>
+            <linearGradient id="spark-negative" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="#EF4444" stopOpacity="0.3" />
+              <stop offset="100%" stopColor="#EF4444" stopOpacity="1" />
+            </linearGradient>
+          </defs>
+        </svg>
       </div>
     </div>
   );
@@ -88,15 +103,13 @@ export default function DashboardView() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="md:col-span-2"><SkeletonCard /></div>
-          <SkeletonCard />
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard />
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <SkeletonCard />
-          <SkeletonCard />
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+          <div className="lg:col-span-3 bg-surface-container-lowest rounded-2xl border border-outline-variant/60 p-6 h-96 animate-shimmer" />
+          <div className="lg:col-span-2 bg-surface-container-lowest rounded-2xl border border-outline-variant/60 p-6 h-96 animate-shimmer" />
         </div>
-        <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/60 p-6 h-80 animate-shimmer" />
       </div>
     );
   }
@@ -123,109 +136,96 @@ export default function DashboardView() {
         </div>
       </div>
 
-      {/* KPI Grid — Asymmetric: span-2 + span-1 */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 animate-fade-in-up stagger-1">
+      {/* KPI Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 animate-fade-in-up stagger-1">
         <KPICard
-          title="Total Stock Value"
-          value={`EGP ${Number(analyticsData?.stock_valuation || 0).toLocaleString()}`}
-          icon={Wallet} trend={1} trendValue="+4.2% vs last month" accent
-          className="md:col-span-2"
+          title="Total Profits"
+          value={`$${Number(analyticsData?.total_profit || 0).toLocaleString()}`}
+          icon={TrendingUp} trend={1} trendValue="+12%" accent
         />
         <KPICard
-          title="Outstanding Balances"
-          value={`EGP ${Number(analyticsData?.outstanding_balances || 0).toLocaleString()}`}
-          icon={CreditCard} trend={-1} trendValue="Requires attention"
-        />
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 animate-fade-in-up stagger-2">
-        <KPICard
-          title="Total Profit"
-          value={`EGP ${Number(analyticsData?.total_profit || 0).toLocaleString()}`}
-          icon={TrendingUp} trend={1} trendValue="Stable vs last month" accent
+          title="Customer Receivables"
+          value={`$${Number(analyticsData?.customer_receivables || 0).toLocaleString()}`}
+          icon={CreditCard} trend={1} trendValue="+4%"
         />
         <KPICard
-          title="Active Products"
-          value={Number(analyticsData?.total_products || 0).toLocaleString()}
-          icon={Package} trend={1} trendValue="Across all batches"
+          title="Supplier Payables"
+          value={`$${Number(analyticsData?.supplier_payables || 0).toLocaleString()}`}
+          icon={Wallet} trend={-1} trendValue="-2%"
+        />
+        <KPICard
+          title="Total Inventory Value"
+          value={`$${Number(analyticsData?.stock_valuation || 0).toLocaleString()}`}
+          icon={Package} trend={1} trendValue="+8%" accent
         />
       </div>
 
-      {/* Charts — Asymmetric 8/4 split */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8 animate-fade-in-up stagger-3">
-        {/* Trend Chart */}
-        <div className="lg:col-span-8 bg-surface-container-lowest border border-outline-variant/60 rounded-2xl flex flex-col shadow-whisper">
+      {/* Charts & Tables — Side by Side on Desktop */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 mb-8 animate-fade-in-up stagger-3">
+        {/* Financial Performance Chart (60%) */}
+        <div className="lg:col-span-3 bg-surface-container-lowest border border-outline-variant/60 rounded-2xl flex flex-col shadow-whisper">
           <div className="p-6 border-b border-outline-variant/40 flex justify-between items-center">
             <div>
-              <h3 className="text-h3 text-charcoal-ink">Sales vs Purchases</h3>
-              <p className="text-body-sm text-muted-steel mt-1">Monthly tracking over the year</p>
-            </div>
-            <div className="flex gap-4">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-accent" />
-                <span className="text-label-sm text-muted-steel">Sales</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-tertiary-container" />
-                <span className="text-label-sm text-muted-steel">Purchases</span>
-              </div>
+              <h3 className="text-h3 text-charcoal-ink">Financial Performance</h3>
+              <p className="text-body-sm text-muted-steel mt-1">Sales, Purchases & Profits</p>
             </div>
           </div>
-          <div className="p-6 flex-1 relative min-h-[320px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={analyticsData?.monthly_sales || []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="salesGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#4F46E5" stopOpacity={0.15} />
-                    <stop offset="95%" stopColor="#4F46E5" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="purchaseGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#a44100" stopOpacity={0.1} />
-                    <stop offset="95%" stopColor="#a44100" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
+          <div className="p-6 min-h-[360px] flex-1">
+            <ResponsiveContainer width="100%" height={320}>
+              <ComposedChart data={(analyticsData?.monthly_sales || []).map(m => ({ ...m, profit: Number(m.sales) - Number(m.purchases) }))} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--color-outline-variant)" strokeOpacity={0.35} vertical={false} />
                 <XAxis dataKey="name" tick={{ fontSize: 12, fill: 'var(--color-muted-steel)', fontFamily: 'Satoshi' }} axisLine={false} tickLine={false} dy={10} />
                 <YAxis tick={{ fontSize: 11, fill: 'var(--color-muted-steel)', fontFamily: 'JetBrains Mono' }} axisLine={false} tickLine={false} dx={-10} tickFormatter={(val) => val >= 1000 ? `${(val/1000).toFixed(0)}k` : val} />
                 <Tooltip content={<CustomTooltip />} />
-                <Area type="monotone" dataKey="sales" name="Sales" stroke="#4F46E5" strokeWidth={2.5} fill="url(#salesGrad)" dot={{ r: 3, fill: '#fff', stroke: '#4F46E5', strokeWidth: 2 }} activeDot={{ r: 5, fill: '#4F46E5', stroke: '#fff', strokeWidth: 2 }} />
-                <Area type="monotone" dataKey="purchases" name="Purchases" stroke="#a44100" strokeWidth={1.5} fill="url(#purchaseGrad)" dot={false} activeDot={{ r: 4, fill: '#a44100', stroke: '#fff', strokeWidth: 2 }} />
-              </AreaChart>
+                <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', fontFamily: 'Satoshi', color: 'var(--color-muted-steel)' }} />
+                <Bar dataKey="sales" name="Sales" fill="#4F46E5" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                <Bar dataKey="purchases" name="Purchases" fill="#93C5FD" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                <Line type="monotone" dataKey="profit" name="Profits" stroke="#4F46E5" strokeWidth={2.5} strokeDasharray="5 5" dot={{ r: 3, fill: '#fff', stroke: '#4F46E5', strokeWidth: 2 }} activeDot={{ r: 5, fill: '#4F46E5', stroke: '#fff', strokeWidth: 2 }} />
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Activity */}
-        <div className="lg:col-span-4 bg-surface-container-lowest border border-outline-variant/60 rounded-2xl flex flex-col shadow-whisper">
+        {/* Recent Transactions List (40%) */}
+        <div className="lg:col-span-2 bg-surface-container-lowest border border-outline-variant/60 rounded-2xl flex flex-col shadow-whisper overflow-hidden">
           <div className="p-6 border-b border-outline-variant/40">
-            <h3 className="text-h3 text-charcoal-ink">Recent Activity</h3>
-            <p className="text-body-sm text-muted-steel mt-1">Latest transactions & profit</p>
+            <h3 className="text-h3 text-charcoal-ink">Recent Transactions</h3>
           </div>
-          <div className="p-3 flex-1 flex flex-col gap-0 overflow-y-auto max-h-[340px]">
-            {(profitData?.items || []).slice(0, 8).map((item, idx) => (
-              <div
-                key={idx}
-                className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-surface-container-low transition-colors duration-200 animate-fade-in-up"
-                style={{ animationDelay: `${idx * 50}ms` }}
-              >
-                <div>
-                  <p className="text-label-md text-charcoal-ink">
-                    Invoice <span className="font-mono-tabular text-muted-steel">#{item.invoice_id}</span>
-                  </p>
-                  <p className="text-body-sm text-muted-steel">
-                    Batch <span className="font-mono-tabular">#{item.batch_id}</span>
-                  </p>
+          <div className="flex-1 overflow-y-auto p-2">
+            {(analyticsData?.recent_transactions || []).map((item, idx) => {
+              const amount = Number(item.value);
+              const isPositive = !item.description.toLowerCase().includes('purchase') && !item.description.toLowerCase().includes('expense');
+              
+              return (
+                <div key={idx} className="flex items-center justify-between p-4 border-b border-outline-variant/20 last:border-0 hover:bg-surface-container-low/50 transition-colors rounded-xl mx-2 my-1">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${isPositive ? 'bg-accent/10 text-accent' : 'bg-warning/10 text-warning'}`}>
+                      {isPositive ? <ArrowUpRight size={18} /> : <ArrowDownRight size={18} />}
+                    </div>
+                    <div>
+                      <p className="text-body-sm font-medium text-charcoal-ink">{item.description}</p>
+                      <p className="text-label-sm text-muted-steel mt-0.5">{item.date}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className={`text-body-sm font-mono-tabular font-medium ${isPositive ? 'text-charcoal-ink' : 'text-charcoal-ink'}`}>
+                      {isPositive ? '+' : '-'}${Math.abs(amount).toLocaleString()}
+                    </p>
+                    <p className="text-label-sm mt-0.5 flex items-center justify-end gap-1">
+                      {item.status === 'Pending' ? (
+                        <span className="text-warning flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-warning"></span> Pending</span>
+                      ) : (
+                        <span className="text-accent flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-accent"></span> Completed</span>
+                      )}
+                    </p>
+                  </div>
                 </div>
-                <span className={`font-mono-tabular text-label-md ${parseFloat(item.profit) >= 0 ? 'text-accent' : 'text-error'}`}>
-                  {parseFloat(item.profit) >= 0 ? '+' : ''}{Number(item.profit).toLocaleString()}
-                </span>
-              </div>
-            ))}
-            {(!profitData?.items || profitData.items.length === 0) && (
-              <div className="flex flex-col items-center justify-center py-10 text-muted-steel flex-1">
-                <Package size={36} strokeWidth={1.2} className="mb-3 opacity-30" />
-                <p className="text-body-sm">No transactions recorded yet</p>
-                <p className="text-body-sm text-muted-steel/60 mt-1">Create your first invoice to see activity</p>
+              );
+            })}
+            {(!analyticsData?.recent_transactions || analyticsData.recent_transactions.length === 0) && (
+              <div className="p-8 text-center text-muted-steel">
+                <Package size={36} strokeWidth={1.2} className="mx-auto mb-3 opacity-30" />
+                <p className="text-body-sm">No recent transactions</p>
               </div>
             )}
           </div>
@@ -234,3 +234,4 @@ export default function DashboardView() {
     </>
   );
 }
+

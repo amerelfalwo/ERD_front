@@ -13,11 +13,26 @@ import { useAuth } from '../context/AuthContext';
 import html2pdf from 'html2pdf.js';
 
 
-function InvoiceItemRow({ item, products, invoiceType, onQuantityChange, onRemove, onEdit }) {
+function InvoiceItemRow({ item, products, invoiceType, onQuantityChange, onRemove, onEdit, maxStock }) {
   const product = products.find((p) => p.id === item.product_id);
   const displayName = item.product_name || product?.name || `#${item.product_id ?? item.batch_id}`;
   const unitPrice = invoiceType === 'sale' ? Number(item.sale_price || 0) : Number(item.purchase_price || 0);
   const lineTotal = unitPrice * Number(item.quantity);
+
+  const handleQtyInput = (e) => {
+    const val = e.target.value.replace(/[^0-9]/g, '');
+    if (val === '') return;
+    let n = parseInt(val, 10);
+    if (n < 1) n = 1;
+    if (invoiceType === 'sale' && maxStock != null && n > maxStock) n = maxStock;
+    onQuantityChange(item.product_id, n);
+  };
+
+  const handleIncrement = () => {
+    const next = item.quantity + 1;
+    if (invoiceType === 'sale' && maxStock != null && next > maxStock) return;
+    onQuantityChange(item.product_id, next);
+  };
 
   return (
     <div className="grid grid-cols-12 gap-2 items-center px-4 py-2.5 border-b border-outline-variant/20 hover:bg-surface-container-low/40 transition-colors group">
@@ -37,8 +52,14 @@ function InvoiceItemRow({ item, products, invoiceType, onQuantityChange, onRemov
       <div className="col-span-3 flex justify-center">
         <div className="flex items-center gap-0 bg-surface-container-lowest border border-outline-variant/60 rounded-xl overflow-hidden">
           <button onClick={() => onQuantityChange(item.product_id, Math.max(1, item.quantity - 1))} className="p-1.5 text-muted-steel hover:text-accent hover:bg-accent-surface transition-colors cursor-pointer"><Minus size={14} /></button>
-          <span className="w-8 text-center font-mono-tabular text-label-md text-charcoal-ink border-x border-outline-variant/40 py-1">{item.quantity}</span>
-          <button onClick={() => onQuantityChange(item.product_id, item.quantity + 1)} className="p-1.5 text-muted-steel hover:text-accent hover:bg-accent-surface transition-colors cursor-pointer"><Plus size={14} /></button>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={item.quantity}
+            onChange={handleQtyInput}
+            className="w-10 text-center font-mono-tabular text-label-md text-charcoal-ink border-x border-outline-variant/40 py-1 bg-transparent outline-none focus:bg-accent-surface/20 transition-colors"
+          />
+          <button onClick={handleIncrement} className="p-1.5 text-muted-steel hover:text-accent hover:bg-accent-surface transition-colors cursor-pointer"><Plus size={14} /></button>
         </div>
       </div>
       <div className="col-span-3 text-right">
@@ -142,9 +163,20 @@ export default function InvoicesView() {
     }
   }, [selectedProduct, products, invoiceType]);
 
+  // Compute available stock for the currently selected product (sale invoices)
+  const selectedAvailableStock = (() => {
+    if (invoiceType !== 'sale' || !selectedProduct) return null;
+    const stockProd = inventory?.products?.find(ip => String(ip.product_id) === String(selectedProduct));
+    if (!stockProd) return null;
+    return stockProd.batches?.reduce((s, b) => s + Number(b.remaining_quantity || 0), 0) ?? null;
+  })();
+
   const addItem = useCallback(() => {
     if (!selectedProduct) return;
     const qty = parseInt(itemQuantity) || 1;
+
+    // Block adding when stock is exhausted for sale invoices
+    if (invoiceType === 'sale' && selectedAvailableStock != null && selectedAvailableStock <= 0 && !editingItemId) return;
 
     if (editingItemId) {
       const updates = { quantity: qty };
@@ -177,7 +209,7 @@ export default function InvoicesView() {
     setSalePrice('');
     setItemQuantity('1');
     setAutoFetchedCost(null);
-  }, [selectedProduct, invoiceType, purchasePrice, sellingPrice, salePrice, itemQuantity, autoFetchedCost, storeAddItem, updateItem, editingItemId]);
+  }, [selectedProduct, invoiceType, purchasePrice, sellingPrice, salePrice, itemQuantity, autoFetchedCost, storeAddItem, updateItem, editingItemId, selectedAvailableStock]);
 
   function handleEditItem(item) {
     const prod = products.find(p => p.id === item.product_id);
@@ -492,8 +524,9 @@ export default function InvoicesView() {
                   <h3 className="text-h3 text-charcoal-ink">Line Items</h3>
                 </div>
 
-                <div className="flex flex-col sm:flex-row gap-2 mb-4">
+                <div className="flex flex-col sm:flex-row gap-2 mb-4 items-end">
                   <div className="relative flex-1">
+                    <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">Product / المنتج</label>
                     <input 
                       type="text" 
                       value={productSearch}
@@ -510,19 +543,31 @@ export default function InvoicesView() {
                     />
                     {showProductDropdown && (
                       <div className="absolute top-full mt-1 left-0 w-full bg-surface-container-lowest border border-outline-variant/60 rounded-xl shadow-lg z-50 max-h-48 overflow-y-auto">
-                        {products.filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase())).map(p => (
-                          <div 
-                            key={p.id} 
-                            className="px-4 py-2 hover:bg-surface-container-low cursor-pointer text-charcoal-ink text-sm"
-                            onClick={() => {
-                              setProductSearch(p.name);
-                              setSelectedProduct(p.id);
-                              setShowProductDropdown(false);
-                            }}
-                          >
-                            {p.name}
-                          </div>
-                        ))}
+                        {products
+                          .filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase()))
+                          .filter(p => editingItemId === p.id || !items.some(i => i.product_id === p.id))
+                          .map(p => {
+                            const stock = inventory?.products?.find(ip => String(ip.product_id) === String(p.id));
+                            const stockQty = stock ? stock.batches?.reduce((s, b) => s + Number(b.remaining_quantity || 0), 0) : null;
+                            return (
+                              <div 
+                                key={p.id} 
+                                className="px-4 py-2 hover:bg-surface-container-low cursor-pointer text-charcoal-ink text-sm flex items-center justify-between"
+                                onClick={() => {
+                                  setProductSearch(p.name);
+                                  setSelectedProduct(p.id);
+                                  setShowProductDropdown(false);
+                                }}
+                              >
+                                <span>{p.name}</span>
+                                {invoiceType === 'sale' && stockQty != null && (
+                                  <span className={`text-[10px] font-mono-tabular px-1.5 py-0.5 rounded-md ${stockQty > 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>
+                                    Stock: {stockQty}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
                         {productSearch && !products.some(p => p.name.toLowerCase() === productSearch.toLowerCase()) && invoiceType === 'purchase' && (
                           <div 
                             className="px-4 py-2 text-accent hover:bg-accent-surface cursor-pointer flex items-center gap-2 text-sm border-t border-outline-variant/30"
@@ -532,24 +577,26 @@ export default function InvoicesView() {
                             Add new product: "{productSearch}"
                           </div>
                         )}
-                        {!productSearch && products.length === 0 && (
+                        {!productSearch && products.filter(p => editingItemId === p.id || !items.some(i => i.product_id === p.id)).length === 0 && (
                           <div className="px-4 py-2 text-muted-steel text-sm">No products available</div>
                         )}
                       </div>
                     )}
                   </div>
                   {invoiceType === 'purchase' && (
-                    <>
-                      <input type="number" value={purchasePrice} onChange={(e) => setPurchasePrice(e.target.value)} placeholder="سعر الشراء" className={`sm:w-28 ${inputClass}`} />
-                    </>
+                    <div className="flex flex-col gap-0">
+                      <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">سعر الشراء</label>
+                      <input type="number" value={purchasePrice} onChange={(e) => setPurchasePrice(e.target.value)} placeholder="0" className={`sm:w-28 ${inputClass}`} />
+                    </div>
                   )}
                   {invoiceType === 'sale' && (
                     <div className="flex flex-col gap-1">
+                      <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">سعر البيع</label>
                       <input
                         type="number"
                         value={salePrice}
                         onChange={(e) => setSalePrice(e.target.value)}
-                        placeholder="سعر البيع"
+                        placeholder="0"
                         className={`sm:w-32 ${inputClass}`}
                       />
                       {autoFetchedCost != null && (
@@ -567,16 +614,40 @@ export default function InvoicesView() {
                       )}
                     </div>
                   )}
-                  <input
-                    type="number"
-                    value={itemQuantity}
-                    onChange={(e) => setItemQuantity(e.target.value)}
-                    placeholder="الكمية"
-                    min="1"
-                    className={`sm:w-20 ${inputClass} text-center`}
-                  />
+                  <div className="flex flex-col gap-1">
+                    <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">الكمية</label>
+                    <input
+                      type="number"
+                      value={itemQuantity}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (invoiceType === 'sale' && selectedProduct) {
+                          const stockProd = inventory?.products?.find(ip => String(ip.product_id) === String(selectedProduct));
+                          const avail = stockProd ? stockProd.batches?.reduce((s, b) => s + Number(b.remaining_quantity || 0), 0) : null;
+                          if (avail != null && parseInt(val) > avail) {
+                            setItemQuantity(String(avail));
+                            return;
+                          }
+                        }
+                        setItemQuantity(val);
+                      }}
+                      placeholder="1"
+                      min="1"
+                      className={`sm:w-20 ${inputClass} text-center`}
+                    />
+                    {invoiceType === 'sale' && selectedProduct && (() => {
+                      const stockProd = inventory?.products?.find(ip => String(ip.product_id) === String(selectedProduct));
+                      const avail = stockProd ? stockProd.batches?.reduce((s, b) => s + Number(b.remaining_quantity || 0), 0) : null;
+                      if (avail != null) return (
+                        <span className={`text-[10px] font-mono-tabular px-1 ${avail > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                          Available: {avail}
+                        </span>
+                      );
+                      return null;
+                    })()}
+                  </div>
                   <div className="flex items-center gap-1">
-                    <button onClick={addItem} disabled={!selectedProduct}
+                    <button onClick={addItem} disabled={!selectedProduct || (invoiceType === 'sale' && selectedAvailableStock != null && selectedAvailableStock <= 0 && !editingItemId)}
                       className={`px-4 py-2 rounded-xl text-on-primary text-label-md shadow-sm transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer btn-tactile ${
                         editingItemId ? 'bg-amber-500 hover:bg-amber-600' : 'bg-accent hover:bg-accent-hover'
                       }`}>
@@ -600,7 +671,11 @@ export default function InvoicesView() {
                   </div>
                   <div className="bg-surface-container-lowest">
                     {items.length > 0 ? (
-                      items.map((item) => <InvoiceItemRow key={item.product_id} item={item} products={products} invoiceType={invoiceType} onQuantityChange={updateQuantity} onRemove={removeItem} onEdit={handleEditItem} />)
+                      items.map((item) => {
+                        const stockProd = inventory?.products?.find(ip => String(ip.product_id) === String(item.product_id));
+                        const maxStock = invoiceType === 'sale' && stockProd ? stockProd.batches?.reduce((s, b) => s + Number(b.remaining_quantity || 0), 0) : undefined;
+                        return <InvoiceItemRow key={item.product_id} item={item} products={products} invoiceType={invoiceType} onQuantityChange={updateQuantity} onRemove={removeItem} onEdit={handleEditItem} maxStock={maxStock} />;
+                      })
                     ) : (
                       <div className="flex flex-col items-center justify-center py-10 text-muted-steel">
                         <ShoppingCart size={32} strokeWidth={1.2} className="mb-3 opacity-30" />

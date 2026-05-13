@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, DollarSign, CreditCard, AlertCircle,
+  ArrowLeft, DollarSign, CreditCard, AlertCircle, CheckCircle2,
   Package, Printer, X, Loader2, Edit, Trash2, Undo2, TrendingUp, Download, Plus,
   ChevronDown, ChevronRight, RotateCcw
 } from 'lucide-react';
@@ -37,6 +37,10 @@ export default function PartyDashboard() {
   const [returnSubmitting, setReturnSubmitting] = useState(false);
   const [returnError, setReturnError] = useState('');
   const [isTotalExpanded, setIsTotalExpanded] = useState(false);
+  const [editingPaymentId, setEditingPaymentId] = useState(null);
+  const [editPaymentAmount, setEditPaymentAmount] = useState('');
+  const [paymentActionLoading, setPaymentActionLoading] = useState(null);
+  const [paymentToDelete, setPaymentToDelete] = useState(null);
 
   function toggleRow(id) {
     setExpandedRows(prev => {
@@ -89,6 +93,39 @@ export default function PartyDashboard() {
       setPaymentError(err.response?.data?.detail || 'Failed to record payment.');
     } finally {
       setPaymentSubmitting(false);
+    }
+  }
+
+  async function handleUpdatePayment(paymentId) {
+    const amt = Number(editPaymentAmount);
+    if (!amt || amt <= 0) return;
+    setPaymentActionLoading(paymentId);
+    try {
+      await api.updatePartyPayment(partyId, paymentId, { amount_paid: amt });
+      setEditingPaymentId(null);
+      setEditPaymentAmount('');
+      setToastMessage('Payment updated successfully!');
+      setTimeout(() => setToastMessage(''), 3000);
+      loadSummary();
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Failed to update payment.');
+    } finally {
+      setPaymentActionLoading(null);
+    }
+  }
+
+  async function handleDeletePayment(paymentId) {
+    setPaymentActionLoading(paymentId);
+    try {
+      await api.deletePartyPayment(partyId, paymentId);
+      setPaymentToDelete(null);
+      setToastMessage('Payment deleted successfully!');
+      setTimeout(() => setToastMessage(''), 3000);
+      loadSummary();
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Failed to delete payment.');
+    } finally {
+      setPaymentActionLoading(null);
     }
   }
 
@@ -327,6 +364,7 @@ export default function PartyDashboard() {
                     <th className="py-3 px-4 text-left">ID</th>
                     <th className="py-3 px-4 text-left">Type</th>
                     <th className="py-3 px-4 text-right">Total</th>
+                    <th className="py-3 px-4 text-right">Profit</th>
                     <th className="py-3 px-4 text-left">Date</th>
                     <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
@@ -368,9 +406,25 @@ export default function PartyDashboard() {
                             </span>
                           </td>
                           <td className="py-3 px-4 text-right font-mono-tabular font-medium text-charcoal-ink">EGP {Number(inv.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                          <td className="py-3 px-4 text-right font-mono-tabular font-medium">
+                            {inv.invoice_profit != null && inv.invoice_type === 'sale' ? (
+                              <span className={Number(inv.invoice_profit) >= 0 ? 'text-emerald-600' : 'text-red-500'}>
+                                {Number(inv.invoice_profit) > 0 ? '+' : ''}EGP {Number(inv.invoice_profit).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              </span>
+                            ) : (
+                              <span className="text-muted-steel">—</span>
+                            )}
+                          </td>
                           <td className="py-3 px-4 font-mono-tabular text-muted-steel text-xs">{inv.created_at ? new Date(inv.created_at).toLocaleDateString('en-GB') : '-'}</td>
                           <td className="py-3 px-4 text-right">
                             <div className="flex items-center justify-end gap-1">
+                              {inv.invoice_type === 'sale' && (
+                                <button onClick={() => setReturnInvoice(inv)}
+                                  className="p-1.5 rounded-xl text-muted-steel hover:bg-status-error/10 hover:text-status-error transition-all cursor-pointer btn-tactile"
+                                  title="Return / إسترجاع">
+                                  <RotateCcw size={16} />
+                                </button>
+                              )}
                               <button onClick={() => setEditingInvoice(inv)}
                                 className="p-1.5 rounded-xl text-muted-steel hover:bg-accent-surface hover:text-accent transition-all cursor-pointer btn-tactile"
                                 title="Edit / تعديل">
@@ -386,7 +440,7 @@ export default function PartyDashboard() {
                         </tr>
                         {isExpanded && hasItems && (
                           <tr key={`${inv.id}-items`} className="bg-surface-container-low/60">
-                            <td colSpan={6} className="px-10 py-3">
+                            <td colSpan={7} className="px-10 py-3">
                               <table className="w-full text-xs border border-outline-variant/20 rounded-xl overflow-hidden">
                                 <thead>
                                   <tr className="bg-surface-container border-b border-outline-variant/20 text-muted-steel uppercase tracking-wider">
@@ -418,6 +472,89 @@ export default function PartyDashboard() {
             </div>
           )}
         </div>
+
+        {summary.payments && summary.payments.length > 0 && (
+          <div className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl shadow-whisper animate-fade-in-up mt-6">
+            <div className="p-6 border-b border-outline-variant/30">
+              <h3 className="text-h3 text-charcoal-ink">Payments</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-outline-variant/30 text-label-sm text-muted-steel uppercase tracking-wider">
+                    <th className="py-3 px-6 text-left">Invoice ID</th>
+                    <th className="py-3 px-6 text-right">Amount</th>
+                    <th className="py-3 px-6 text-left">Date</th>
+                    <th className="py-3 px-6 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {summary.payments.map((payment) => (
+                    <tr key={payment.id} className="border-b border-outline-variant/20 hover:bg-surface-container-low/40 transition-colors group">
+                      <td className="py-3 px-6 text-muted-steel">{payment.invoice_id ? `#${String(payment.invoice_id).padStart(5, '0')}` : '—'}</td>
+                      <td className="py-3 px-6 text-right">
+                        {editingPaymentId === payment.id ? (
+                          <div className="flex items-center justify-end gap-2">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={editPaymentAmount}
+                              onChange={(e) => setEditPaymentAmount(e.target.value)}
+                              className="w-28 bg-surface-container-low border border-accent rounded-lg px-2 py-1.5 text-right text-charcoal-ink font-mono-tabular focus:ring-1 focus:ring-accent outline-none transition-all"
+                              autoFocus
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleUpdatePayment(payment.id);
+                                if (e.key === 'Escape') { setEditingPaymentId(null); setEditPaymentAmount(''); }
+                              }}
+                            />
+                            <button
+                              onClick={() => handleUpdatePayment(payment.id)}
+                              disabled={paymentActionLoading === payment.id}
+                              className="p-1.5 rounded-lg bg-accent text-white hover:bg-accent-hover transition-all cursor-pointer btn-tactile disabled:opacity-50"
+                              title="Save"
+                            >
+                              {paymentActionLoading === payment.id ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                            </button>
+                            <button
+                              onClick={() => { setEditingPaymentId(null); setEditPaymentAmount(''); }}
+                              className="p-1.5 rounded-lg text-muted-steel border border-outline-variant/60 hover:bg-surface-container-low transition-all cursor-pointer btn-tactile"
+                              title="Cancel"
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="font-mono-tabular font-medium text-emerald-600">EGP {Number(payment.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-6 font-mono-tabular text-muted-steel text-xs">{payment.created_at ? new Date(payment.created_at).toLocaleDateString('en-GB') : (payment.payment_date ? new Date(payment.payment_date).toLocaleDateString('en-GB') : '-')}</td>
+                      <td className="py-3 px-6 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => { setEditingPaymentId(payment.id); setEditPaymentAmount(String(payment.amount)); }}
+                            className="p-1.5 rounded-xl text-muted-steel hover:bg-accent-surface hover:text-accent transition-all cursor-pointer btn-tactile opacity-0 group-hover:opacity-100"
+                            title="Edit"
+                          >
+                            <Edit size={16} />
+                          </button>
+                          <button
+                            onClick={() => setPaymentToDelete(payment)}
+                            className="p-1.5 rounded-xl text-error/50 hover:bg-error-container/20 hover:text-error transition-all cursor-pointer btn-tactile opacity-0 group-hover:opacity-100"
+                            title="Delete"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
 
         {products.length > 0 && (
           <div className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl shadow-whisper animate-fade-in-up">
@@ -682,7 +819,7 @@ export default function PartyDashboard() {
                         <th className="py-2.5 px-3 text-left">Product</th>
                         <th className="py-2.5 px-3 text-right">Stock</th>
                         <th className="py-2.5 px-3 text-right">Unit Price</th>
-                        <th className="py-2.5 px-3 text-center w-32">Return Qty</th>
+                        <th className="py-2.5 px-3 text-center w-28">Return Qty</th>
                         <th className="py-2.5 px-3 text-right">Subtotal</th>
                       </tr>
                     </thead>
@@ -704,7 +841,7 @@ export default function PartyDashboard() {
                               className="w-24 bg-surface-container-low border border-outline-variant/60 rounded-lg px-2 py-1.5 text-right text-charcoal-ink font-mono-tabular focus:border-accent outline-none transition-all"
                             />
                           </td>
-                          <td className="py-3 px-3 flex justify-center">
+                          <td className="py-3 px-3 text-center">
                             <input
                               type="number"
                               min="0"
@@ -715,7 +852,7 @@ export default function PartyDashboard() {
                                 setReturnItems(prev => prev.map((it, i) => i === idx ? { ...it, return_qty: val } : it));
                               }}
                               placeholder="0"
-                              className="w-24 bg-surface-container-low border border-outline-variant/60 rounded-lg px-2 py-1.5 text-center text-charcoal-ink font-mono-tabular focus:border-indigo-500 outline-none transition-all"
+                              className="w-24 mx-auto bg-surface-container-low border border-outline-variant/60 rounded-lg px-2 py-1.5 text-center text-charcoal-ink font-mono-tabular focus:border-indigo-500 outline-none transition-all"
                             />
                           </td>
                           <td className="py-3 px-3 text-right font-mono-tabular font-medium text-charcoal-ink">
@@ -755,6 +892,38 @@ export default function PartyDashboard() {
                 >
                   {returnSubmitting && <Loader2 size={16} className="animate-spin" />}
                   Confirm Return / تأكيد الاسترجاع
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {paymentToDelete && (
+        <div className="fixed inset-0 z-[100] bg-charcoal-ink/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-surface-container-lowest rounded-2xl shadow-2xl border border-outline-variant/60 w-full max-w-md overflow-hidden animate-fade-in-up">
+            <div className="p-6">
+              <div className="w-12 h-12 rounded-xl bg-error-container/30 text-error flex items-center justify-center mb-4">
+                <Trash2 size={24} />
+              </div>
+              <h3 className="text-h3 text-charcoal-ink mb-2">Delete Payment</h3>
+              <p className="text-muted-steel text-sm leading-relaxed mb-6">
+                Are you sure you want to delete this payment of <strong className="text-charcoal-ink">EGP {Number(paymentToDelete.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>? The balance will be recalculated.
+              </p>
+              <div className="flex items-center gap-3 justify-end">
+                <button
+                  onClick={() => setPaymentToDelete(null)}
+                  className="px-5 py-2.5 rounded-xl text-label-md text-muted-steel hover:bg-surface-container-low transition-all cursor-pointer btn-tactile"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleDeletePayment(paymentToDelete.id)}
+                  disabled={paymentActionLoading === paymentToDelete.id}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-label-md bg-error text-white hover:bg-error/90 shadow-sm transition-all cursor-pointer btn-tactile disabled:opacity-50"
+                >
+                  {paymentActionLoading === paymentToDelete.id && <Loader2 size={16} className="animate-spin" />}
+                  Confirm Delete
                 </button>
               </div>
             </div>

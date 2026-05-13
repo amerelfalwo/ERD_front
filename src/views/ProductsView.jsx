@@ -160,8 +160,8 @@ function ProductRow({ product, inventoryProduct, onDelete, onEdit }) {
 
   const totalQty = inventoryProduct?.batches?.reduce((sum, b) => sum + parseFloat(b.remaining_quantity || 0), 0) || 0;
   
-  const displayPurchasePrice = product.purchase_price || 0;
-  const displaySellPrice = product.sell_price || 0;
+  const displayPurchasePrice = product.current_cost ?? product.purchase_price ?? 0;
+  const displaySellPrice = product.current_selling_price ?? product.sell_price ?? 0;
 
   async function toggleExpand() {
     if (!expanded && batches.length === 0) {
@@ -207,7 +207,7 @@ function ProductRow({ product, inventoryProduct, onDelete, onEdit }) {
       {expanded && (
         <div className="bg-surface-container-low/20 border-t border-outline-variant/20 animate-fade-in-up">
           <div className="grid grid-cols-4 gap-2 py-2.5 px-6 text-label-sm uppercase tracking-wider text-muted-steel/70">
-            <span>Batch ID</span><span>Purchase Price</span><span>Selling Price</span><span>Remaining</span>
+            <span>Batch ID</span><span>In Price</span><span>Selling Price</span><span>Remaining</span>
           </div>
           {loadingBatches ? (
             <div className="py-3 px-6 space-y-1.5">{[1,2].map(i => <div key={i} className="h-8 rounded-lg animate-shimmer" />)}</div>
@@ -324,7 +324,7 @@ export default function ProductsView() {
         <div className="grid grid-cols-12 gap-2 items-center py-3 px-6 border-b border-outline-variant/40 bg-surface-container-low/30">
           <span className="col-span-1 text-label-sm uppercase tracking-wider text-muted-steel/70">ID</span>
           <span className="col-span-3 text-label-sm uppercase tracking-wider text-muted-steel/70">Product Name</span>
-          <span className="col-span-2 text-label-sm uppercase tracking-wider text-muted-steel/70 text-right">Purchase Price</span>
+          <span className="col-span-2 text-label-sm uppercase tracking-wider text-muted-steel/70 text-right">In Price</span>
           <span className="col-span-2 text-label-sm uppercase tracking-wider text-muted-steel/70 text-right">Sell Price</span>
           <span className="col-span-2 text-label-sm uppercase tracking-wider text-muted-steel/70 text-right">Quantity</span>
           <span className="col-span-2 text-label-sm uppercase tracking-wider text-muted-steel/70 text-right">Status</span>

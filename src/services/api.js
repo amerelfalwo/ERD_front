@@ -59,6 +59,8 @@ export const api = {
   getPartyBalance: (partyId) => request(`/parties/${partyId}/balance`),
   getPartySummary: (partyId) => request(`/parties/${partyId}/summary`),
   createPartyPayment: (partyId, data) => request(`/parties/${partyId}/payments`, { method: 'POST', body: JSON.stringify(data) }),
+  updatePartyPayment: (partyId, paymentId, data) => request(`/parties/${partyId}/payments/${paymentId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deletePartyPayment: (partyId, paymentId) => request(`/parties/${partyId}/payments/${paymentId}`, { method: 'DELETE' }),
   createStockReturn: (partyId, data) => request(`/parties/${partyId}/stock-return`, { method: 'POST', body: JSON.stringify(data) }),
 
   getProducts: (skip = 0, limit = 100) => request(`/products?skip=${skip}&limit=${limit}`),

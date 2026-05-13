@@ -76,14 +76,14 @@ export default function ReturnInvoiceModal({ invoice, onClose, onSaved }) {
                   <tr key={item.invoice_item_id} className="border-b border-outline-variant/20">
                     <td className="py-3">{item.product_name}</td>
                     <td className="py-3 text-center">{item.purchased_qty}</td>
-                    <td className="py-3 flex justify-center">
+                    <td className="py-3 text-center">
                       <input 
                         type="number" 
                         min="0" 
                         max={item.purchased_qty} 
                         value={item.return_qty}
                         onChange={e => handleQtyChange(item.invoice_item_id, e.target.value)}
-                        className="w-20 bg-surface-container-low border border-outline-variant/60 rounded-lg px-2 py-1 text-center text-charcoal-ink focus:border-accent outline-none"
+                        className="w-20 mx-auto bg-surface-container-low border border-outline-variant/60 rounded-lg px-2 py-1 text-center text-charcoal-ink focus:border-accent outline-none"
                       />
                     </td>
                   </tr>
