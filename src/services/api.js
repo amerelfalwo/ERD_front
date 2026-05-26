@@ -55,13 +55,39 @@ export const api = {
   getParties: (skip = 0, limit = 100) => request(`/parties?skip=${skip}&limit=${limit}`),
   getPartiesSelect: () => request('/parties/select'),
   createParty: (data) => request('/parties', { method: 'POST', body: JSON.stringify(data) }),
-  deleteParty: (partyId) => request(`/parties/${partyId}`, { method: 'DELETE' }),
-  getPartyBalance: (partyId) => request(`/parties/${partyId}/balance`),
-  getPartySummary: (partyId) => request(`/parties/${partyId}/summary`),
-  createPartyPayment: (partyId, data) => request(`/parties/${partyId}/payments`, { method: 'POST', body: JSON.stringify(data) }),
-  updatePartyPayment: (partyId, paymentId, data) => request(`/parties/${partyId}/payments/${paymentId}`, { method: 'PATCH', body: JSON.stringify(data) }),
-  deletePartyPayment: (partyId, paymentId) => request(`/parties/${partyId}/payments/${paymentId}`, { method: 'DELETE' }),
-  createStockReturn: (partyId, data) => request(`/parties/${partyId}/stock-return`, { method: 'POST', body: JSON.stringify(data) }),
+  deleteParty: (id) => request(`/parties/${id}`, { method: 'DELETE' }),
+  updateParty: (id, data) => request(`/parties/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  getPartyBalance: (id) => request(`/parties/${id}/balance`),
+  getPartySummary: (id) => request(`/parties/${id}/summary`),
+  createPartyPayment: (id, data) => request(`/parties/${id}/payments`, { method: 'POST', body: JSON.stringify(data) }),
+  updatePartyPayment: (id, paymentId, data) => request(`/parties/${id}/payments/${paymentId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deletePartyPayment: (id, paymentId) => request(`/parties/${id}/payments/${paymentId}`, { method: 'DELETE' }),
+  createPartyStockReturn: (id, data) => request(`/parties/${id}/stock-return`, { method: 'POST', body: JSON.stringify(data) }),
+
+
+  getSuppliers: (skip = 0, limit = 100) => request(`/suppliers?skip=${skip}&limit=${limit}`),
+  getSuppliersSelect: () => request('/suppliers/select'),
+  createSupplier: (data) => request('/suppliers', { method: 'POST', body: JSON.stringify(data) }),
+  deleteSupplier: (id) => request(`/suppliers/${id}`, { method: 'DELETE' }),
+  updateSupplier: (id, data) => request(`/suppliers/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  getSupplierBalance: (id) => request(`/suppliers/${id}/balance`),
+  getSupplierSummary: (id) => request(`/suppliers/${id}/summary`),
+  createSupplierPayment: (id, data) => request(`/suppliers/${id}/payments`, { method: 'POST', body: JSON.stringify(data) }),
+  updateSupplierPayment: (id, paymentId, data) => request(`/suppliers/${id}/payments/${paymentId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteSupplierPayment: (id, paymentId) => request(`/suppliers/${id}/payments/${paymentId}`, { method: 'DELETE' }),
+  createSupplierStockReturn: (id, data) => request(`/suppliers/${id}/stock-return`, { method: 'POST', body: JSON.stringify(data) }),
+
+  getCustomers: (skip = 0, limit = 100) => request(`/customers?skip=${skip}&limit=${limit}`),
+  getCustomersSelect: () => request('/customers/select'),
+  createCustomer: (data) => request('/customers', { method: 'POST', body: JSON.stringify(data) }),
+  deleteCustomer: (id) => request(`/customers/${id}`, { method: 'DELETE' }),
+  updateCustomer: (id, data) => request(`/customers/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  getCustomerBalance: (id) => request(`/customers/${id}/balance`),
+  getCustomerSummary: (id) => request(`/customers/${id}/summary`),
+  createCustomerPayment: (id, data) => request(`/customers/${id}/payments`, { method: 'POST', body: JSON.stringify(data) }),
+  updateCustomerPayment: (id, paymentId, data) => request(`/customers/${id}/payments/${paymentId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteCustomerPayment: (id, paymentId) => request(`/customers/${id}/payments/${paymentId}`, { method: 'DELETE' }),
+  createCustomerStockReturn: (id, data) => request(`/customers/${id}/stock-return`, { method: 'POST', body: JSON.stringify(data) }),
 
   getProducts: (skip = 0, limit = 100) => request(`/products?skip=${skip}&limit=${limit}`),
   getProductsSelect: () => request('/products/select'),
@@ -81,18 +107,12 @@ export const api = {
   createSaleInvoice: (data) => request('/invoices/sale', { method: 'POST', body: JSON.stringify(data) }),
   getInvoice: (invoiceId) => request(`/invoices/${invoiceId}`),
   updateInvoice: (invoiceId, data) => request(`/invoices/${invoiceId}`, { method: 'PATCH', body: JSON.stringify(data) }),
-  deleteInvoice: (invoiceId) => fetch(`${BASE_URL}/invoices/${invoiceId}`, {
-    method: 'DELETE',
-    headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
-  }),
+  deleteInvoice: (invoiceId) => request(`/invoices/${invoiceId}`, { method: 'DELETE' }),
   processReturn: (invoiceId, data) => request(`/invoices/${invoiceId}/return`, { method: 'POST', body: JSON.stringify(data) }),
 
   getInvoicePayments: (invoiceId) => request(`/invoices/${invoiceId}/payments`),
   updatePayment: (invoiceId, paymentId, data) => request(`/invoices/${invoiceId}/payments/${paymentId}`, { method: 'PATCH', body: JSON.stringify(data) }),
-  deletePayment: (invoiceId, paymentId) => fetch(`${BASE_URL}/invoices/${invoiceId}/payments/${paymentId}`, {
-    method: 'DELETE',
-    headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` }
-  }),
+  deletePayment: (invoiceId, paymentId) => request(`/invoices/${invoiceId}/payments/${paymentId}`, { method: 'DELETE' }),
 
   addPayment: (data) => request('/payments', { method: 'POST', body: JSON.stringify(data) }),
 

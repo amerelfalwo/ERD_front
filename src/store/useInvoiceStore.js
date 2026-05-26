@@ -4,7 +4,7 @@ import { persist } from 'zustand/middleware';
 export const useInvoiceStore = create(
   persist(
     (set) => ({
-      invoiceType: 'sale',
+      invoiceType: 'purchase',
       selectedParty: '',
       items: [],
 

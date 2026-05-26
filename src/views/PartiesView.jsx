@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Users, X, Loader2, Eye, DollarSign, User, Building2, BarChart2, Phone, MapPin, Trash2, TrendingUp } from 'lucide-react';
+import { Plus, Search, Users, X, Loader2, Eye, DollarSign, User, Building2, BarChart2, Phone, MapPin, Trash2, TrendingUp, Edit } from 'lucide-react';
+import { notifications } from '@mantine/notifications';
 import api from '../services/api';
 
 function AddPartyModal({ isOpen, onClose, onCreated }) {
@@ -32,7 +33,11 @@ function AddPartyModal({ isOpen, onClose, onCreated }) {
       onCreated();
       onClose();
     } catch (err) {
-      alert(err?.message || 'Error creating party');
+      notifications.show({
+        title: 'Error',
+        message: err?.response?.data?.detail || err?.message || 'Error creating party',
+        color: 'red'
+      });
     } finally {
       setSubmitting(false);
     }
@@ -110,6 +115,111 @@ function AddPartyModal({ isOpen, onClose, onCreated }) {
               className="flex items-center gap-1.5 px-5 py-2 rounded-xl text-label-md bg-accent text-on-primary hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm cursor-pointer btn-tactile">
               {submitting && <Loader2 size={16} className="animate-spin" />}
               Create Party
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function EditPartyModal({ isOpen, onClose, party, onUpdated }) {
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState('');
+  const [initialBalance, setInitialBalance] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (isOpen && party) {
+      setName(party.name || '');
+      setPhone(party.phone || '');
+      setAddress(party.address || '');
+      setInitialBalance(party.initial_balance != null ? String(party.initial_balance) : '0');
+    }
+  }, [isOpen, party]);
+
+  if (!isOpen || !party) return null;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setSubmitting(true);
+    try {
+      await api.updateParty(party.id, {
+        name: name.trim(),
+        phone: phone.trim() || null,
+        address: address.trim() || null,
+        initial_balance: parseFloat(initialBalance) || 0,
+      });
+      onUpdated();
+      onClose();
+    } catch (err) {
+      notifications.show({
+        title: 'Error',
+        message: err?.response?.data?.detail || err?.message || 'Error updating party',
+        color: 'red'
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-charcoal-ink/15 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-surface-container-lowest rounded-2xl border border-outline-variant/60 shadow-whisper-lg w-full max-w-md animate-scale-in">
+        <div className="flex items-center justify-between p-6 border-b border-outline-variant/40">
+          <h3 className="text-h3 text-charcoal-ink tracking-tight">Edit Party</h3>
+          <button onClick={onClose} className="p-1.5 rounded-xl text-muted-steel hover:bg-surface-container-low transition-colors cursor-pointer btn-tactile">
+            <X size={18} />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="block text-label-sm text-muted-steel mb-1.5 uppercase tracking-wider">Party Name</label>
+            <input
+              type="text" value={name} onChange={(e) => setName(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-xl border border-outline-variant/60 bg-surface-container-lowest text-sm text-charcoal-ink placeholder:text-outline focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all duration-200"
+              placeholder="Enter name" autoFocus
+            />
+          </div>
+          <div>
+            <label className="block text-label-sm text-muted-steel mb-1.5 uppercase tracking-wider">Phone Number</label>
+            <div className="relative">
+              <Phone size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-steel" />
+              <input
+                type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
+                className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-outline-variant/60 bg-surface-container-lowest text-sm text-charcoal-ink placeholder:text-outline focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all duration-200"
+                placeholder="e.g. 01xxxxxxxxx"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-label-sm text-muted-steel mb-1.5 uppercase tracking-wider">Address</label>
+            <div className="relative">
+              <MapPin size={15} className="absolute left-3 top-3 text-muted-steel" />
+              <textarea
+                value={address} onChange={(e) => setAddress(e.target.value)} rows={2}
+                className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-outline-variant/60 bg-surface-container-lowest text-sm text-charcoal-ink placeholder:text-outline focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all duration-200 resize-none"
+                placeholder="Street, City"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-label-sm text-muted-steel mb-1.5 uppercase tracking-wider">Opening Balance (EGP) — الحساب السابق</label>
+            <input
+              type="number" min="0" step="0.01" value={initialBalance} onChange={(e) => setInitialBalance(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-xl border border-outline-variant/60 bg-surface-container-lowest text-sm text-charcoal-ink placeholder:text-outline focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all duration-200"
+              placeholder="0.00"
+            />
+          </div>
+          <div className="flex items-center justify-end gap-2 pt-4">
+            <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-label-md text-muted-steel hover:bg-surface-container-low transition-colors cursor-pointer btn-tactile">Cancel</button>
+            <button type="submit" disabled={submitting || !name.trim()}
+              className="flex items-center gap-1.5 px-5 py-2 rounded-xl text-label-md bg-accent text-on-primary hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm cursor-pointer btn-tactile">
+              {submitting && <Loader2 size={16} className="animate-spin" />}
+              Save Changes
             </button>
           </div>
         </form>
@@ -207,6 +317,7 @@ export default function PartiesView() {
   const [profits, setProfits] = useState({});
   const [partyToDelete, setPartyToDelete] = useState(null);
   const [deletingParty, setDeletingParty] = useState(false);
+  const [editPartyModal, setEditPartyModal] = useState({ open: false, party: null });
 
   async function fetchParties() {
     await Promise.resolve();
@@ -245,7 +356,11 @@ export default function PartiesView() {
       setPartyToDelete(null);
       fetchParties();
     } catch (err) {
-      alert(err?.message || 'Error');
+      notifications.show({
+        title: 'Error',
+        message: err?.response?.data?.detail || err?.message || 'Error deleting party',
+        color: 'red'
+      });
     } finally {
       setDeletingParty(false);
     }
@@ -363,6 +478,11 @@ export default function PartiesView() {
                       className="p-1.5 rounded-xl text-muted-steel hover:bg-accent-surface hover:text-accent transition-all duration-200 opacity-0 group-hover:opacity-100 cursor-pointer btn-tactile">
                       <Eye size={18} />
                     </button>
+                    <button onClick={(e) => { e.stopPropagation(); setEditPartyModal({ open: true, party }); }}
+                      className="p-1.5 rounded-xl text-muted-steel hover:bg-accent-surface hover:text-accent transition-all duration-200 opacity-0 group-hover:opacity-100 cursor-pointer btn-tactile"
+                      title="Edit party">
+                      <Edit size={18} />
+                    </button>
                     <button onClick={(e) => { e.stopPropagation(); setPartyToDelete(party); }}
                       className="p-1.5 rounded-xl text-muted-steel hover:bg-error-container/30 hover:text-error transition-all duration-200 opacity-0 group-hover:opacity-100 cursor-pointer btn-tactile">
                       <Trash2 size={18} />
@@ -376,7 +496,7 @@ export default function PartiesView() {
                   <span className="text-label-sm text-muted-steel uppercase tracking-wider">Balance</span>
                   <span className="text-h3 font-mono-tabular text-charcoal-ink">EGP {Number(balances[party.id] || 0).toLocaleString()}</span>
                 </div>
-                {profits[party.id]?.profit > 0 && (
+                {party.party_type === 'client' && profits[party.id]?.profit > 0 && (
                   <div className="flex items-center justify-between pt-2">
                     <span className="text-label-sm text-muted-steel uppercase tracking-wider flex items-center gap-1"><TrendingUp size={11} />Profit</span>
                     <span className="text-label-md font-mono-tabular text-emerald-600 font-semibold">EGP {Number(profits[party.id].profit).toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</span>
@@ -394,6 +514,7 @@ export default function PartiesView() {
       </div>
 
       <AddPartyModal isOpen={showModal} onClose={() => setShowModal(false)} onCreated={fetchParties} />
+      <EditPartyModal isOpen={editPartyModal.open} party={editPartyModal.party} onClose={() => setEditPartyModal({ open: false, party: null })} onUpdated={fetchParties} />
       <StatementModal isOpen={statementModal.open} onClose={() => setStatementModal({ open: false, partyId: null, partyName: '' })} partyId={statementModal.partyId} partyName={statementModal.partyName} />
       {partyToDelete && (
         <div className="fixed inset-0 z-[70] bg-charcoal-ink/40 backdrop-blur-sm flex items-center justify-center p-4">

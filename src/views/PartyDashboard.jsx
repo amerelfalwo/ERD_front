@@ -6,15 +6,19 @@ import {
   Package, Printer, X, Loader2, Edit, Trash2, Undo2, TrendingUp, Download, Plus,
   ChevronDown, ChevronRight, RotateCcw
 } from 'lucide-react';
+import { notifications } from '@mantine/notifications';
 import api from '../services/api';
 import InvoicePrintTemplate from '../components/InvoicePrintTemplate';
-import EditInvoiceModal from '../components/EditInvoiceModal';
+
+import { useTranslation } from 'react-i18next';
 import ReturnInvoiceModal from '../components/ReturnInvoiceModal';
+import EditInvoiceModal from '../components/EditInvoiceModal';
 import { useAuth } from '../context/AuthContext';
 
 
 
 export default function PartyDashboard() {
+  const { t } = useTranslation();
   const { partyId } = useParams();
   const navigate = useNavigate();
   const [summary, setSummary] = useState(null);
@@ -22,9 +26,12 @@ export default function PartyDashboard() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [invoiceToPrint, setInvoiceToPrint] = useState(null);
   const [bulkInvoicesToPrint, setBulkInvoicesToPrint] = useState([]);
-  const [editingInvoice, setEditingInvoice] = useState(null);
+  const [inlineEditId, setInlineEditId] = useState(null);
+  const [inlineItems, setInlineItems] = useState([]);
+  const [inlineSaving, setInlineSaving] = useState(false);
   const [invoiceToDelete, setInvoiceToDelete] = useState(null);
   const [returnInvoice, setReturnInvoice] = useState(null);
+  const [editingInvoice, setEditingInvoice] = useState(null);
   const [paperSize, setPaperSize] = useState('a4');
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState('');
@@ -63,6 +70,40 @@ export default function PartyDashboard() {
       .then(setSummary)
       .catch(() => navigate('/parties'))
       .finally(() => setLoading(false));
+  };
+
+  // ─── Inline Editing Handlers ───
+  const startInlineEdit = (inv) => {
+    setInlineEditId(inv.id);
+    setInlineItems((inv.items || []).map(it => ({
+      id: it.id,
+      product_name: it.product_name || it.name || `Product #${it.product_id}`,
+      batch_id: it.batch_id,
+      quantity: Number(it.quantity),
+      unit_price: Number(it.unit_price || it.price || 0),
+    })));
+  };
+  const cancelInlineEdit = () => { setInlineEditId(null); setInlineItems([]); };
+  const updateInlineItem = (idx, field, val) => {
+    setInlineItems(prev => prev.map((it, i) => i === idx ? { ...it, [field]: Number(val) || 0 } : it));
+  };
+  const saveInlineEdit = async () => {
+    try {
+      setInlineSaving(true);
+      await api.updateInvoice(inlineEditId, {
+        items: inlineItems.map(it => ({ batch_id: it.batch_id, quantity: it.quantity, unit_price: it.unit_price }))
+      });
+      cancelInlineEdit();
+      loadSummary();
+    } catch (err) {
+      notifications.show({
+        title: 'Error',
+        message: err?.response?.data?.detail || err?.message || 'فشل حفظ التعديلات',
+        color: 'red',
+      });
+    } finally {
+      setInlineSaving(false);
+    }
   };
 
 
@@ -108,7 +149,7 @@ export default function PartyDashboard() {
       setTimeout(() => setToastMessage(''), 3000);
       loadSummary();
     } catch (err) {
-      alert(err.response?.data?.detail || 'Failed to update payment.');
+      notifications.show({ title: 'Error', message: err.response?.data?.detail || 'Failed to update payment.', color: 'red' });
     } finally {
       setPaymentActionLoading(null);
     }
@@ -123,7 +164,7 @@ export default function PartyDashboard() {
       setTimeout(() => setToastMessage(''), 3000);
       loadSummary();
     } catch (err) {
-      alert(err.response?.data?.detail || 'Failed to delete payment.');
+      notifications.show({ title: 'Error', message: err.response?.data?.detail || 'Failed to delete payment.', color: 'red' });
     } finally {
       setPaymentActionLoading(null);
     }
@@ -185,7 +226,7 @@ export default function PartyDashboard() {
       setInvoiceToDelete(null);
       loadSummary();
     } catch (err) {
-      alert(err.response?.data?.detail || 'Failed to delete invoice');
+      notifications.show({ title: 'Error', message: err.response?.data?.detail || 'Failed to delete invoice', color: 'red' });
     }
   }
 
@@ -221,7 +262,7 @@ export default function PartyDashboard() {
 
   const { party, financials, invoices, products } = summary;
 
-  const fmt = (n) => `EGP ${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+  const fmt = (n) => `${t('common.currency')} ${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
   const balance = Number(financials.balance || 0);
   const totalBeforePayments = Number(financials.initial_balance || 0) + Number(financials.total_purchases || 0) - Number(financials.total_returns || 0);
 
@@ -364,7 +405,7 @@ export default function PartyDashboard() {
                     <th className="py-3 px-4 text-left">ID</th>
                     <th className="py-3 px-4 text-left">Type</th>
                     <th className="py-3 px-4 text-right">Total</th>
-                    <th className="py-3 px-4 text-right">Profit</th>
+                    {party.party_type !== 'supplier' && <th className="py-3 px-4 text-right">Profit</th>}
                     <th className="py-3 px-4 text-left">Date</th>
                     <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
@@ -405,62 +446,77 @@ export default function PartyDashboard() {
                               {typeLabel}
                             </span>
                           </td>
-                          <td className="py-3 px-4 text-right font-mono-tabular font-medium text-charcoal-ink">EGP {Number(inv.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                          <td className="py-3 px-4 text-right font-mono-tabular font-medium">
-                            {inv.invoice_profit != null && inv.invoice_type === 'sale' ? (
-                              <span className={Number(inv.invoice_profit) >= 0 ? 'text-emerald-600' : 'text-red-500'}>
-                                {Number(inv.invoice_profit) > 0 ? '+' : ''}EGP {Number(inv.invoice_profit).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                              </span>
-                            ) : (
-                              <span className="text-muted-steel">—</span>
-                            )}
-                          </td>
+                          <td className="py-3 px-4 text-right font-mono-tabular font-medium text-charcoal-ink">{t('common.currency')} {Number(inv.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                          {party.party_type !== 'supplier' && (
+                            <td className="py-3 px-4 text-right font-mono-tabular font-medium">
+                              {inv.invoice_profit != null && inv.invoice_type === 'sell' ? (
+                                <span className={Number(inv.invoice_profit) >= 0 ? 'text-emerald-600' : 'text-red-500'}>
+                                  {Number(inv.invoice_profit) > 0 ? '+' : ''}{t('common.currency')} {Number(inv.invoice_profit).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </span>
+                              ) : (
+                                <span className="text-muted-steel">—</span>
+                              )}
+                            </td>
+                          )}
                           <td className="py-3 px-4 font-mono-tabular text-muted-steel text-xs">{inv.created_at ? new Date(inv.created_at).toLocaleDateString('en-GB') : '-'}</td>
                           <td className="py-3 px-4 text-right">
-                            <div className="flex items-center justify-end gap-1">
-                              {inv.invoice_type === 'sale' && (
-                                <button onClick={() => setReturnInvoice(inv)}
-                                  className="p-1.5 rounded-xl text-muted-steel hover:bg-status-error/10 hover:text-status-error transition-all cursor-pointer btn-tactile"
-                                  title="Return / إسترجاع">
-                                  <RotateCcw size={16} />
-                                </button>
-                              )}
-                              <button onClick={() => setEditingInvoice(inv)}
-                                className="p-1.5 rounded-xl text-muted-steel hover:bg-accent-surface hover:text-accent transition-all cursor-pointer btn-tactile"
-                                title="Edit / تعديل">
-                                <Edit size={16} />
-                              </button>
-                              <button onClick={() => setInvoiceToPrint(inv)}
-                                className="p-1.5 rounded-xl text-muted-steel hover:bg-accent-surface hover:text-accent transition-all cursor-pointer btn-tactile"
-                                title="Print / طباعة">
-                                <Printer size={16} />
-                              </button>
-                            </div>
+                            <button onClick={() => setInvoiceToPrint(inv)}
+                              className="p-1.5 rounded-xl text-muted-steel hover:bg-accent-surface hover:text-accent transition-all cursor-pointer btn-tactile"
+                              title="Print / طباعة">
+                              <Printer size={16} />
+                            </button>
                           </td>
                         </tr>
                         {isExpanded && hasItems && (
-                          <tr key={`${inv.id}-items`} className="bg-surface-container-low/60">
-                            <td colSpan={7} className="px-10 py-3">
-                              <table className="w-full text-xs border border-outline-variant/20 rounded-xl overflow-hidden">
-                                <thead>
-                                  <tr className="bg-surface-container border-b border-outline-variant/20 text-muted-steel uppercase tracking-wider">
-                                    <th className="py-2 px-3 text-left">Product</th>
-                                    <th className="py-2 px-3 text-right">Qty</th>
-                                    <th className="py-2 px-3 text-right">Unit Price</th>
-                                    <th className="py-2 px-3 text-right">Subtotal</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {inv.items.map((item, idx) => (
-                                    <tr key={idx} className="border-b border-outline-variant/10 last:border-0 hover:bg-surface-container transition-colors">
-                                      <td className="py-2 px-3 text-charcoal-ink font-medium">{item.product_name || item.name || `Product #${item.product_id}`}</td>
-                                      <td className="py-2 px-3 text-right font-mono-tabular">{item.quantity}</td>
-                                      <td className="py-2 px-3 text-right font-mono-tabular">EGP {Number(item.unit_price).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                      <td className="py-2 px-3 text-right font-mono-tabular font-semibold">EGP {Number(item.total_price ?? item.unit_price * item.quantity).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                          <tr key={`${inv.id}-items`}>
+                            <td colSpan={party.party_type !== 'supplier' ? 7 : 6} className="pt-0 pb-3 px-4">
+                              <div className="bg-surface-container-low/80 rounded-xl border border-outline-variant/30 overflow-hidden">
+                                {/* Header with actions */}
+                                <div className="flex items-center justify-between px-4 py-2.5 bg-surface-container border-b border-outline-variant/20">
+                                  <span className="text-xs font-semibold text-charcoal-ink/60 tracking-wide">
+                                    تفاصيل الفاتورة #{String(inv.id).padStart(5, '0')}
+                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    <button onClick={() => setEditingInvoice(inv)}
+                                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-accent-surface text-accent hover:bg-accent hover:text-white transition-all cursor-pointer">
+                                      <Edit size={12} /> تعديل
+                                    </button>
+                                    {(inv.invoice_type === 'sell' || inv.invoice_type === 'sale') && (
+                                      <button onClick={() => setReturnInvoice(inv)}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-red-50 text-red-600 hover:bg-red-500 hover:text-white transition-all cursor-pointer">
+                                        <RotateCcw size={12} /> استرجاع
+                                      </button>
+                                    )}
+                                  </div> 
+                                </div>
+                                {/* Items table */}
+                                <table className="w-full text-xs">
+                                  <thead>
+                                    <tr className="text-muted-steel">
+                                      <th className="py-2 px-4 text-left font-medium">المنتج</th>
+                                      <th className="py-2 px-4 text-center font-medium">الكمية</th>
+                                      <th className="py-2 px-4 text-right font-medium">السعر</th>
+                                      <th className="py-2 px-4 text-right font-medium">الإجمالي</th>
                                     </tr>
-                                  ))}
-                                </tbody>
-                              </table>
+                                  </thead>
+                                  <tbody>
+                                    {inv.items.map((item, idx) => (
+                                      <tr key={idx} className="border-t border-outline-variant/10 hover:bg-surface-container/40 transition-colors">
+                                        <td className="py-2.5 px-4 font-medium text-charcoal-ink">{item.product_name || item.name || `#${item.product_id}`}</td>
+                                        <td className="py-2.5 px-4 text-center font-mono-tabular">{item.quantity}</td>
+                                        <td className="py-2.5 px-4 text-right font-mono-tabular">{t('common.currency')} {Number(item.unit_price).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                        <td className="py-2.5 px-4 text-right font-mono-tabular font-semibold text-charcoal-ink">{t('common.currency')} {Number(item.total_price ?? item.unit_price * item.quantity).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                  <tfoot>
+                                    <tr className="border-t-2 border-outline-variant/30 bg-surface-container/40">
+                                      <td colSpan={3} className="py-2 px-4 text-right text-muted-steel font-medium">الإجمالي</td>
+                                      <td className="py-2 px-4 text-right font-mono-tabular font-bold text-charcoal-ink">{t('common.currency')} {Number(inv.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                    </tr>
+                                  </tfoot>
+                                </table>
+                              </div>
                             </td>
                           </tr>
                         )}
@@ -525,7 +581,7 @@ export default function PartyDashboard() {
                             </button>
                           </div>
                         ) : (
-                          <span className="font-mono-tabular font-medium text-emerald-600">EGP {Number(payment.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                          <span className="font-mono-tabular font-medium text-emerald-600">{t('common.currency')} {Number(payment.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                         )}
                       </td>
                       <td className="py-3 px-6 font-mono-tabular text-muted-steel text-xs">{payment.created_at ? new Date(payment.created_at).toLocaleDateString('en-GB') : (payment.payment_date ? new Date(payment.payment_date).toLocaleDateString('en-GB') : '-')}</td>
@@ -618,7 +674,7 @@ export default function PartyDashboard() {
                       }).from(el).save();
                     } catch (err) {
                       console.error('PDF error:', err);
-                      alert('Error downloading PDF. Use Print → Save as PDF instead.');
+                      notifications.show({ title: 'PDF Error', message: 'Error downloading PDF. Use Print → Save as PDF instead.', color: 'red' });
                     } finally {
                       if (container) container.style.display = 'none';
                       setDownloadingPdf(false);
@@ -677,19 +733,7 @@ export default function PartyDashboard() {
         </>
       )}
 
-      {editingInvoice && (
-        <EditInvoiceModal
-          invoice={editingInvoice}
-          paperSize={paperSize}
-          onPaperSizeChange={setPaperSize}
-          onPrint={setInvoiceToPrint}
-          onClose={() => setEditingInvoice(null)}
-          onSaved={() => {
-            setEditingInvoice(null);
-            loadSummary();
-          }}
-        />
-      )}
+
 
       {returnInvoice && (
         <ReturnInvoiceModal
@@ -697,6 +741,20 @@ export default function PartyDashboard() {
           onClose={() => setReturnInvoice(null)}
           onSaved={() => {
             setReturnInvoice(null);
+            loadSummary();
+          }}
+        />
+      )}
+
+      {editingInvoice && (
+        <EditInvoiceModal
+          invoice={editingInvoice}
+          paperSize={paperSize}
+          onPaperSizeChange={setPaperSize}
+          onPrint={(printInvoice) => setInvoiceToPrint(printInvoice)}
+          onClose={() => setEditingInvoice(null)}
+          onSaved={() => {
+            setEditingInvoice(null);
             loadSummary();
           }}
         />
@@ -746,11 +804,11 @@ export default function PartyDashboard() {
               <div className="mb-6 space-y-4">
                 <div className="bg-surface-container-low p-4 rounded-xl border border-outline-variant/30 flex justify-between items-center">
                   <span className="text-label-sm text-muted-steel">Outstanding Balance:</span>
-                  <span className="text-label-md text-error font-mono-tabular">EGP {Number(financials.balance).toLocaleString()}</span>
+                  <span className="text-label-md text-error font-mono-tabular">{t('common.currency')} {Number(financials.balance).toLocaleString()}</span>
                 </div>
                 
                 <div>
-                  <label className="block text-label-sm text-charcoal-ink mb-1.5">Payment Amount (EGP)</label>
+                  <label className="block text-label-sm text-charcoal-ink mb-1.5">Payment Amount ({t('common.currency')})</label>
                   <input 
                     type="number"
                     step="0.01"
@@ -856,7 +914,7 @@ export default function PartyDashboard() {
                             />
                           </td>
                           <td className="py-3 px-3 text-right font-mono-tabular font-medium text-charcoal-ink">
-                            {item.return_qty > 0 ? `EGP ${(item.return_qty * item.unit_price).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '-'}
+                            {item.return_qty > 0 ? `${t('common.currency')} ${(item.return_qty * item.unit_price).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '-'}
                           </td>
                         </tr>
                       ))}
@@ -870,7 +928,7 @@ export default function PartyDashboard() {
                 return returnTotal > 0 ? (
                   <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 mb-4 flex justify-between items-center">
                     <span className="text-sm font-medium text-indigo-700">Return Total / إجمالي الاسترجاع</span>
-                    <span className="text-lg font-bold font-mono-tabular text-indigo-700">EGP {returnTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                    <span className="text-lg font-bold font-mono-tabular text-indigo-700">{t('common.currency')} {returnTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                   </div>
                 ) : null;
               })()}
@@ -908,7 +966,7 @@ export default function PartyDashboard() {
               </div>
               <h3 className="text-h3 text-charcoal-ink mb-2">Delete Payment</h3>
               <p className="text-muted-steel text-sm leading-relaxed mb-6">
-                Are you sure you want to delete this payment of <strong className="text-charcoal-ink">EGP {Number(paymentToDelete.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>? The balance will be recalculated.
+                Are you sure you want to delete this payment of <strong className="text-charcoal-ink">{t('common.currency')} {Number(paymentToDelete.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>? The balance will be recalculated.
               </p>
               <div className="flex items-center gap-3 justify-end">
                 <button

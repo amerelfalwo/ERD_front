@@ -164,6 +164,9 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
 
   const inputCls = 'w-full px-3 py-2 rounded-lg border border-outline-variant/60 bg-surface-container-lowest text-sm text-charcoal-ink focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/20 transition-all';
 
+  const isPurchase = invoice.invoice_type?.toLowerCase() === 'purchase';
+  const isSale = invoice.invoice_type?.toLowerCase() === 'sale' || invoice.invoice_type?.toLowerCase() === 'sell';
+
   if (!invoice) return null;
 
   return (
@@ -174,7 +177,7 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
           <div>
             <h2 className="text-h2 text-charcoal-ink">تعديل الفاتورة #{invoice.id}</h2>
             <p className="text-body-sm text-muted-steel mt-0.5">
-              {invoice.invoice_type === 'SALE' ? 'فاتورة بيع' : invoice.invoice_type === 'PURCHASE' ? 'فاتورة شراء' : invoice.invoice_type}
+              {isSale ? 'فاتورة بيع' : isPurchase ? 'فاتورة شراء' : invoice.invoice_type}
             </p>
           </div>
           <button onClick={onClose} className="p-2 rounded-xl hover:bg-surface-container text-muted-steel transition-colors cursor-pointer">
@@ -205,24 +208,28 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
                 <div key={idx} className="grid grid-cols-12 gap-2 items-start p-3 rounded-xl bg-surface-container-low/40 border border-outline-variant/30">
                   <div className="col-span-5">
                     <label className="block text-label-sm text-muted-steel mb-1 uppercase tracking-wider">المنتج</label>
-                    <select
-                      disabled={invoice.invoice_type === 'PURCHASE'}
-                      value={item.batch_id}
-                      onChange={(e) => onBatchSelect(idx, e.target.value)}
-                      className={`${inputCls} disabled:opacity-50 disabled:bg-surface-container`}
-                    >
-                      <option value="">اختر المنتج...</option>
-                      {products.map((p) => (
-                        (batches[p.id] || []).map((b) => (
-                          <option key={b.id} value={b.id}>
-                            {invoice.invoice_type === 'PURCHASE'
-                              ? `${p.name} — (أصلي: ${b.initial_quantity}, مباع: ${(Number(b.initial_quantity) - Number(b.remaining_quantity)).toFixed(2)})`
-                              : `${p.name} — متاح: ${Number(b.remaining_quantity).toFixed(2)}`}
-                          </option>
-                        ))
-                      ))}
-                    </select>
-                    {invoice.invoice_type === 'PURCHASE' && (() => {
+                    {item.id ? (
+                      <div className="w-full px-3 py-2 rounded-lg bg-surface-container/50 border border-outline-variant/30 text-sm font-medium text-charcoal-ink flex items-center h-[38px] truncate" title={item.product_name}>
+                        {item.product_name}
+                      </div>
+                    ) : (
+                      <select
+                        disabled={isPurchase}
+                        value={String(item.batch_id || '')}
+                        onChange={(e) => onBatchSelect(idx, e.target.value)}
+                        className={`${inputCls} disabled:opacity-50 disabled:bg-surface-container`}
+                      >
+                        <option value="">اختر المنتج...</option>
+                        {products.map((p) => (
+                          (batches[p.id] || []).map((b) => (
+                            <option key={b.id} value={b.id}>
+                              {p.name} — متاح: {Number(b.remaining_quantity).toFixed(2)}
+                            </option>
+                          ))
+                        ))}
+                      </select>
+                    )}
+                    {isPurchase && (() => {
                       const allBatches = Object.values(batches).flat();
                       const b = allBatches.find((x) => String(x.id) === String(item.batch_id));
                       const sold = b ? Number(b.initial_quantity) - Number(b.remaining_quantity) : 0;
@@ -251,7 +258,7 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
                   </div>
                   <div className="col-span-1 flex items-end pb-1">
                     <button
-                      disabled={invoice.invoice_type === 'PURCHASE'}
+                      disabled={isPurchase}
                       onClick={() => removeItem(idx)}
                       className="p-1.5 rounded-lg text-red-400 hover:bg-red-50 disabled:hover:bg-transparent disabled:opacity-30 transition-colors cursor-pointer btn-tactile"
                     >
@@ -267,7 +274,7 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
                 </div>
               ))}
 
-              {invoice.invoice_type !== 'PURCHASE' ? (
+              {!isPurchase ? (
                 <button onClick={addItem} className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border-2 border-dashed border-accent/30 text-accent text-label-sm hover:bg-accent-surface transition-colors cursor-pointer">
                   <Plus size={16} /> إضافة بند جديد
                 </button>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { Select } from '@mantine/core';
 import {
   ShoppingCart, Plus, Minus, Trash2, Printer, Loader2,
   CheckCircle2, Package, UserSquare2, X, Edit, Undo2, Search,
@@ -10,10 +11,12 @@ import { useInvoiceStore } from '../store/useInvoiceStore';
 import InvoicePrintTemplate from '../components/InvoicePrintTemplate';
 import EditInvoiceModal from '../components/EditInvoiceModal';
 import { useAuth } from '../context/AuthContext';
+import { notifications } from '@mantine/notifications';
 import html2pdf from 'html2pdf.js';
-
+import { useTranslation } from 'react-i18next';
 
 function InvoiceItemRow({ item, products, invoiceType, onQuantityChange, onRemove, onEdit, maxStock }) {
+  const { t } = useTranslation();
   const product = products.find((p) => p.id === item.product_id);
   const displayName = item.product_name || product?.name || `#${item.product_id ?? item.batch_id}`;
   const unitPrice = invoiceType === 'sale' ? Number(item.sale_price || 0) : Number(item.purchase_price || 0);
@@ -40,12 +43,12 @@ function InvoiceItemRow({ item, products, invoiceType, onQuantityChange, onRemov
         <span className="text-label-md text-charcoal-ink truncate">{displayName}</span>
         {invoiceType === 'purchase' && item.purchase_price !== undefined && (
           <span className="font-mono-tabular text-label-sm text-muted-steel mt-0.5">
-            Buy: {Number(item.purchase_price).toLocaleString()} | Sell: {Number(item.selling_price).toLocaleString()}
+            {t('invoices.buy')}: {Number(item.purchase_price).toLocaleString()} | {t('invoices.sell')}: {Number(item.selling_price).toLocaleString()}
           </span>
         )}
         {invoiceType === 'sale' && item.sale_price != null && (
           <span className="font-mono-tabular text-label-sm text-muted-steel mt-0.5">
-            Price: {Number(item.sale_price).toLocaleString()}
+            {t('common.price')}: {Number(item.sale_price).toLocaleString()}
           </span>
         )}
       </div>
@@ -63,11 +66,11 @@ function InvoiceItemRow({ item, products, invoiceType, onQuantityChange, onRemov
         </div>
       </div>
       <div className="col-span-3 text-right">
-        <span className="font-mono-tabular text-label-md text-charcoal-ink font-medium">EGP {lineTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+        <span className="font-mono-tabular text-label-md text-charcoal-ink font-medium">{t('common.currency')} {lineTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
       </div>
       <div className="col-span-2 flex justify-end gap-1">
-        <button onClick={() => onEdit(item)} className="p-1.5 rounded-xl text-muted-steel/50 hover:bg-accent-surface hover:text-accent transition-all opacity-0 group-hover:opacity-100 cursor-pointer btn-tactile" title="Edit"><Edit size={14} /></button>
-        <button onClick={() => onRemove(item.product_id)} className="p-1.5 rounded-xl text-error/50 hover:bg-error-container/20 hover:text-error transition-all opacity-0 group-hover:opacity-100 cursor-pointer btn-tactile" title="Delete"><Trash2 size={14} /></button>
+        <button onClick={() => onEdit(item)} className="p-1.5 rounded-xl text-muted-steel/50 hover:bg-accent-surface hover:text-accent transition-all opacity-0 group-hover:opacity-100 cursor-pointer btn-tactile" title={t('common.edit')}><Edit size={14} /></button>
+        <button onClick={() => onRemove(item.product_id)} className="p-1.5 rounded-xl text-error/50 hover:bg-error-container/20 hover:text-error transition-all opacity-0 group-hover:opacity-100 cursor-pointer btn-tactile" title={t('common.delete')}><Trash2 size={14} /></button>
       </div>
     </div>
   );
@@ -75,11 +78,32 @@ function InvoiceItemRow({ item, products, invoiceType, onQuantityChange, onRemov
 
 
 export default function InvoicesView() {
+  const { t, i18n } = useTranslation();
   const {
     invoiceType, selectedParty, items,
     setInvoiceType, setSelectedParty,
     addItem: storeAddItem, updateItem, updateQuantity, removeItem, clearCart,
   } = useInvoiceStore();
+
+  const isSale = invoiceType === 'sale' || invoiceType === 'sale_return';
+  const partyInfoLabel = isSale ? t('invoices.clientInfo') : t('invoices.supplierInfo');
+  const partyLabel = isSale ? t('invoices.selectClient') : t('invoices.selectSupplier');
+  const partyEntityLabel = isSale ? t('parties.client') : t('parties.supplier');
+  const partyNameLabel = isSale ? t('invoices.clientName') : t('invoices.supplierName');
+  const partyNamePlaceholder = isSale ? t('invoices.enterClientName') : t('invoices.enterSupplierName');
+  const partySelectPlaceholder = isSale ? t('invoices.selectClientPlaceholder') : t('invoices.selectSupplierPlaceholder');
+  const dateLocale = i18n.language === 'ar' ? 'ar-EG' : 'en-US';
+
+  const formatInvoiceType = (value) => {
+    const key = String(value || '').toLowerCase();
+    const fallback = String(value || '').replace('_', ' ');
+    return t(`invoices.typeLabels.${key}`, { defaultValue: fallback });
+  };
+
+  const formatStatus = (value) => {
+    const key = String(value || '').toLowerCase();
+    return t(`invoices.status.${key}`, { defaultValue: value || '' });
+  };
 
   const [parties, setParties] = useState([]);
   const [products, setProducts] = useState([]);
@@ -133,18 +157,53 @@ export default function InvoicesView() {
       loadHistory();
       api.getInventoryReport().then(setInventory);
     } catch (err) {
-      alert(err.response?.data?.detail || 'Failed to delete invoice');
+      notifications.show({ title: t('common.error'), message: err.response?.data?.detail || err.message || t('invoices.errorDeleting'), color: 'red' });
     }
   }
 
+  const [availableParties, setAvailableParties] = useState([]);
+
   useEffect(() => {
-    Promise.all([api.getParties(), api.getProducts(), api.getInventoryReport(), api.getTemplates()])
-      .then(([p, pr, inv, tmpl]) => { setParties(p); setProducts(pr); setInventory(inv); setTemplates(tmpl); })
-      .catch(console.error);
+    Promise.all([
+      api.getProducts(),
+      api.getInventoryReport(),
+      api.getTemplates()
+    ])
+      .then(([pr, inv, tmpl]) => { setProducts(pr); setInventory(inv); setTemplates(tmpl); })
+      .catch((err) => notifications.show({ title: t('common.error'), message: err.response?.data?.detail || err.message || t('invoices.failedLoadInitialData'), color: 'red' }));
     loadHistory();
+
+    Promise.all([api.getCustomersSelect().catch(()=>[]), api.getSuppliersSelect().catch(()=>[])])
+      .then(([c, s]) => {
+         const custs = Array.isArray(c) ? c : (c.data || c.items || []);
+         const supps = Array.isArray(s) ? s : (s.data || s.items || []);
+         setParties([
+           ...custs.map(x=>({...x, party_type: 'client'})),
+           ...supps.map(x=>({...x, party_type: 'supplier'}))
+         ]);
+      }).catch((err) => notifications.show({ title: t('common.error'), message: err.response?.data?.detail || err.message || t('invoices.failedLoadParties'), color: 'red' }));
   }, []);
 
-  const filteredParties = parties.filter((p) => invoiceType === 'sale' ? p.party_type === 'client' : p.party_type === 'supplier');
+  useEffect(() => {
+    let active = true;
+    async function fetchAvailableParties() {
+      try {
+        let res;
+        if (invoiceType === 'sale' || invoiceType === 'sale_return') {
+          res = await api.getCustomersSelect();
+        } else if (invoiceType === 'purchase' || invoiceType === 'purchase_return') {
+          res = await api.getSuppliersSelect();
+        }
+        if (active) {
+          setAvailableParties(Array.isArray(res) ? res : (res?.data || res?.items || []));
+        }
+      } catch (err) {
+        notifications.show({ title: t('common.error'), message: err.response?.data?.detail || err.message || t('invoices.failedFetchAvailableParties'), color: 'red' });
+      }
+    }
+    fetchAvailableParties();
+    return () => { active = false; };
+  }, [invoiceType]);
 
   useEffect(() => {
     if (!selectedProduct) {
@@ -238,7 +297,7 @@ export default function InvoicesView() {
       setProductSearch(newProd.name);
       setShowProductDropdown(false);
     } catch (err) {
-      alert(err?.message || 'Error creating product');
+      notifications.show({ title: t('common.error'), message: err.response?.data?.detail || err.message || t('invoices.errorCreatingProduct'), color: 'red' });
     } finally {
       setCreatingProduct(false);
     }
@@ -251,16 +310,25 @@ export default function InvoicesView() {
 
     // If new party mode, create the party first
     if (isNewParty) {
-      if (!newPartyName.trim()) { alert('يرجى إدخال اسم العميل'); return; }
+      if (!newPartyName.trim()) {
+        notifications.show({ title: t('common.validationError'), message: t('invoices.pleaseEnterName', { party: partyLabel }), color: 'red' });
+        return;
+      }
       setSubmitting(true);
       try {
-        const partyType = invoiceType === 'sale' ? 'client' : 'supplier';
-        const newParty = await api.createParty({
+        const payload = {
           name: newPartyName.trim(),
-          party_type: partyType,
           phone: newPartyPhone.trim() || null,
           address: newPartyAddress.trim() || null,
-        });
+        };
+        let newParty;
+        if (invoiceType === 'sale' || invoiceType === 'sale_return') {
+          newParty = await api.createCustomer(payload);
+          newParty.party_type = 'client';
+        } else {
+          newParty = await api.createSupplier(payload);
+          newParty.party_type = 'supplier';
+        }
         partyId = newParty.id;
         setParties(prev => [...prev, newParty]);
         setSelectedParty(String(newParty.id));
@@ -269,12 +337,12 @@ export default function InvoicesView() {
         setNewPartyPhone('');
         setNewPartyAddress('');
       } catch (err) {
-        alert(err?.message || 'Error creating party');
+        notifications.show({ title: t('common.error'), message: err.response?.data?.detail || err.message || t('invoices.errorCreatingParty'), color: 'red' });
         setSubmitting(false);
         return;
       }
     } else if (!partyId) {
-      alert('يرجى اختيار طرف أو إضافة عميل جديد');
+      notifications.show({ title: t('common.validationError'), message: t('invoices.pleaseSelectParty', { party: partyEntityLabel }), color: 'red' });
       return;
     }
 
@@ -306,7 +374,10 @@ export default function InvoicesView() {
       setAutoFetchedCost(null);
       loadHistory();
       api.getInventoryReport().then(setInventory);
-    } catch (err) { alert(err?.message || 'Error'); }
+      notifications.show({ title: t('common.success'), message: t('invoices.invoiceSaved'), color: 'green' });
+    } catch (err) {
+      notifications.show({ title: t('common.error'), message: err.response?.data?.detail || err.message || t('invoices.errorSaving'), color: 'red' });
+    }
     finally { setSubmitting(false); }
   }
 
@@ -354,7 +425,9 @@ export default function InvoicesView() {
     try {
       const hydratedData = await api.previewTemplate(templates[0].id, lastInvoice.id);
       handleOpenPrintPreview(hydratedData);
-    } catch (err) { alert(err?.message || 'Error'); }
+    } catch (err) {
+      notifications.show({ title: t('common.error'), message: err.response?.data?.detail || err.message || t('invoices.errorPrint'), color: 'red' });
+    }
     finally { setLoadingPreview(false); }
   }
 
@@ -403,19 +476,19 @@ export default function InvoicesView() {
         <div className="max-w-7xl mx-auto px-6 pt-6">
           <div className="mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-fade-in-up">
             <div>
-              <h2 className="text-h1 text-charcoal-ink">Invoices</h2>
-              <p className="text-body-base text-muted-steel mt-1">Manage sales, purchases, and returns.</p>
+              <h2 className="text-h1 text-charcoal-ink">{t('invoices.title')}</h2>
+              <p className="text-body-base text-muted-steel mt-1">{t('invoices.subtitle')}</p>
             </div>
             <div className="bg-surface-container-lowest border border-outline-variant/60 rounded-xl p-1 flex gap-1 shadow-whisper">
               <button onClick={() => setActiveTab('create')}
                 className={`px-4 py-2 rounded-lg text-label-md transition-all duration-200 cursor-pointer btn-tactile flex items-center gap-2
                   ${activeTab === 'create' ? 'bg-accent text-on-primary shadow-sm' : 'text-muted-steel hover:bg-surface-container-low'}`}>
-                <Plus size={16} /> Add Invoice
+                <Plus size={16} /> {t('invoices.addInvoice')}
               </button>
               <button onClick={() => setActiveTab('history')}
                 className={`px-4 py-2 rounded-lg text-label-md transition-all duration-200 cursor-pointer btn-tactile flex items-center gap-2
                   ${activeTab === 'history' ? 'bg-accent text-on-primary shadow-sm' : 'text-muted-steel hover:bg-surface-container-low'}`}>
-                <Package size={16} /> History
+                <Package size={16} /> {t('invoices.history')}
               </button>
             </div>
           </div>
@@ -424,13 +497,21 @@ export default function InvoicesView() {
         {activeTab === 'create' && (
         <div className="max-w-7xl mx-auto space-y-6 px-6">
           <div className="mb-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-fade-in-up">
-            <h2 className="text-h3 text-charcoal-ink">Invoice Details</h2>
+            <h2 className="text-h3 text-charcoal-ink">{t('invoices.invoiceDetails')}</h2>
             <div className="bg-surface-container-lowest border border-outline-variant/60 rounded-xl p-1 flex gap-1 shadow-whisper">
-              {['sale', 'purchase'].map((t) => (
-                <button key={t} onClick={() => setInvoiceType(t)}
+              {[
+                { key: 'sale', label: t('invoices.saleInvoice') },
+                { key: 'purchase', label: t('invoices.purchaseInvoice') }
+              ].map(({ key, label }) => (
+                <button key={key} onClick={() => {
+                  if (invoiceType !== key) {
+                    setInvoiceType(key);
+                    setSelectedParty('');
+                  }
+                }}
                   className={`px-4 py-1.5 rounded-lg text-label-md capitalize transition-all duration-200 cursor-pointer btn-tactile
-                    ${invoiceType === t ? 'bg-accent text-on-primary shadow-sm' : 'text-muted-steel hover:bg-surface-container-low'}`}>
-                  {t} Invoice
+                    ${invoiceType === key ? 'bg-accent text-on-primary shadow-sm' : 'text-muted-steel hover:bg-surface-container-low'}`}>
+                  {label}
                 </button>
               ))}
             </div>
@@ -442,7 +523,7 @@ export default function InvoicesView() {
                 <div className="flex items-center justify-between mb-4 pb-3 border-b border-outline-variant/30">
                   <div className="flex items-center gap-2.5">
                     <div className="p-1.5 rounded-lg bg-accent-surface text-accent"><UserSquare2 size={18} /></div>
-                    <h3 className="text-h3 text-charcoal-ink">{invoiceType === 'sale' ? 'Client' : 'Supplier'} Information</h3>
+                    <h3 className="text-h3 text-charcoal-ink">{partyInfoLabel}</h3>
                   </div>
                   {invoiceType === 'sale' && (
                     <button
@@ -454,30 +535,43 @@ export default function InvoicesView() {
                       }`}
                     >
                       <UserPlus size={14} />
-                      {isNewParty ? 'اختيار موجود' : 'عميل جديد'}
+                      {isNewParty ? t('invoices.selectExisting') : (isSale ? t('invoices.newClient') : t('invoices.newSupplier'))}
                     </button>
                   )}
                 </div>
 
                 {!isNewParty ? (
                   <div>
-                    <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">Select Party</label>
-                    <select value={selectedParty} onChange={(e) => setSelectedParty(e.target.value)} className={selectClass}>
-                      <option value="">Choose a party...</option>
-                      {filteredParties.map((p) => <option key={p.id} value={p.id}>{p.name}{p.phone ? ` — ${p.phone}` : ''}</option>)}
-                    </select>
+                    <Select
+                      label={partyLabel}
+                      placeholder={partySelectPlaceholder}
+                      value={selectedParty ? String(selectedParty) : null}
+                      onChange={(val) => setSelectedParty(val || '')}
+                      data={availableParties.map((p) => ({
+                        value: String(p.id),
+                        label: `${p.name}${p.phone ? ` — ${p.phone}` : ''}`
+                      }))}
+                      searchable
+                      clearable
+                      required
+                      withAsterisk
+                      classNames={{
+                        input: "bg-surface-container-lowest border border-outline-variant/60 rounded-xl px-4 py-2.5 text-sm text-charcoal-ink focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all duration-200",
+                        label: "text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5"
+                      }}
+                    />
                   </div>
                 ) : (
                   <div className="space-y-3">
                     <div>
-                      <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">اسم العميل *</label>
+                      <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">{partyNameLabel} *</label>
                       <div className="relative">
                         <UserSquare2 size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-steel/50" />
                         <input
                           type="text"
                           value={newPartyName}
                           onChange={(e) => setNewPartyName(e.target.value)}
-                          placeholder="ادخل اسم العميل..."
+                          placeholder={partyNamePlaceholder}
                           className={`${inputClass} pr-10`}
                           dir="rtl"
                           autoFocus
@@ -486,28 +580,28 @@ export default function InvoicesView() {
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">رقم الهاتف</label>
+                        <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">{t('invoices.phoneNumber')}</label>
                         <div className="relative">
                           <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-steel/50" />
                           <input
                             type="tel"
                             value={newPartyPhone}
                             onChange={(e) => setNewPartyPhone(e.target.value)}
-                            placeholder="01xxxxxxxxx"
+                            placeholder={t('parties.phonePlaceholder')}
                             className={`${inputClass} pl-10`}
                             dir="ltr"
                           />
                         </div>
                       </div>
                       <div>
-                        <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">العنوان</label>
+                        <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">{t('invoices.addressLabel')}</label>
                         <div className="relative">
                           <MapPin size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-steel/50" />
                           <input
                             type="text"
                             value={newPartyAddress}
                             onChange={(e) => setNewPartyAddress(e.target.value)}
-                            placeholder="المنطقة / الشارع"
+                            placeholder={t('invoices.addressPlaceholder')}
                             className={`${inputClass} pr-10`}
                             dir="rtl"
                           />
@@ -521,12 +615,12 @@ export default function InvoicesView() {
               <div className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl p-6 shadow-whisper animate-fade-in-up stagger-2">
                 <div className="flex items-center gap-2.5 mb-4 pb-3 border-b border-outline-variant/30">
                   <div className="p-1.5 rounded-lg bg-accent-surface text-accent"><Package size={18} /></div>
-                  <h3 className="text-h3 text-charcoal-ink">Line Items</h3>
+                  <h3 className="text-h3 text-charcoal-ink">{t('invoices.lineItems')}</h3>
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-2 mb-4 items-end">
                   <div className="relative flex-1">
-                    <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">Product / المنتج</label>
+                    <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">{t('invoices.product')}</label>
                     <input 
                       type="text" 
                       value={productSearch}
@@ -538,7 +632,7 @@ export default function InvoicesView() {
                       }}
                       onFocus={() => setShowProductDropdown(true)}
                       onBlur={() => setTimeout(() => setShowProductDropdown(false), 200)}
-                      placeholder="Search or type to add product..."
+                      placeholder={t('invoices.searchOrAddProduct')}
                       className={inputClass}
                     />
                     {showProductDropdown && (
@@ -550,8 +644,8 @@ export default function InvoicesView() {
                             const stock = inventory?.products?.find(ip => String(ip.product_id) === String(p.id));
                             const stockQty = stock ? stock.batches?.reduce((s, b) => s + Number(b.remaining_quantity || 0), 0) : null;
                             return (
-                              <div 
-                                key={p.id} 
+                              <div
+                                key={p.id}
                                 className="px-4 py-2 hover:bg-surface-container-low cursor-pointer text-charcoal-ink text-sm flex items-center justify-between"
                                 onClick={() => {
                                   setProductSearch(p.name);
@@ -562,36 +656,36 @@ export default function InvoicesView() {
                                 <span>{p.name}</span>
                                 {invoiceType === 'sale' && stockQty != null && (
                                   <span className={`text-[10px] font-mono-tabular px-1.5 py-0.5 rounded-md ${stockQty > 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>
-                                    Stock: {stockQty}
+                                    {t('invoices.stock')}: {stockQty}
                                   </span>
                                 )}
                               </div>
                             );
                           })}
                         {productSearch && !products.some(p => p.name.toLowerCase() === productSearch.toLowerCase()) && invoiceType === 'purchase' && (
-                          <div 
+                          <div
                             className="px-4 py-2 text-accent hover:bg-accent-surface cursor-pointer flex items-center gap-2 text-sm border-t border-outline-variant/30"
                             onClick={handleCreateNewProduct}
                           >
                             {creatingProduct ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-                            Add new product: "{productSearch}"
+                            {t('invoices.addNewProductPrompt', { name: productSearch })}
                           </div>
                         )}
                         {!productSearch && products.filter(p => editingItemId === p.id || !items.some(i => i.product_id === p.id)).length === 0 && (
-                          <div className="px-4 py-2 text-muted-steel text-sm">No products available</div>
+                          <div className="px-4 py-2 text-muted-steel text-sm">{t('invoices.noProductsAvailable')}</div>
                         )}
                       </div>
                     )}
                   </div>
                   {invoiceType === 'purchase' && (
                     <div className="flex flex-col gap-0">
-                      <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">سعر الشراء</label>
+                      <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">{t('invoices.purchasePriceLabel')}</label>
                       <input type="number" value={purchasePrice} onChange={(e) => setPurchasePrice(e.target.value)} placeholder="0" className={`sm:w-28 ${inputClass}`} />
                     </div>
                   )}
                   {invoiceType === 'sale' && (
                     <div className="flex flex-col gap-1">
-                      <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">سعر البيع</label>
+                      <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">{t('invoices.sellPriceLabel')}</label>
                       <input
                         type="number"
                         value={salePrice}
@@ -601,7 +695,7 @@ export default function InvoicesView() {
                       />
                       {autoFetchedCost != null && (
                         <span className="text-[10px] text-muted-steel px-1">
-                          Cost: <span className="font-mono font-semibold text-charcoal-ink">{autoFetchedCost.toLocaleString()}</span>
+                          {t('invoices.cost')}: <span className="font-mono font-semibold text-charcoal-ink">{autoFetchedCost.toLocaleString()}</span>
                           {salePrice && parseFloat(salePrice) > 0 && (
                             <span className={`ml-2 font-bold ${
                               parseFloat(salePrice) - autoFetchedCost > 0 ? 'text-emerald-600' : 'text-red-500'
@@ -615,7 +709,7 @@ export default function InvoicesView() {
                     </div>
                   )}
                   <div className="flex flex-col gap-1">
-                    <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">الكمية</label>
+                    <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">{t('invoices.quantityLabel')}</label>
                     <input
                       type="number"
                       value={itemQuantity}
@@ -640,7 +734,7 @@ export default function InvoicesView() {
                       const avail = stockProd ? stockProd.batches?.reduce((s, b) => s + Number(b.remaining_quantity || 0), 0) : null;
                       if (avail != null) return (
                         <span className={`text-[10px] font-mono-tabular px-1 ${avail > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                          Available: {avail}
+                          {t('invoices.available')}: {avail}
                         </span>
                       );
                       return null;
@@ -651,7 +745,7 @@ export default function InvoicesView() {
                       className={`px-4 py-2 rounded-xl text-on-primary text-label-md shadow-sm transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer btn-tactile ${
                         editingItemId ? 'bg-amber-500 hover:bg-amber-600' : 'bg-accent hover:bg-accent-hover'
                       }`}>
-                      {editingItemId ? <><Edit size={14} /> Update</> : <><Plus size={16} /> Add</>}
+                      {editingItemId ? <><Edit size={14} /> {t('common.update')}</> : <><Plus size={16} /> {t('common.add')}</>}
                     </button>
                     {editingItemId && (
                       <button onClick={() => { setEditingItemId(null); setSelectedProduct(''); setProductSearch(''); setPurchasePrice(''); setSellingPrice(''); setSalePrice(''); setItemQuantity('1'); setAutoFetchedCost(null); }}
@@ -664,10 +758,10 @@ export default function InvoicesView() {
 
                 <div className="border border-outline-variant/40 rounded-xl overflow-hidden">
                   <div className="grid grid-cols-12 gap-2 px-4 py-2.5 bg-surface-container-low/30 border-b border-outline-variant/30 text-label-sm text-muted-steel/70 uppercase tracking-wider">
-                    <div className="col-span-4">Product</div>
-                    <div className="col-span-3 text-center">Qty</div>
-                    <div className="col-span-3 text-right">Total</div>
-                    <div className="col-span-2 text-right">Actions</div>
+                    <div className="col-span-4">{t('invoices.productHeader')}</div>
+                    <div className="col-span-3 text-center">{t('invoices.qtyHeader')}</div>
+                    <div className="col-span-3 text-right">{t('invoices.totalHeader')}</div>
+                    <div className="col-span-2 text-right">{t('invoices.actionsHeader')}</div>
                   </div>
                   <div className="bg-surface-container-lowest">
                     {items.length > 0 ? (
@@ -679,8 +773,8 @@ export default function InvoicesView() {
                     ) : (
                       <div className="flex flex-col items-center justify-center py-10 text-muted-steel">
                         <ShoppingCart size={32} strokeWidth={1.2} className="mb-3 opacity-30" />
-                        <p className="text-body-base text-charcoal-ink">No items added yet</p>
-                        <p className="text-body-sm text-muted-steel mt-1">Select a product and click Add</p>
+                        <p className="text-body-base text-charcoal-ink">{t('invoices.noItemsAdded')}</p>
+                        <p className="text-body-sm text-muted-steel mt-1">{t('invoices.noItemsHint')}</p>
                       </div>
                     )}
                   </div>
@@ -691,17 +785,17 @@ export default function InvoicesView() {
             <div className="lg:col-span-4 space-y-6">
               <div className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl p-6 shadow-whisper relative overflow-hidden animate-fade-in-up stagger-3">
                 <div className="absolute top-0 left-0 w-full h-[3px] bg-accent rounded-t-2xl" />
-                <h3 className="text-h3 text-charcoal-ink mb-4 mt-1">Current Order</h3>
+                <h3 className="text-h3 text-charcoal-ink mb-4 mt-1">{t('invoices.currentOrder')}</h3>
                 <div className="space-y-3 mb-6">
                   <div className="flex justify-between items-center text-body-sm text-muted-steel">
-                    <span>Items Count</span>
+                    <span>{t('invoices.itemsCount')}</span>
                     <span className="font-mono-tabular text-charcoal-ink font-medium">{items.length}</span>
                   </div>
                   {items.length > 0 && (
                     <>
                       <div className="flex justify-between items-center text-body-sm text-muted-steel border-t border-outline-variant/30 pt-2">
-                        <span>Subtotal</span>
-                        <span className="font-mono-tabular text-charcoal-ink font-medium">EGP {subtotal.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                        <span>{t('invoices.subtotal')}</span>
+                        <span className="font-mono-tabular text-charcoal-ink font-medium">{t('common.currency')} {subtotal.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                       </div>
 
                       {/* Delivery Toggle */}
@@ -716,14 +810,14 @@ export default function InvoicesView() {
                             }`}
                           >
                             <Truck size={14} />
-                            {hasDelivery ? 'يوجد توصيل ✓' : 'إضافة توصيل'}
+                            {hasDelivery ? t('invoices.hasDelivery') : t('invoices.addDelivery')}
                           </button>
                           {hasDelivery && (
                             <input
                               type="number"
                               value={deliveryFee}
                               onChange={(e) => setDeliveryFee(e.target.value)}
-                              placeholder="سعر التوصيل"
+                              placeholder={t('invoices.deliveryPrice')}
                               className="w-28 bg-surface-container-low border border-outline-variant/60 rounded-lg px-2 py-1.5 text-sm text-right text-charcoal-ink focus:border-accent outline-none"
                               autoFocus
                             />
@@ -731,71 +825,71 @@ export default function InvoicesView() {
                         </div>
                         {hasDelivery && deliveryFee && (
                           <div className="flex justify-between items-center text-body-sm text-muted-steel">
-                            <span>Delivery Fee / توصيل</span>
-                            <span className="font-mono-tabular text-charcoal-ink font-medium">EGP {Number(deliveryFee || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                            <span>{t('invoices.deliveryFee')}</span>
+                            <span className="font-mono-tabular text-charcoal-ink font-medium">{t('common.currency')} {Number(deliveryFee || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                           </div>
                         )}
                       </div>
                       <div className="flex justify-between items-center text-body-sm text-muted-steel border-t border-outline-variant/30 pt-2">
-                        <span>Total Amount</span>
-                        <span className="font-mono-tabular text-charcoal-ink font-medium">EGP {totalAmount.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                        <span>{t('invoices.totalAmount')}</span>
+                        <span className="font-mono-tabular text-charcoal-ink font-medium">{t('common.currency')} {totalAmount.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                       </div>
                       {invoiceType === 'sale' && totalProfit !== 0 && (
                         <div className="flex justify-between items-center text-body-sm border-t border-outline-variant/30 pt-2">
-                          <span className="text-muted-steel">Est. Profit / الربح</span>
+                          <span className="text-muted-steel">{t('invoices.estProfit')}</span>
                           <span className={`font-mono-tabular font-bold text-sm ${
                             totalProfit > 0 ? 'text-emerald-600' : 'text-red-500'
                           }`}>
-                            {totalProfit > 0 ? '+' : ''}EGP {totalProfit.toLocaleString(undefined, {minimumFractionDigits: 2})}
+                            {totalProfit > 0 ? '+' : ''}{t('common.currency')} {totalProfit.toLocaleString(undefined, {minimumFractionDigits: 2})}
                           </span>
                         </div>
                       )}
                       <div className="flex justify-between items-center text-body-sm text-muted-steel pt-1">
-                        <span>Amount Paid</span>
+                        <span>{t('invoices.amountPaid')}</span>
                         <input type="number" value={amountPaid} onChange={(e) => setAmountPaid(e.target.value)} placeholder="0.00" className="w-24 bg-surface-container-low border border-outline-variant/60 rounded-lg px-2 py-1 text-sm text-right text-charcoal-ink focus:border-accent outline-none" />
                       </div>
                       <div className="flex justify-between items-center text-label-md text-charcoal-ink border-t border-outline-variant/30 pt-2">
-                        <span>Remaining Balance</span>
-                        <span className="font-mono-tabular font-medium text-error">EGP {Math.max(0, totalAmount - (parseFloat(amountPaid) || 0)).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                        <span>{t('invoices.remainingBalance')}</span>
+                        <span className="font-mono-tabular font-medium text-error">{t('common.currency')} {Math.max(0, totalAmount - (parseFloat(amountPaid) || 0)).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                       </div>
                     </>
                   )}
                 </div>
                 <button onClick={handleSubmit} disabled={submitting || (!selectedParty && !isNewParty) || items.length === 0 || (isNewParty && !newPartyName.trim())}
                   className="w-full bg-accent hover:bg-accent-hover text-on-primary text-label-md py-2.5 rounded-xl flex items-center justify-center gap-2 transition-all duration-200 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer btn-tactile">
-                  {submitting ? <Loader2 size={18} className="animate-spin" /> : <><CheckCircle2 size={18} /> Generate Invoice</>}
+                  {submitting ? <Loader2 size={18} className="animate-spin" /> : <><CheckCircle2 size={18} /> {t('invoices.generateInvoice')}</>}
                 </button>
               </div>
 
               {lastInvoice && (
                 <div className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl p-6 shadow-whisper relative overflow-hidden animate-scale-in">
                   <div className="absolute top-0 left-0 w-full h-[3px] bg-gradient-to-r from-accent to-accent-muted rounded-t-2xl" />
-                  <h3 className="text-h3 text-charcoal-ink mb-4 mt-1">Last Generated Invoice</h3>
+                  <h3 className="text-h3 text-charcoal-ink mb-4 mt-1">{t('invoices.lastGenerated')}</h3>
                   <div className="space-y-3">
                     <div className="flex justify-between items-center text-body-sm text-muted-steel border-b border-outline-variant/20 pb-2">
-                      <span>Invoice ID</span>
+                      <span>{t('invoices.invoiceId')}</span>
                       <span className="font-mono-tabular text-charcoal-ink">#{lastInvoice.id}</span>
                     </div>
                     <div className="flex justify-between items-center text-body-sm text-muted-steel border-b border-outline-variant/20 pb-2">
-                      <span>Status</span>
-                      <span className={`text-label-sm px-2 py-0.5 rounded-lg ${lastInvoice.status === 'paid' ? 'bg-accent-surface text-accent' : 'bg-error-container/30 text-error'}`}>{lastInvoice.status}</span>
+                      <span>{t('common.status')}</span>
+                      <span className={`text-label-sm px-2 py-0.5 rounded-lg ${lastInvoice.status === 'paid' ? 'bg-accent-surface text-accent' : 'bg-error-container/30 text-error'}`}>{formatStatus(lastInvoice.status)}</span>
                     </div>
                     <div className="flex justify-between items-center pt-2 border-t border-outline-variant/30">
-                      <span className="text-label-md text-charcoal-ink">Total Amount</span>
-                      <span className="text-h2 text-accent font-mono-tabular tracking-tight">EGP {Number(lastInvoice.total_amount).toLocaleString()}</span>
+                      <span className="text-label-md text-charcoal-ink">{t('invoices.totalAmount')}</span>
+                      <span className="text-h2 text-accent font-mono-tabular tracking-tight">{t('common.currency')} {Number(lastInvoice.total_amount).toLocaleString()}</span>
                     </div>
                   </div>
                   <div className="mt-5 flex gap-2">
                     <button onClick={() => handleOpenPrintPreview(lastInvoice)}
                       className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-label-md bg-charcoal-ink text-white hover:opacity-90 transition-all duration-200 shadow-sm cursor-pointer btn-tactile">
                       <Printer size={18} />
-                      Print Invoice
+                      {t('invoices.printInvoice')}
                     </button>
                     {templates.length > 0 && (
                       <button onClick={handlePrintFromTemplate} disabled={loadingPreview}
                         className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-label-md border border-outline-variant/60 text-charcoal-ink hover:bg-surface-container-low transition-all duration-200 cursor-pointer btn-tactile disabled:opacity-50">
                         {loadingPreview ? <Loader2 size={18} className="animate-spin" /> : <Printer size={18} />}
-                        Template
+                        {t('invoices.template')}
                       </button>
                     )}
                   </div>
@@ -810,13 +904,13 @@ export default function InvoicesView() {
         <div className="max-w-7xl mx-auto space-y-6 px-6">
           <div className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl shadow-whisper animate-fade-in-up">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between p-6 border-b border-outline-variant/30 gap-4">
-              <h3 className="text-h3 text-charcoal-ink">Previous Invoices</h3>
+              <h3 className="text-h3 text-charcoal-ink">{t('invoices.previousInvoices')}</h3>
               <div className="flex items-center gap-3">
                 <div className="relative">
                   <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-steel" />
                   <input 
                     type="text" 
-                    placeholder="Search by ID or Type..." 
+                    placeholder={t('invoices.searchByIdOrType')}
                     value={historySearch}
                     onChange={(e) => setHistorySearch(e.target.value)}
                     className="pl-9 pr-4 py-2 bg-surface-container-low border border-outline-variant/60 rounded-xl text-sm focus:border-accent outline-none"
@@ -825,7 +919,7 @@ export default function InvoicesView() {
                 {selectedIds.size > 0 && (
                   <button onClick={handleBulkPrint}
                     className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-label-md bg-charcoal-ink text-white hover:opacity-90 transition-all shadow-sm cursor-pointer btn-tactile">
-                    <Printer size={16} /> Print Selected ({selectedIds.size})
+                    <Printer size={16} /> {t('invoices.printSelected')} ({selectedIds.size})
                   </button>
                 )}
               </div>
@@ -835,19 +929,20 @@ export default function InvoicesView() {
                 <thead>
                   <tr className="border-b border-outline-variant/30 text-label-sm text-muted-steel uppercase tracking-wider">
                     <th className="py-3 px-4 text-left w-10"></th>
-                    <th className="py-3 px-4 text-left">ID</th>
-                    <th className="py-3 px-4 text-left">Type</th>
-                    <th className="py-3 px-4 text-right">Total</th>
-                    <th className="py-3 px-4 text-center">Status</th>
-                    <th className="py-3 px-4 text-left">Date</th>
-                    <th className="py-3 px-4 text-right">Actions</th>
+                    <th className="py-3 px-4 text-left">{t('common.id')}</th>
+                    <th className="py-3 px-4 text-left">{t('invoices.party')}</th>
+                    <th className="py-3 px-4 text-left">{t('invoices.type')}</th>
+                    <th className="py-3 px-4 text-right">{t('common.total')}</th>
+                    <th className="py-3 px-4 text-center">{t('common.status')}</th>
+                    <th className="py-3 px-4 text-left">{t('common.date')}</th>
+                    <th className="py-3 px-4 text-right">{t('common.actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {invoiceHistory.filter(inv => {
                     if (!historySearch) return true;
                     const s = historySearch.toLowerCase();
-                    return String(inv.id).includes(s) || inv.invoice_type.replace('_', ' ').toLowerCase().includes(s) || inv.status.toLowerCase().includes(s);
+                    return String(inv.id).includes(s) || inv.invoice_type.replace('_', ' ').toLowerCase().includes(s) || inv.status.toLowerCase().includes(s) || (inv.party_name || '').toLowerCase().includes(s);
                   }).map((inv) => (
                   <tr key={inv.id} className="border-b border-outline-variant/20 hover:bg-surface-container-low/40 transition-colors">
                     <td className="py-3 px-4">
@@ -855,29 +950,30 @@ export default function InvoicesView() {
                         className="w-4 h-4 rounded border-outline-variant/60 text-accent focus:ring-accent/20 cursor-pointer" />
                     </td>
                     <td className="py-3 px-4 font-mono-tabular text-charcoal-ink">#{String(inv.id).padStart(5, '0')}</td>
-                    <td className="py-3 px-4 capitalize text-muted-steel">{inv.invoice_type.replace('_', ' ')}</td>
-                    <td className="py-3 px-4 text-right font-mono-tabular text-charcoal-ink">EGP {Number(inv.total_amount).toLocaleString()}</td>
+                    <td className="py-3 px-4 text-charcoal-ink font-medium">{inv.party_name || <span className="text-muted-steel/50 italic text-xs">—</span>}</td>
+                    <td className="py-3 px-4 capitalize text-muted-steel">{formatInvoiceType(inv.invoice_type)}</td>
+                    <td className="py-3 px-4 text-right font-mono-tabular text-charcoal-ink">{t('common.currency')} {Number(inv.total_amount).toLocaleString()}</td>
                     <td className="py-3 px-4 text-center">
-                      <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-lg ${inv.status === 'paid' ? 'bg-accent-surface text-accent' : inv.status === 'partial' ? 'bg-amber-100 text-amber-700' : 'bg-error-container/30 text-error'}`}>{inv.status}</span>
+                      <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-lg ${inv.status === 'paid' ? 'bg-accent-surface text-accent' : inv.status === 'partial' ? 'bg-amber-100 text-amber-700' : 'bg-error-container/30 text-error'}`}>{formatStatus(inv.status)}</span>
                     </td>
-                    <td className="py-3 px-4 font-mono-tabular text-muted-steel text-xs">{inv.created_at ? new Date(inv.created_at).toLocaleDateString() : '-'}</td>
+                    <td className="py-3 px-4 font-mono-tabular text-muted-steel text-xs">{inv.created_at ? new Date(inv.created_at).toLocaleDateString(dateLocale, { year: 'numeric', month: 'short', day: '2-digit' }) : '-'}</td>
                     <td className="py-3 px-4 text-right">
                       <div className="flex items-center justify-end gap-1">
                         {(inv.invoice_type === 'SALE' || inv.invoice_type === 'PURCHASE') && (
                           <button onClick={() => setEditingInvoice(inv)}
                             className="p-1.5 rounded-xl text-muted-steel hover:bg-accent-surface hover:text-accent transition-all cursor-pointer btn-tactile"
-                            title="Edit">
+                            title={t('common.edit')}>
                             <Edit size={16} />
                           </button>
                         )}
                         <button onClick={() => handleOpenPrintPreview(inv)}
                           className="p-1.5 rounded-xl text-muted-steel hover:bg-accent-surface hover:text-accent transition-all cursor-pointer btn-tactile"
-                          title="Print">
+                          title={t('common.print')}>
                           <Printer size={16} />
                         </button>
                         <button onClick={() => setInvoiceToDelete(inv)}
                           className="p-1.5 rounded-xl text-muted-steel hover:bg-error-container/30 hover:text-error transition-all cursor-pointer btn-tactile"
-                          title="Delete">
+                          title={t('common.delete')}>
                           <Trash2 size={16} />
                         </button>
                       </div>
@@ -889,7 +985,7 @@ export default function InvoicesView() {
             </div>
             {invoiceHistory.length === 0 && (
               <div className="p-8 text-center text-muted-steel">
-                No invoices found.
+                {t('invoices.noInvoices')}
               </div>
             )}
           </div>
@@ -906,8 +1002,8 @@ export default function InvoicesView() {
                   <Printer size={16} />
                 </div>
                 <div>
-                  <h3 className="text-label-md text-charcoal-ink font-semibold leading-tight">Print Preview</h3>
-                  <p className="text-[11px] text-muted-steel mt-0.5">Invoice #{String(invoiceToPrint.id).padStart(5, '0')}</p>
+                  <h3 className="text-label-md text-charcoal-ink font-semibold leading-tight">{t('invoices.printPreview')}</h3>
+                  <p className="text-[11px] text-muted-steel mt-0.5">{t('invoices.invoiceId')} #{String(invoiceToPrint.id).padStart(5, '0')}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -916,14 +1012,14 @@ export default function InvoicesView() {
                   onChange={(e) => setPaperSize(e.target.value)}
                   className="px-3 py-2 rounded-xl text-label-md border border-outline-variant/60 bg-surface-container-lowest text-muted-steel focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all text-sm cursor-pointer"
                 >
-                  <option value="a4">A4 Paper</option>
-                  <option value="a5">A5 Paper</option>
-                  <option value="receipt">Receipt (80mm)</option>
+                  <option value="a4">{t('invoices.a4Paper')}</option>
+                  <option value="a5">{t('invoices.a5Paper')}</option>
+                  <option value="receipt">{t('invoices.receipt')}</option>
                 </select>
                 <button onClick={handleClosePrintPreview}
                   className="flex items-center gap-2 px-4 py-2 rounded-xl text-label-md text-muted-steel border border-outline-variant/60 hover:bg-surface-container-low transition-all cursor-pointer btn-tactile">
                   <X size={16} />
-                  Cancel
+                  {t('common.cancel')}
                 </button>
                 <button
                   onClick={async () => {
@@ -942,7 +1038,7 @@ export default function InvoicesView() {
                         .from(el)
                         .save();
                     } catch (err) {
-                      console.error('PDF generation failed:', err);
+                      notifications.show({ title: t('common.error'), message: err.response?.data?.detail || err.message || t('invoices.pdfFailed'), color: 'red' });
                     } finally {
                       setDownloadingPdf(false);
                     }
@@ -951,12 +1047,12 @@ export default function InvoicesView() {
                   className="flex items-center gap-2 px-4 py-2 rounded-xl text-label-md bg-charcoal-ink text-white hover:opacity-90 shadow-sm transition-all cursor-pointer btn-tactile disabled:opacity-50"
                 >
                   {downloadingPdf ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
-                  Save PDF
+                  {t('invoices.savePdf')}
                 </button>
                 <button onClick={handleConfirmPrint}
                   className="flex items-center gap-2 px-5 py-2 rounded-xl text-label-md bg-accent text-on-primary hover:bg-accent-hover shadow-sm transition-all cursor-pointer btn-tactile">
                   <Printer size={16} />
-                  Confirm Print
+                  {t('invoices.confirmPrint')}
                 </button>
               </div>
             </div>
@@ -966,7 +1062,7 @@ export default function InvoicesView() {
                   key={`${invoiceToPrint?.id || 'preview'}-${paperSize}`}
                   invoice={invoiceToPrint}
                   tenantName={tenantName}
-                  partyName={partyForPrint?.name || 'Unknown'}
+                  partyName={partyForPrint?.name || t('common.unknown')}
                   partyPhone={partyForPrint?.phone || null}
                   partyAddress={partyForPrint?.address || null}
                   logoUrl={logoUrl}
@@ -984,7 +1080,7 @@ export default function InvoicesView() {
                 key={`print-${invoiceToPrint?.id || 'preview'}-${paperSize}`}
                 invoice={invoiceToPrint}
                 tenantName={tenantName}
-                partyName={partyForPrint?.name || 'Unknown'}
+                partyName={partyForPrint?.name || t('common.unknown')}
                 partyPhone={partyForPrint?.phone || null}
                 partyAddress={partyForPrint?.address || null}
                 logoUrl={logoUrl}
@@ -1006,16 +1102,16 @@ export default function InvoicesView() {
                 <div className="w-8 h-8 rounded-lg bg-accent-surface text-accent flex items-center justify-center">
                   <Printer size={16} />
                 </div>
-                <h3 className="text-label-md text-charcoal-ink font-semibold">Bulk Print — {bulkInvoicesToPrint.length} invoices</h3>
+                <h3 className="text-label-md text-charcoal-ink font-semibold">{t('invoices.bulkPrint', { count: bulkInvoicesToPrint.length })}</h3>
               </div>
               <div className="flex items-center gap-2">
                 <button onClick={handleClosePrintPreview}
                   className="flex items-center gap-2 px-4 py-2 rounded-xl text-label-md text-muted-steel border border-outline-variant/60 hover:bg-surface-container-low transition-all cursor-pointer btn-tactile">
-                  <X size={16} /> Cancel
+                  <X size={16} /> {t('common.cancel')}
                 </button>
                 <button onClick={handleConfirmPrint}
                   className="flex items-center gap-2 px-5 py-2 rounded-xl text-label-md bg-accent text-on-primary hover:bg-accent-hover shadow-sm transition-all cursor-pointer btn-tactile">
-                  <Printer size={16} /> Print All
+                  <Printer size={16} /> {t('invoices.printAll')}
                 </button>
               </div>
             </div>
@@ -1025,7 +1121,7 @@ export default function InvoicesView() {
                   <InvoicePrintTemplate
                     invoice={inv}
                     tenantName={tenantName}
-                    partyName={parties.find(p => p.id === inv.party_id)?.name || 'Unknown'}
+                    partyName={parties.find(p => p.id === inv.party_id)?.name || t('common.unknown')}
                     logoUrl={logoUrl}
                     defaultFooterText={defaultFooterText}
                     taxNumber={taxNumber}
@@ -1043,7 +1139,7 @@ export default function InvoicesView() {
                   key={inv.id}
                   invoice={inv}
                   tenantName={tenantName}
-                  partyName={parties.find(p => p.id === inv.party_id)?.name || 'Unknown'}
+                  partyName={parties.find(p => p.id === inv.party_id)?.name || t('common.unknown')}
                   logoUrl={logoUrl}
                   defaultFooterText={defaultFooterText}
                   taxNumber={taxNumber}
@@ -1079,22 +1175,22 @@ export default function InvoicesView() {
               <div className="w-12 h-12 rounded-xl bg-error-container/30 text-error flex items-center justify-center mb-4">
                 <Trash2 size={24} />
               </div>
-              <h3 className="text-h3 text-charcoal-ink mb-2">Delete Invoice</h3>
+              <h3 className="text-h3 text-charcoal-ink mb-2">{t('invoices.deleteInvoice')}</h3>
               <p className="text-muted-steel text-sm leading-relaxed mb-6">
-                Are you sure you want to delete Invoice #{String(invoiceToDelete.id).padStart(5, '0')}? This action cannot be undone. Associated stock will be adjusted accordingly.
+                {t('invoices.deleteInvoiceMessage', { id: String(invoiceToDelete.id).padStart(5, '0') })}
               </p>
               <div className="flex items-center gap-3 justify-end">
                 <button
                   onClick={() => setInvoiceToDelete(null)}
                   className="px-5 py-2.5 rounded-xl text-label-md text-muted-steel hover:bg-surface-container-low transition-all cursor-pointer btn-tactile"
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </button>
                 <button
                   onClick={() => handleDeleteInvoice(invoiceToDelete.id)}
                   className="px-5 py-2.5 rounded-xl text-label-md bg-error text-white hover:bg-error/90 shadow-sm transition-all cursor-pointer btn-tactile"
                 >
-                  Confirm Delete
+                  {t('invoices.confirmDelete')}
                 </button>
               </div>
             </div>

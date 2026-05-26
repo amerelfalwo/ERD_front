@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Loader2, X } from 'lucide-react';
+import { notifications } from '@mantine/notifications';
 
 export default function ReturnInvoiceModal({ invoice, onClose, onSaved }) {
   const [returnItems, setReturnItems] = useState(
@@ -46,9 +47,18 @@ export default function ReturnInvoiceModal({ invoice, onClose, onSaved }) {
         const error = await res.json().catch(() => ({}));
         throw new Error(error.detail || 'Failed to process return');
       }
+      notifications.show({
+        title: 'Success',
+        message: 'Return processed successfully',
+        color: 'green'
+      });
       onSaved();
     } catch (err) {
-      alert(err.message || 'Error processing return');
+      notifications.show({
+        title: 'Error processing return',
+        message: err.message || 'An unexpected error occurred.',
+        color: 'red'
+      });
     } finally {
       setSubmitting(false);
     }

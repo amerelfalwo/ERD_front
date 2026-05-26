@@ -8,8 +8,10 @@ import { AuthProvider } from './context/AuthContext';
 
 const DashboardView = lazy(() => import('./views/DashboardView'));
 const ProductsView = lazy(() => import('./views/ProductsView'));
-const PartiesView = lazy(() => import('./views/PartiesView'));
-const PartyDashboard = lazy(() => import('./views/PartyDashboard'));
+const CustomersView = lazy(() => import('./views/CustomersView'));
+const CustomerProfileView = lazy(() => import('./views/CustomerProfileView'));
+const SuppliersView = lazy(() => import('./views/SuppliersView'));
+const SupplierProfileView = lazy(() => import('./views/SupplierProfileView'));
 const InvoicesView = lazy(() => import('./views/InvoicesView'));
 const SettingsView = lazy(() => import('./views/SettingsView'));
 
@@ -44,8 +46,10 @@ export default function App() {
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<Suspense fallback={<RouteSpinner />}><DashboardView /></Suspense>} />
             <Route path="/products" element={<Suspense fallback={<RouteSpinner />}><ProductsView /></Suspense>} />
-            <Route path="/parties" element={<Suspense fallback={<RouteSpinner />}><PartiesView /></Suspense>} />
-            <Route path="/parties/:partyId" element={<Suspense fallback={<RouteSpinner />}><PartyDashboard /></Suspense>} />
+            <Route path="/customers" element={<Suspense fallback={<RouteSpinner />}><CustomersView /></Suspense>} />
+            <Route path="/customers/:id" element={<Suspense fallback={<RouteSpinner />}><CustomerProfileView /></Suspense>} />
+            <Route path="/suppliers" element={<Suspense fallback={<RouteSpinner />}><SuppliersView /></Suspense>} />
+            <Route path="/suppliers/:id" element={<Suspense fallback={<RouteSpinner />}><SupplierProfileView /></Suspense>} />
             <Route path="/invoices" element={<Suspense fallback={<RouteSpinner />}><InvoicesView /></Suspense>} />
             <Route path="/settings" element={<Suspense fallback={<RouteSpinner />}><SettingsView /></Suspense>} />
           </Route>
