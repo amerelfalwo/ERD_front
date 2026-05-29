@@ -1,22 +1,29 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft, DollarSign, CreditCard, AlertCircle, CheckCircle2,
   Package, Printer, X, Loader2, Edit, Trash2, Undo2, TrendingUp, Download, Plus,
   ChevronDown, ChevronRight, RotateCcw
 } from 'lucide-react';
 import api from '../services/api';
+import { notifications } from '@mantine/notifications';
 import InvoicePrintTemplate from '../components/InvoicePrintTemplate';
-import EditInvoiceModal from '../components/EditInvoiceModal';
+import InlineInvoiceEditor from '../components/InlineInvoiceEditor';
 import ReturnInvoiceModal from '../components/ReturnInvoiceModal';
+import SupplierReturnProductModal from '../components/SupplierReturnProductModal';
 import { useAuth } from '../context/AuthContext';
+import { useTranslation } from 'react-i18next';
 
 
 
 export default function PartyDashboard() {
   const { partyId } = useParams();
+  const { t } = useTranslation();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const isCustomer = pathname.includes('/customers');
+  const backPath = isCustomer ? '/customers' : '/suppliers';
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -32,8 +39,6 @@ export default function PartyDashboard() {
   const [paymentError, setPaymentError] = useState('');
   const [toastMessage, setToastMessage] = useState('');
   const [expandedRows, setExpandedRows] = useState(new Set());
-  const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
-  const [returnItems, setReturnItems] = useState([]);
   const [returnSubmitting, setReturnSubmitting] = useState(false);
   const [returnError, setReturnError] = useState('');
   const [isTotalExpanded, setIsTotalExpanded] = useState(false);
@@ -41,6 +46,7 @@ export default function PartyDashboard() {
   const [editPaymentAmount, setEditPaymentAmount] = useState('');
   const [paymentActionLoading, setPaymentActionLoading] = useState(null);
   const [paymentToDelete, setPaymentToDelete] = useState(null);
+  const [productToReturn, setProductToReturn] = useState(null);
 
   function toggleRow(id) {
     setExpandedRows(prev => {
@@ -56,12 +62,21 @@ export default function PartyDashboard() {
   const logoUrl = user?.tenant?.logo_url || null;
   const taxNumber = user?.tenant?.tax_number || null;
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const invoicePrintRef = useRef(null);
 
   const loadSummary = () => {
     setLoading(true);
-    api.getPartySummary(partyId)
-      .then(setSummary)
-      .catch(() => navigate('/parties'))
+    const fetchFn = isCustomer ? api.getCustomerSummary : api.getSupplierSummary;
+    fetchFn(partyId)
+      .then(data => {
+        // Normalize: backend returns { customer: {...} } or { supplier: {...} }
+        const party = data.party || data.customer || data.supplier;
+        setSummary({ ...data, party });
+      })
+      .catch((err) => {
+        console.error("Dashboard Load Error:", err);
+        // navigate(backPath);
+      })
       .finally(() => setLoading(false));
   };
 
@@ -83,8 +98,9 @@ export default function PartyDashboard() {
     }
     setPaymentSubmitting(true);
     try {
-      await api.createPartyPayment(partyId, { amount_paid: amt });
-      setToastMessage('Payment recorded successfully!');
+      const payFn = isCustomer ? api.createCustomerPayment : api.createSupplierPayment;
+      await payFn(partyId, { amount_paid: amt });
+      setToastMessage(t('partyDashboard.paymentRecorded'));
       setTimeout(() => setToastMessage(''), 3000);
       setIsPaymentModalOpen(false);
       setPaymentAmount('');
@@ -101,14 +117,15 @@ export default function PartyDashboard() {
     if (!amt || amt <= 0) return;
     setPaymentActionLoading(paymentId);
     try {
-      await api.updatePartyPayment(partyId, paymentId, { amount_paid: amt });
+      const updateFn = isCustomer ? api.updateCustomerPayment : api.updateSupplierPayment;
+      await updateFn(partyId, paymentId, { amount: amt });
       setEditingPaymentId(null);
       setEditPaymentAmount('');
-      setToastMessage('Payment updated successfully!');
+      setToastMessage(t('partyDashboard.paymentUpdated'));
       setTimeout(() => setToastMessage(''), 3000);
       loadSummary();
     } catch (err) {
-      alert(err.response?.data?.detail || 'Failed to update payment.');
+      notifications.show({ title: 'Error', message: err.response?.data?.detail || 'Failed to update payment.', color: 'red' });
     } finally {
       setPaymentActionLoading(null);
     }
@@ -117,67 +134,20 @@ export default function PartyDashboard() {
   async function handleDeletePayment(paymentId) {
     setPaymentActionLoading(paymentId);
     try {
-      await api.deletePartyPayment(partyId, paymentId);
+      const deleteFn = isCustomer ? api.deleteCustomerPayment : api.deleteSupplierPayment;
+      await deleteFn(partyId, paymentId);
       setPaymentToDelete(null);
-      setToastMessage('Payment deleted successfully!');
+      setToastMessage(t('partyDashboard.paymentDeleted'));
       setTimeout(() => setToastMessage(''), 3000);
       loadSummary();
     } catch (err) {
-      alert(err.response?.data?.detail || 'Failed to delete payment.');
+      notifications.show({ title: 'Error', message: err.response?.data?.detail || 'Failed to delete payment.', color: 'red' });
     } finally {
       setPaymentActionLoading(null);
     }
   }
 
-  function openReturnModal() {
-    if (!summary || !summary.products || summary.products.length === 0) return;
-    setReturnItems(
-      summary.products
-        .filter(p => p.remaining_stock > 0)
-        .map(p => ({
-          product_id: p.id,
-          product_name: p.name,
-          available_stock: p.remaining_stock,
-          return_qty: 0,
-          unit_price: p.last_purchase_price || 0,
-        }))
-    );
-    setReturnError('');
-    setIsReturnModalOpen(true);
-  }
 
-  async function handleStockReturn() {
-    setReturnError('');
-    const validItems = returnItems.filter(i => i.return_qty > 0);
-    if (validItems.length === 0) {
-      setReturnError('Select at least one product to return.');
-      return;
-    }
-    for (const item of validItems) {
-      if (item.return_qty > item.available_stock) {
-        setReturnError(`Cannot return more than available stock for "${item.product_name}".`);
-        return;
-      }
-    }
-    setReturnSubmitting(true);
-    try {
-      const result = await api.createStockReturn(partyId, {
-        items: validItems.map(i => ({
-          product_id: i.product_id,
-          quantity: i.return_qty,
-          unit_price: i.unit_price,
-        }))
-      });
-      setSummary(result);
-      setToastMessage('Return processed successfully!');
-      setTimeout(() => setToastMessage(''), 3000);
-      setIsReturnModalOpen(false);
-    } catch (err) {
-      setReturnError(err.message || 'Failed to process return.');
-    } finally {
-      setReturnSubmitting(false);
-    }
-  }
 
   async function handleDeleteInvoice(invoiceId) {
     try {
@@ -185,7 +155,7 @@ export default function PartyDashboard() {
       setInvoiceToDelete(null);
       loadSummary();
     } catch (err) {
-      alert(err.response?.data?.detail || 'Failed to delete invoice');
+      notifications.show({ title: 'Error', message: err.response?.data?.detail || 'Failed to delete invoice', color: 'red' });
     }
   }
 
@@ -209,6 +179,14 @@ export default function PartyDashboard() {
     setBulkInvoicesToPrint([]);
   }
 
+  function handleConfirmPrint() {
+    document.body.classList.add('printing');
+    setTimeout(() => {
+      window.print();
+      document.body.classList.remove('printing');
+    }, 100);
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -217,7 +195,20 @@ export default function PartyDashboard() {
     );
   }
 
-  if (!summary) return null;
+  if (!summary) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 space-y-4">
+        <p className="text-muted-steel">{t('partyDashboard.couldNotLoad', 'Could not load data.')}</p>
+        <button 
+          onClick={() => navigate(backPath)}
+          className="text-accent font-medium hover:underline flex items-center gap-2"
+        >
+          <ArrowLeft size={16} />
+          {t('common.goBack', 'Go Back')}
+        </button>
+      </div>
+    );
+  }
 
   const { party, financials, invoices, products } = summary;
 
@@ -230,7 +221,7 @@ export default function PartyDashboard() {
       <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-4">
-            <button onClick={() => navigate('/parties')}
+            <button onClick={() => navigate(backPath)}
               className="p-2 rounded-xl text-muted-steel hover:bg-surface-container-low transition-all cursor-pointer btn-tactile">
               <ArrowLeft size={20} />
             </button>
@@ -240,22 +231,14 @@ export default function PartyDashboard() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            {products.length > 0 && (
-              <button
-                onClick={openReturnModal}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-label-md bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm transition-all cursor-pointer btn-tactile"
-              >
-                <RotateCcw size={18} />
-                Return / استرجاع
-              </button>
-            )}
+
             {balance > 0 && (
               <button
                 onClick={() => setIsPaymentModalOpen(true)}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-label-md bg-accent text-on-primary hover:bg-accent-hover shadow-sm transition-all cursor-pointer btn-tactile"
               >
                 <Plus size={18} />
-                Record Payment
+                {t('partyDashboard.recordPayment')}
               </button>
             )}
           </div>
@@ -273,7 +256,7 @@ export default function PartyDashboard() {
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <Package size={20} className="text-muted-steel" />
-                  <span className="text-sm font-medium text-charcoal-ink/70">Total Amount</span>
+                  <span className="text-sm font-medium text-charcoal-ink/70">{t('partyDashboard.totalAmount')}</span>
                 </div>
                 <p className="text-3xl font-bold font-mono-tabular tracking-tight text-charcoal-ink">
                   {fmt(totalBeforePayments)}
@@ -288,20 +271,20 @@ export default function PartyDashboard() {
               <div className="mt-6 pt-6 border-t border-outline-variant/30 space-y-4 animate-fade-in-up">
                 {Number(financials.initial_balance || 0) > 0 && (
                   <div className="flex justify-between items-center text-sm">
-                    <span className="text-muted-steel">Initial Balance</span>
+                    <span className="text-muted-steel">{t('partyDashboard.initialBalance')}</span>
                     <span className="font-mono-tabular font-medium text-amber-600">{fmt(financials.initial_balance)}</span>
                   </div>
                 )}
                 <div className="flex justify-between items-center text-sm">
-                  <span className="text-muted-steel">Total Purchases <span className="text-charcoal-ink/30 ml-1">(+)</span></span>
+                  <span className="text-muted-steel">{t('partyDashboard.totalPurchases')} <span className="text-charcoal-ink/30 ml-1">(+)</span></span>
                   <span className="font-mono-tabular font-medium text-charcoal-ink">{fmt(financials.total_purchases)}</span>
                 </div>
                 <div className="flex justify-between items-center text-sm">
-                  <span className="text-muted-steel">Total Returns <span className="text-indigo-400 ml-1">(−)</span></span>
+                  <span className="text-muted-steel">{t('partyDashboard.totalReturns')} <span className="text-indigo-400 ml-1">(−)</span></span>
                   <span className="font-mono-tabular font-medium text-indigo-500">{fmt(financials.total_returns)}</span>
                 </div>
                 <div className="flex justify-between items-center pt-3 border-t border-outline-variant/20 text-sm font-bold">
-                  <span className="text-charcoal-ink">Final Total <span className="text-charcoal-ink/30 ml-1">(=)</span></span>
+                  <span className="text-charcoal-ink">{t('partyDashboard.finalTotal')} <span className="text-charcoal-ink/30 ml-1">(=)</span></span>
                   <span className="font-mono-tabular text-charcoal-ink">{fmt(totalBeforePayments)}</span>
                 </div>
               </div>
@@ -312,7 +295,7 @@ export default function PartyDashboard() {
           <div className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl shadow-whisper p-6 flex flex-col justify-start">
             <div className="flex items-center gap-2 mb-2">
               <CreditCard size={20} className="text-emerald-500" />
-              <span className="text-sm font-medium text-charcoal-ink/70">Total Paid</span>
+              <span className="text-sm font-medium text-charcoal-ink/70">{t('partyDashboard.totalPaid')}</span>
             </div>
             <p className="text-3xl font-bold font-mono-tabular tracking-tight text-emerald-600">
               {fmt(financials.total_paid)}
@@ -327,7 +310,7 @@ export default function PartyDashboard() {
           }`}>
             <div className="flex items-center gap-2 mb-2">
               <AlertCircle size={20} className={balance > 0 ? 'text-error' : 'text-accent'} />
-              <span className="text-sm font-medium text-charcoal-ink/70">Outstanding Balance</span>
+              <span className="text-sm font-medium text-charcoal-ink/70">{t('partyDashboard.outstandingBalance')}</span>
             </div>
             <p className={`text-3xl font-bold font-mono-tabular tracking-tight ${
               balance > 0 ? 'text-error' : 'text-accent'
@@ -336,7 +319,7 @@ export default function PartyDashboard() {
             </p>
             {balance === 0 && (
               <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-accent/10 text-accent text-xs font-semibold w-fit">
-                <span>✓</span> Fully settled
+                <span>✓</span> {t('partyDashboard.fullySettled')}
               </div>
             )}
           </div>
@@ -345,32 +328,48 @@ export default function PartyDashboard() {
 
         <div className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl shadow-whisper animate-fade-in-up">
           <div className="flex items-center justify-between p-6 border-b border-outline-variant/30">
-            <h3 className="text-h3 text-charcoal-ink">Invoices</h3>
+            <h3 className="text-h3 text-charcoal-ink">{t('partyDashboard.invoices')}</h3>
             {selectedIds.size > 0 && (
               <button onClick={handleBulkPrint}
                 className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-label-md bg-charcoal-ink text-white hover:opacity-90 transition-all shadow-sm cursor-pointer btn-tactile">
-                <Printer size={16} /> Print Selected ({selectedIds.size})
+                <Printer size={16} /> {t('partyDashboard.printSelected')} ({selectedIds.size})
               </button>
             )}
           </div>
           {invoices.length === 0 ? (
-            <p className="p-6 text-muted-steel text-sm">No invoices found.</p>
+            <p className="p-6 text-muted-steel text-sm">{t('partyDashboard.noInvoicesFound')}</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-outline-variant/30 text-label-sm text-muted-steel uppercase tracking-wider">
                     <th className="py-3 px-4 text-left w-10"></th>
-                    <th className="py-3 px-4 text-left">ID</th>
-                    <th className="py-3 px-4 text-left">Type</th>
-                    <th className="py-3 px-4 text-right">Total</th>
-                    <th className="py-3 px-4 text-right">Profit</th>
-                    <th className="py-3 px-4 text-left">Date</th>
-                    <th className="py-3 px-4 text-right">Actions</th>
+                    <th className="py-3 px-4 text-left">{t('partyDashboard.id')}</th>
+                    <th className="py-3 px-4 text-left">{t('partyDashboard.type')}</th>
+                    <th className="py-3 px-4 text-right">{t('partyDashboard.total')}</th>
+                    <th className="py-3 px-4 text-right">{t('partyDashboard.profit')}</th>
+                    <th className="py-3 px-4 text-left">{t('partyDashboard.date')}</th>
+                    <th className="py-3 px-4 text-right">{t('partyDashboard.actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {invoices.map((inv) => {
+                    if (editingInvoice && editingInvoice.id === inv.id) {
+                      return (
+                        <tr key={`edit-${inv.id}`} className="border-b border-outline-variant/20">
+                          <InlineInvoiceEditor
+                            invoice={editingInvoice}
+                            onCancel={() => setEditingInvoice(null)}
+                            onSaved={() => {
+                              setEditingInvoice(null);
+                              loadSummary();
+                            }}
+                            onPrint={(inv) => setInvoiceToPrint(inv)}
+                          />
+                        </tr>
+                      );
+                    }
+
                     const isExpanded = expandedRows.has(inv.id);
                     const hasItems = Array.isArray(inv.items) && inv.items.length > 0;
                     const typeLabel = (inv.invoice_type || '').replace('_', ' ');
@@ -402,12 +401,12 @@ export default function PartyDashboard() {
                                   ? 'bg-amber-50 text-amber-700'
                                   : 'bg-emerald-50 text-emerald-700'
                             }`}>
-                              {typeLabel}
+                              {t(`partyDashboard.${typeLabel.replace(' ', '_')}`, typeLabel)}
                             </span>
                           </td>
                           <td className="py-3 px-4 text-right font-mono-tabular font-medium text-charcoal-ink">EGP {Number(inv.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                           <td className="py-3 px-4 text-right font-mono-tabular font-medium">
-                            {inv.invoice_profit != null && inv.invoice_type === 'sale' ? (
+                            {inv.invoice_profit != null && inv.invoice_type?.toLowerCase() === 'sale' ? (
                               <span className={Number(inv.invoice_profit) >= 0 ? 'text-emerald-600' : 'text-red-500'}>
                                 {Number(inv.invoice_profit) > 0 ? '+' : ''}EGP {Number(inv.invoice_profit).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                               </span>
@@ -415,25 +414,30 @@ export default function PartyDashboard() {
                               <span className="text-muted-steel">—</span>
                             )}
                           </td>
-                          <td className="py-3 px-4 font-mono-tabular text-muted-steel text-xs">{inv.created_at ? new Date(inv.created_at).toLocaleDateString('en-GB') : '-'}</td>
+                          <td className="py-3 px-4 font-mono-tabular text-muted-steel text-xs">{inv.created_at ? new Date(inv.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '-'}</td>
                           <td className="py-3 px-4 text-right">
                             <div className="flex items-center justify-end gap-1">
-                              {inv.invoice_type === 'sale' && (
+                              {isCustomer && inv.invoice_type?.toLowerCase() === 'sell' && inv.items?.length > 0 && inv.items.some(item => Number(item.quantity) > Number(item.already_returned_qty || 0)) && (
                                 <button onClick={() => setReturnInvoice(inv)}
                                   className="p-1.5 rounded-xl text-muted-steel hover:bg-status-error/10 hover:text-status-error transition-all cursor-pointer btn-tactile"
-                                  title="Return / إسترجاع">
+                                  title={t('partyDashboard.returnAction')}>
                                   <RotateCcw size={16} />
                                 </button>
                               )}
                               <button onClick={() => setEditingInvoice(inv)}
                                 className="p-1.5 rounded-xl text-muted-steel hover:bg-accent-surface hover:text-accent transition-all cursor-pointer btn-tactile"
-                                title="Edit / تعديل">
+                                title={t('partyDashboard.edit')}>
                                 <Edit size={16} />
                               </button>
                               <button onClick={() => setInvoiceToPrint(inv)}
                                 className="p-1.5 rounded-xl text-muted-steel hover:bg-accent-surface hover:text-accent transition-all cursor-pointer btn-tactile"
-                                title="Print / طباعة">
+                                title={t('partyDashboard.print')}>
                                 <Printer size={16} />
+                              </button>
+                              <button onClick={() => setInvoiceToDelete(inv)}
+                                className="p-1.5 rounded-xl text-error/50 hover:bg-error-container/20 hover:text-error transition-all cursor-pointer btn-tactile"
+                                title={t('partyDashboard.delete')}>
+                                <Trash2 size={16} />
                               </button>
                             </div>
                           </td>
@@ -444,10 +448,10 @@ export default function PartyDashboard() {
                               <table className="w-full text-xs border border-outline-variant/20 rounded-xl overflow-hidden">
                                 <thead>
                                   <tr className="bg-surface-container border-b border-outline-variant/20 text-muted-steel uppercase tracking-wider">
-                                    <th className="py-2 px-3 text-left">Product</th>
-                                    <th className="py-2 px-3 text-right">Qty</th>
-                                    <th className="py-2 px-3 text-right">Unit Price</th>
-                                    <th className="py-2 px-3 text-right">Subtotal</th>
+                                    <th className="py-2 px-3 text-left">{t('partyDashboard.product')}</th>
+                                    <th className="py-2 px-3 text-right">{t('partyDashboard.qty')}</th>
+                                    <th className="py-2 px-3 text-right">{t('partyDashboard.unitPrice')}</th>
+                                    <th className="py-2 px-3 text-right">{t('partyDashboard.subtotal')}</th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -476,16 +480,16 @@ export default function PartyDashboard() {
         {summary.payments && summary.payments.length > 0 && (
           <div className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl shadow-whisper animate-fade-in-up mt-6">
             <div className="p-6 border-b border-outline-variant/30">
-              <h3 className="text-h3 text-charcoal-ink">Payments</h3>
+              <h3 className="text-h3 text-charcoal-ink">{t('partyDashboard.payments')}</h3>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-outline-variant/30 text-label-sm text-muted-steel uppercase tracking-wider">
-                    <th className="py-3 px-6 text-left">Invoice ID</th>
-                    <th className="py-3 px-6 text-right">Amount</th>
-                    <th className="py-3 px-6 text-left">Date</th>
-                    <th className="py-3 px-6 text-right">Actions</th>
+                    <th className="py-3 px-6 text-left">{t('partyDashboard.invoiceId')}</th>
+                    <th className="py-3 px-6 text-right">{t('partyDashboard.amount')}</th>
+                    <th className="py-3 px-6 text-left">{t('partyDashboard.date')}</th>
+                    <th className="py-3 px-6 text-right">{t('partyDashboard.actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -512,14 +516,14 @@ export default function PartyDashboard() {
                               onClick={() => handleUpdatePayment(payment.id)}
                               disabled={paymentActionLoading === payment.id}
                               className="p-1.5 rounded-lg bg-accent text-white hover:bg-accent-hover transition-all cursor-pointer btn-tactile disabled:opacity-50"
-                              title="Save"
+                              title={t('partyDashboard.save')}
                             >
                               {paymentActionLoading === payment.id ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
                             </button>
                             <button
                               onClick={() => { setEditingPaymentId(null); setEditPaymentAmount(''); }}
                               className="p-1.5 rounded-lg text-muted-steel border border-outline-variant/60 hover:bg-surface-container-low transition-all cursor-pointer btn-tactile"
-                              title="Cancel"
+                              title={t('partyDashboard.cancel')}
                             >
                               <X size={14} />
                             </button>
@@ -528,20 +532,20 @@ export default function PartyDashboard() {
                           <span className="font-mono-tabular font-medium text-emerald-600">EGP {Number(payment.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                         )}
                       </td>
-                      <td className="py-3 px-6 font-mono-tabular text-muted-steel text-xs">{payment.created_at ? new Date(payment.created_at).toLocaleDateString('en-GB') : (payment.payment_date ? new Date(payment.payment_date).toLocaleDateString('en-GB') : '-')}</td>
+                      <td className="py-3 px-6 font-mono-tabular text-muted-steel text-xs">{payment.created_at ? new Date(payment.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : (payment.payment_date ? new Date(payment.payment_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '-')}</td>
                       <td className="py-3 px-6 text-right">
                         <div className="flex items-center justify-end gap-1">
                           <button
                             onClick={() => { setEditingPaymentId(payment.id); setEditPaymentAmount(String(payment.amount)); }}
                             className="p-1.5 rounded-xl text-muted-steel hover:bg-accent-surface hover:text-accent transition-all cursor-pointer btn-tactile opacity-0 group-hover:opacity-100"
-                            title="Edit"
+                            title={t('partyDashboard.edit')}
                           >
                             <Edit size={16} />
                           </button>
                           <button
                             onClick={() => setPaymentToDelete(payment)}
                             className="p-1.5 rounded-xl text-error/50 hover:bg-error-container/20 hover:text-error transition-all cursor-pointer btn-tactile opacity-0 group-hover:opacity-100"
-                            title="Delete"
+                            title={t('partyDashboard.delete')}
                           >
                             <Trash2 size={16} />
                           </button>
@@ -559,23 +563,52 @@ export default function PartyDashboard() {
         {products.length > 0 && (
           <div className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl shadow-whisper animate-fade-in-up">
             <div className="p-6 border-b border-outline-variant/30">
-              <h3 className="text-h3 text-charcoal-ink">Product Inventory</h3>
+              <h3 className="text-h3 text-charcoal-ink">{t('partyDashboard.productInventory')}</h3>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-outline-variant/30 text-label-sm text-muted-steel uppercase tracking-wider">
-                    <th className="py-3 px-6 text-left">Product</th>
-                    <th className="py-3 px-6 text-right">Stock</th>
+                    <th className="py-3 px-6 text-left">{t('partyDashboard.product')}</th>
+                    {!isCustomer && <th className="py-3 px-6 text-right">{t('partyDashboard.unitPrice', 'Price')}</th>}
+                    <th className="py-3 px-6 text-right">
+                      {!isCustomer ? t('partyDashboard.supplierStock', 'Stock (Supplier / Total)') : t('partyDashboard.stock')}
+                    </th>
+                    {!isCustomer && <th className="py-3 px-6 text-right">{t('partyDashboard.actions')}</th>}
                   </tr>
                 </thead>
                 <tbody>
                   {products.map((prod) => (
                     <tr key={prod.id} className="border-b border-outline-variant/20 hover:bg-surface-container-low/40 transition-colors">
                       <td className="py-3 px-6 text-charcoal-ink font-medium">{prod.name}</td>
+                      {!isCustomer && (
+                        <td className="py-3 px-6 text-right font-mono-tabular text-muted-steel">
+                          EGP {Number(prod.last_purchase_price).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </td>
+                      )}
                       <td className="py-3 px-6 text-right font-mono-tabular">
-                        <span className={prod.remaining_stock <= 0 ? 'text-error' : 'text-charcoal-ink'}>{prod.remaining_stock}</span>
+                        {!isCustomer ? (
+                          <span className={prod.supplier_stock <= 0 ? 'text-error' : 'text-charcoal-ink'}>
+                            {prod.supplier_stock} / <span className="text-muted-steel text-xs">{prod.remaining_stock}</span>
+                          </span>
+                        ) : (
+                          <span className={prod.remaining_stock <= 0 ? 'text-error' : 'text-charcoal-ink'}>{prod.remaining_stock}</span>
+                        )}
                       </td>
+                      {!isCustomer && (
+                        <td className="py-3 px-6 text-right">
+                          {prod.supplier_stock > 0 && (
+                            <button
+                              onClick={() => setProductToReturn(prod)}
+                              className="p-1.5 rounded-xl text-muted-steel hover:bg-status-error/10 hover:text-status-error transition-all cursor-pointer btn-tactile inline-flex items-center gap-1.5 text-xs font-semibold"
+                              title={t('partyDashboard.returnAction')}
+                            >
+                              <RotateCcw size={14} />
+                              {t('partyDashboard.returnAction', 'Return')}
+                            </button>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -589,18 +622,15 @@ export default function PartyDashboard() {
         <>
           <div className="print:hidden fixed inset-0 z-[100] bg-charcoal-ink/60 backdrop-blur-sm flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 bg-surface-container-lowest border-b border-outline-variant/60 flex-shrink-0">
-              <h3 className="text-label-md text-charcoal-ink font-semibold">Print Preview — #{String(invoiceToPrint.id).padStart(5, '0')}</h3>
+              <h3 className="text-label-md text-charcoal-ink font-semibold">{t('partyDashboard.printPreview')} — #{String(invoiceToPrint.id).padStart(5, '0')}</h3>
               <div className="flex items-center gap-2">
                 <button onClick={handleClosePrint} className="flex items-center gap-2 px-4 py-2 rounded-xl text-label-md text-muted-steel border border-outline-variant/60 hover:bg-surface-container-low transition-all cursor-pointer btn-tactile"><X size={16} /> Cancel</button>
                 <button
                   onClick={async () => {
+                    const el = invoicePrintRef.current?.querySelector('.invoice-print-area');
+                    if (!el) return;
                     setDownloadingPdf(true);
-                    const container = document.getElementById('print-only-container');
                     try {
-                      if (container) container.style.display = 'block';
-                      await new Promise(r => setTimeout(r, 100));
-                      const el = container?.querySelector('#invoice-print-area') || document.getElementById('invoice-print-area');
-                      if (!el) return;
                       if (!window.html2pdf) {
                         await new Promise((resolve, reject) => {
                           const s = document.createElement('script');
@@ -618,9 +648,8 @@ export default function PartyDashboard() {
                       }).from(el).save();
                     } catch (err) {
                       console.error('PDF error:', err);
-                      alert('Error downloading PDF. Use Print → Save as PDF instead.');
+                      notifications.show({ title: 'Error', message: 'Error downloading PDF. Use Print → Save as PDF instead.', color: 'red' });
                     } finally {
-                      if (container) container.style.display = 'none';
                       setDownloadingPdf(false);
                     }
                   }}
@@ -628,19 +657,19 @@ export default function PartyDashboard() {
                   className="flex items-center gap-2 px-4 py-2 rounded-xl text-label-md bg-charcoal-ink text-white hover:opacity-90 shadow-sm transition-all cursor-pointer btn-tactile disabled:opacity-50"
                 >
                   {downloadingPdf ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
-                  Save PDF
+                  {t('partyDashboard.savePdf')}
                 </button>
-                <button onClick={() => window.print()} className="flex items-center gap-2 px-5 py-2 rounded-xl text-label-md bg-accent text-on-primary hover:bg-accent-hover shadow-sm transition-all cursor-pointer btn-tactile"><Printer size={16} /> Print</button>
+                <button onClick={handleConfirmPrint} className="flex items-center gap-2 px-5 py-2 rounded-xl text-label-md bg-accent text-on-primary hover:bg-accent-hover shadow-sm transition-all cursor-pointer btn-tactile"><Printer size={16} /> {t('partyDashboard.print')}</button>
               </div>
             </div>
             <div className="flex-1 overflow-y-auto py-8 flex justify-center">
-              <div className="shadow-2xl rounded-xl overflow-hidden border border-outline-variant/30 self-start">
+              <div ref={invoicePrintRef} className="shadow-2xl rounded-xl overflow-hidden border border-outline-variant/30 self-start">
                 <InvoicePrintTemplate invoice={invoiceToPrint} tenantName={tenantName} partyName={party.name} partyPhone={party.phone} partyAddress={party.address} logoUrl={logoUrl} defaultFooterText={defaultFooterText} taxNumber={taxNumber} paperSize={paperSize} />
               </div>
             </div>
           </div>
           {createPortal(
-            <div id="print-only-container" style={{ display: 'none' }}>
+            <div id="print-only-container" className="print-portal" style={{ display: 'none' }}>
               <InvoicePrintTemplate invoice={invoiceToPrint} tenantName={tenantName} partyName={party.name} partyPhone={party.phone} partyAddress={party.address} logoUrl={logoUrl} defaultFooterText={defaultFooterText} taxNumber={taxNumber} paperSize={paperSize} />
             </div>,
             document.body
@@ -652,10 +681,10 @@ export default function PartyDashboard() {
         <>
           <div className="print:hidden fixed inset-0 z-[100] bg-charcoal-ink/60 backdrop-blur-sm flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 bg-surface-container-lowest border-b border-outline-variant/60 flex-shrink-0">
-              <h3 className="text-label-md text-charcoal-ink font-semibold">Bulk Print — {bulkInvoicesToPrint.length} invoices</h3>
+              <h3 className="text-label-md text-charcoal-ink font-semibold">{t('partyDashboard.bulkPrint')} — {bulkInvoicesToPrint.length} {t('partyDashboard.invoices').toLowerCase()}</h3>
               <div className="flex items-center gap-2">
-                <button onClick={handleClosePrint} className="flex items-center gap-2 px-4 py-2 rounded-xl text-label-md text-muted-steel border border-outline-variant/60 hover:bg-surface-container-low transition-all cursor-pointer btn-tactile"><X size={16} /> Cancel</button>
-                <button onClick={() => window.print()} className="flex items-center gap-2 px-5 py-2 rounded-xl text-label-md bg-accent text-on-primary hover:bg-accent-hover shadow-sm transition-all cursor-pointer btn-tactile"><Printer size={16} /> Print All</button>
+                <button onClick={handleClosePrint} className="flex items-center gap-2 px-4 py-2 rounded-xl text-label-md text-muted-steel border border-outline-variant/60 hover:bg-surface-container-low transition-all cursor-pointer btn-tactile"><X size={16} /> {t('partyDashboard.cancel')}</button>
+                <button onClick={handleConfirmPrint} className="flex items-center gap-2 px-5 py-2 rounded-xl text-label-md bg-accent text-on-primary hover:bg-accent-hover shadow-sm transition-all cursor-pointer btn-tactile"><Printer size={16} /> {t('partyDashboard.printAll')}</button>
               </div>
             </div>
             <div className="flex-1 overflow-y-auto py-8 flex flex-col items-center gap-8">
@@ -667,7 +696,7 @@ export default function PartyDashboard() {
             </div>
           </div>
           {createPortal(
-            <div id="print-only-container" style={{ display: 'none' }}>
+            <div id="print-only-container" className="print-portal" style={{ display: 'none' }}>
               {bulkInvoicesToPrint.map((inv) => (
                 <InvoicePrintTemplate key={inv.id} invoice={inv} tenantName={tenantName} partyName={party.name} partyPhone={party.phone} partyAddress={party.address} logoUrl={logoUrl} defaultFooterText={defaultFooterText} taxNumber={taxNumber} paperSize={paperSize} />
               ))}
@@ -675,20 +704,6 @@ export default function PartyDashboard() {
             document.body
           )}
         </>
-      )}
-
-      {editingInvoice && (
-        <EditInvoiceModal
-          invoice={editingInvoice}
-          paperSize={paperSize}
-          onPaperSizeChange={setPaperSize}
-          onPrint={setInvoiceToPrint}
-          onClose={() => setEditingInvoice(null)}
-          onSaved={() => {
-            setEditingInvoice(null);
-            loadSummary();
-          }}
-        />
       )}
 
       {returnInvoice && (
@@ -702,6 +717,18 @@ export default function PartyDashboard() {
         />
       )}
 
+      {productToReturn && (
+        <SupplierReturnProductModal
+          supplierId={partyId}
+          product={productToReturn}
+          onClose={() => setProductToReturn(null)}
+          onSaved={() => {
+            setProductToReturn(null);
+            loadSummary();
+          }}
+        />
+      )}
+
       {invoiceToDelete && (
         <div className="fixed inset-0 z-[100] bg-charcoal-ink/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-surface-container-lowest rounded-2xl shadow-2xl border border-outline-variant/60 w-full max-w-md overflow-hidden animate-fade-in-up">
@@ -709,22 +736,22 @@ export default function PartyDashboard() {
               <div className="w-12 h-12 rounded-xl bg-error-container/30 text-error flex items-center justify-center mb-4">
                 <Trash2 size={24} />
               </div>
-              <h3 className="text-h3 text-charcoal-ink mb-2">Delete Invoice</h3>
+              <h3 className="text-h3 text-charcoal-ink mb-2">{t('partyDashboard.deleteInvoice')}</h3>
               <p className="text-muted-steel text-sm leading-relaxed mb-6">
-                Are you sure you want to delete Invoice #{String(invoiceToDelete.id).padStart(5, '0')}? This action cannot be undone. Associated stock will be adjusted accordingly.
+                {t('partyDashboard.deleteInvoiceDesc').replace('{id}', String(invoiceToDelete.id).padStart(5, '0'))}
               </p>
               <div className="flex items-center gap-3 justify-end">
                 <button
                   onClick={() => setInvoiceToDelete(null)}
                   className="px-5 py-2.5 rounded-xl text-label-md text-muted-steel hover:bg-surface-container-low transition-all cursor-pointer btn-tactile"
                 >
-                  Cancel
+                  {t('partyDashboard.cancel')}
                 </button>
                 <button
                   onClick={() => handleDeleteInvoice(invoiceToDelete.id)}
                   className="px-5 py-2.5 rounded-xl text-label-md bg-error text-white hover:bg-error/90 shadow-sm transition-all cursor-pointer btn-tactile"
                 >
-                  Confirm Delete
+                  {t('partyDashboard.confirmDelete')}
                 </button>
               </div>
             </div>
@@ -737,7 +764,7 @@ export default function PartyDashboard() {
           <div className="bg-surface-container-lowest rounded-2xl shadow-2xl border border-outline-variant/60 w-full max-w-md overflow-hidden animate-fade-in-up">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-h3 text-charcoal-ink">Record Payment</h3>
+                <h3 className="text-h3 text-charcoal-ink">{t('partyDashboard.recordPayment')}</h3>
                 <button onClick={() => setIsPaymentModalOpen(false)} className="p-2 text-muted-steel hover:bg-surface-container-low rounded-xl transition-all btn-tactile">
                   <X size={20} />
                 </button>
@@ -745,12 +772,12 @@ export default function PartyDashboard() {
               
               <div className="mb-6 space-y-4">
                 <div className="bg-surface-container-low p-4 rounded-xl border border-outline-variant/30 flex justify-between items-center">
-                  <span className="text-label-sm text-muted-steel">Outstanding Balance:</span>
-                  <span className="text-label-md text-error font-mono-tabular">EGP {Number(financials.balance).toLocaleString()}</span>
+                  <span className="text-label-sm text-muted-steel">{t('partyDashboard.outstandingBalance')}:</span>
+                  <span className="text-label-md text-error font-mono-tabular">{t('common.currency')} {Number(financials.balance).toLocaleString()}</span>
                 </div>
                 
                 <div>
-                  <label className="block text-label-sm text-charcoal-ink mb-1.5">Payment Amount (EGP)</label>
+                  <label className="block text-label-sm text-charcoal-ink mb-1.5">{t('partyDashboard.paymentAmount')} ({t('common.currency')})</label>
                   <input 
                     type="number"
                     step="0.01"
@@ -761,7 +788,7 @@ export default function PartyDashboard() {
                       setPaymentAmount(e.target.value);
                       if (paymentError) setPaymentError('');
                     }}
-                    placeholder="Enter amount..."
+                    placeholder={t('partyDashboard.enterAmount')}
                     className="w-full px-4 py-2.5 bg-surface-container-lowest border border-outline-variant focus:border-accent focus:ring-1 focus:ring-accent rounded-xl outline-none transition-all text-charcoal-ink"
                   />
                   {paymentError && <p className="text-error text-xs mt-1.5">{paymentError}</p>}
@@ -774,7 +801,7 @@ export default function PartyDashboard() {
                   disabled={paymentSubmitting}
                   className="px-5 py-2.5 rounded-xl text-label-md text-muted-steel hover:bg-surface-container-low transition-all cursor-pointer btn-tactile"
                 >
-                  Cancel
+                  {t('partyDashboard.cancel')}
                 </button>
                 <button
                   onClick={handleRecordPayment}
@@ -782,7 +809,7 @@ export default function PartyDashboard() {
                   className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-label-md bg-accent text-on-primary hover:bg-accent-hover shadow-sm transition-all cursor-pointer btn-tactile disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {paymentSubmitting && <Loader2 size={16} className="animate-spin" />}
-                  Record Payment
+                  {t('partyDashboard.recordPayment')}
                 </button>
               </div>
             </div>
@@ -790,114 +817,7 @@ export default function PartyDashboard() {
         </div>
       )}
 
-      {isReturnModalOpen && (
-        <div className="fixed inset-0 z-[100] bg-charcoal-ink/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-surface-container-lowest rounded-2xl shadow-2xl border border-outline-variant/60 w-full max-w-2xl overflow-hidden animate-fade-in-up">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center">
-                    <RotateCcw size={20} />
-                  </div>
-                  <div>
-                    <h3 className="text-h3 text-charcoal-ink">Stock Return / استرجاع</h3>
-                    <p className="text-xs text-muted-steel mt-0.5">Select products and quantities to return</p>
-                  </div>
-                </div>
-                <button onClick={() => setIsReturnModalOpen(false)} className="p-2 text-muted-steel hover:bg-surface-container-low rounded-xl transition-all btn-tactile">
-                  <X size={20} />
-                </button>
-              </div>
 
-              {returnItems.length === 0 ? (
-                <p className="text-muted-steel text-sm py-8 text-center">No products with available stock.</p>
-              ) : (
-                <div className="max-h-[50vh] overflow-y-auto mb-4">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-outline-variant/30 text-label-sm text-muted-steel uppercase tracking-wider">
-                        <th className="py-2.5 px-3 text-left">Product</th>
-                        <th className="py-2.5 px-3 text-right">Stock</th>
-                        <th className="py-2.5 px-3 text-right">Unit Price</th>
-                        <th className="py-2.5 px-3 text-center w-28">Return Qty</th>
-                        <th className="py-2.5 px-3 text-right">Subtotal</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {returnItems.map((item, idx) => (
-                        <tr key={item.product_id} className="border-b border-outline-variant/20 hover:bg-surface-container-low/40 transition-colors">
-                          <td className="py-3 px-3 text-charcoal-ink font-medium">{item.product_name}</td>
-                          <td className="py-3 px-3 text-right font-mono-tabular text-muted-steel">{item.available_stock}</td>
-                          <td className="py-3 px-3 text-right">
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              value={item.unit_price}
-                              onChange={(e) => {
-                                const val = Math.max(0, Number(e.target.value));
-                                setReturnItems(prev => prev.map((it, i) => i === idx ? { ...it, unit_price: val } : it));
-                              }}
-                              className="w-24 bg-surface-container-low border border-outline-variant/60 rounded-lg px-2 py-1.5 text-right text-charcoal-ink font-mono-tabular focus:border-accent outline-none transition-all"
-                            />
-                          </td>
-                          <td className="py-3 px-3 text-center">
-                            <input
-                              type="number"
-                              min="0"
-                              max={item.available_stock}
-                              value={item.return_qty || ''}
-                              onChange={(e) => {
-                                const val = Math.max(0, Math.min(item.available_stock, Number(e.target.value)));
-                                setReturnItems(prev => prev.map((it, i) => i === idx ? { ...it, return_qty: val } : it));
-                              }}
-                              placeholder="0"
-                              className="w-24 mx-auto bg-surface-container-low border border-outline-variant/60 rounded-lg px-2 py-1.5 text-center text-charcoal-ink font-mono-tabular focus:border-indigo-500 outline-none transition-all"
-                            />
-                          </td>
-                          <td className="py-3 px-3 text-right font-mono-tabular font-medium text-charcoal-ink">
-                            {item.return_qty > 0 ? `EGP ${(item.return_qty * item.unit_price).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '-'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {(() => {
-                const returnTotal = returnItems.reduce((sum, i) => sum + (i.return_qty * i.unit_price), 0);
-                return returnTotal > 0 ? (
-                  <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 mb-4 flex justify-between items-center">
-                    <span className="text-sm font-medium text-indigo-700">Return Total / إجمالي الاسترجاع</span>
-                    <span className="text-lg font-bold font-mono-tabular text-indigo-700">EGP {returnTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                  </div>
-                ) : null;
-              })()}
-
-              {returnError && <p className="text-error text-xs mb-3">{returnError}</p>}
-
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  onClick={() => setIsReturnModalOpen(false)}
-                  disabled={returnSubmitting}
-                  className="px-5 py-2.5 rounded-xl text-label-md text-muted-steel hover:bg-surface-container-low transition-all cursor-pointer btn-tactile"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleStockReturn}
-                  disabled={returnSubmitting || returnItems.every(i => i.return_qty <= 0)}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-label-md bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm transition-all cursor-pointer btn-tactile disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {returnSubmitting && <Loader2 size={16} className="animate-spin" />}
-                  Confirm Return / تأكيد الاسترجاع
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {paymentToDelete && (
         <div className="fixed inset-0 z-[100] bg-charcoal-ink/60 backdrop-blur-sm flex items-center justify-center p-4">
@@ -906,16 +826,16 @@ export default function PartyDashboard() {
               <div className="w-12 h-12 rounded-xl bg-error-container/30 text-error flex items-center justify-center mb-4">
                 <Trash2 size={24} />
               </div>
-              <h3 className="text-h3 text-charcoal-ink mb-2">Delete Payment</h3>
+              <h3 className="text-h3 text-charcoal-ink mb-2">{t('partyDashboard.deletePayment')}</h3>
               <p className="text-muted-steel text-sm leading-relaxed mb-6">
-                Are you sure you want to delete this payment of <strong className="text-charcoal-ink">EGP {Number(paymentToDelete.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>? The balance will be recalculated.
+                {t('partyDashboard.deletePaymentConfirm').split('{{amount}}')[0]}<strong className="text-charcoal-ink">{t('common.currency')} {Number(paymentToDelete.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>{t('partyDashboard.deletePaymentConfirm').split('{{amount}}')[1]}
               </p>
               <div className="flex items-center gap-3 justify-end">
                 <button
                   onClick={() => setPaymentToDelete(null)}
                   className="px-5 py-2.5 rounded-xl text-label-md text-muted-steel hover:bg-surface-container-low transition-all cursor-pointer btn-tactile"
                 >
-                  Cancel
+                  {t('partyDashboard.cancel')}
                 </button>
                 <button
                   onClick={() => handleDeletePayment(paymentToDelete.id)}
@@ -923,7 +843,7 @@ export default function PartyDashboard() {
                   className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-label-md bg-error text-white hover:bg-error/90 shadow-sm transition-all cursor-pointer btn-tactile disabled:opacity-50"
                 >
                   {paymentActionLoading === paymentToDelete.id && <Loader2 size={16} className="animate-spin" />}
-                  Confirm Delete
+                  {t('partyDashboard.confirmDelete')}
                 </button>
               </div>
             </div>

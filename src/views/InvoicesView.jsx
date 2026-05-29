@@ -1,19 +1,23 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import {
   ShoppingCart, Plus, Minus, Trash2, Printer, Loader2,
   CheckCircle2, Package, UserSquare2, X, Edit, Undo2, Search,
-  Truck, UserPlus, Phone, MapPin, Download
+  Truck, UserPlus, Phone, MapPin, Download, RotateCcw
 } from 'lucide-react';
+import { notifications } from '@mantine/notifications';
 import api from '../services/api';
 import { useInvoiceStore } from '../store/useInvoiceStore';
 import InvoicePrintTemplate from '../components/InvoicePrintTemplate';
 import EditInvoiceModal from '../components/EditInvoiceModal';
+import ReturnInvoiceModal from '../components/ReturnInvoiceModal';
 import { useAuth } from '../context/AuthContext';
+import { useTranslation } from 'react-i18next';
 import html2pdf from 'html2pdf.js';
 
 
 function InvoiceItemRow({ item, products, invoiceType, onQuantityChange, onRemove, onEdit, maxStock }) {
+  const { t } = useTranslation();
   const product = products.find((p) => p.id === item.product_id);
   const displayName = item.product_name || product?.name || `#${item.product_id ?? item.batch_id}`;
   const unitPrice = invoiceType === 'sale' ? Number(item.sale_price || 0) : Number(item.purchase_price || 0);
@@ -41,6 +45,11 @@ function InvoiceItemRow({ item, products, invoiceType, onQuantityChange, onRemov
         {invoiceType === 'purchase' && item.purchase_price !== undefined && (
           <span className="font-mono-tabular text-label-sm text-muted-steel mt-0.5">
             Buy: {Number(item.purchase_price).toLocaleString()} | Sell: {Number(item.selling_price).toLocaleString()}
+          </span>
+        )}
+        {invoiceType === 'supplier_return' && item.purchase_price !== undefined && (
+          <span className="font-mono-tabular text-label-sm text-error mt-0.5">
+            Unit Price: {Number(item.purchase_price).toLocaleString()}
           </span>
         )}
         {invoiceType === 'sale' && item.sale_price != null && (
@@ -75,6 +84,8 @@ function InvoiceItemRow({ item, products, invoiceType, onQuantityChange, onRemov
 
 
 export default function InvoicesView() {
+  const { t } = useTranslation();
+  const { user } = useAuth();
   const {
     invoiceType, selectedParty, items,
     setInvoiceType, setSelectedParty,
@@ -103,10 +114,15 @@ export default function InvoicesView() {
   const [amountPaid, setAmountPaid] = useState('');
   const [deliveryFee, setDeliveryFee] = useState('');
   const [invoiceHistory, setInvoiceHistory] = useState([]);
+  const [historyTotal, setHistoryTotal] = useState(0);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyPageSize, setHistoryPageSize] = useState(20);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [bulkInvoicesToPrint, setBulkInvoicesToPrint] = useState([]);
   const [editingInvoice, setEditingInvoice] = useState(null);
   const [invoiceToDelete, setInvoiceToDelete] = useState(null);
+  const [invoiceToReturn, setInvoiceToReturn] = useState(null);
   const [activeTab, setActiveTab] = useState('create');
   const [historySearch, setHistorySearch] = useState('');
   const [isNewParty, setIsNewParty] = useState(false);
@@ -115,25 +131,38 @@ export default function InvoicesView() {
   const [newPartyAddress, setNewPartyAddress] = useState('');
   const [hasDelivery, setHasDelivery] = useState(false);
 
-  const { user } = useAuth();
   const tenantName = user?.tenant?.company_name || 'ERP Dashboard';
   const defaultFooterText = user?.tenant?.default_footer_text || user?.tenant?.print_notes || null;
   const logoUrl = user?.tenant?.logo_url || null;
   const taxNumber = user?.tenant?.tax_number || null;
   const [downloadingPdf, setDownloadingPdf] = useState(false);
 
-  function loadHistory() {
-    api.getInvoices().then(setInvoiceHistory).catch(() => {});
-  }
+  const loadHistory = useCallback(async (page = historyPage, pageSize = historyPageSize) => {
+    setHistoryLoading(true);
+    try {
+      const skip = (page - 1) * pageSize;
+      const response = await api.getInvoices({ skip, limit: pageSize, partyId: selectedParty || undefined });
+      const list = Array.isArray(response) ? response : (response?.data || response?.items || []);
+      const total = Array.isArray(response) ? list.length : Number(response?.total ?? list.length);
+      setInvoiceHistory(list);
+      setHistoryTotal(total);
+      setSelectedIds(new Set());
+    } catch {
+      setInvoiceHistory([]);
+      setHistoryTotal(0);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [historyPage, historyPageSize, selectedParty]);
 
   async function handleDeleteInvoice(invoiceId) {
     try {
       await api.deleteInvoice(invoiceId);
       setInvoiceToDelete(null);
-      loadHistory();
+      loadHistory(historyPage, historyPageSize);
       api.getInventoryReport().then(setInventory);
     } catch (err) {
-      alert(err.response?.data?.detail || 'Failed to delete invoice');
+      notifications.show({ title: 'Error', message: err.response?.data?.detail || 'Failed to delete invoice', color: 'red' });
     }
   }
 
@@ -141,8 +170,13 @@ export default function InvoicesView() {
     Promise.all([api.getParties(), api.getProducts(), api.getInventoryReport(), api.getTemplates()])
       .then(([p, pr, inv, tmpl]) => { setParties(p); setProducts(pr); setInventory(inv); setTemplates(tmpl); })
       .catch(console.error);
-    loadHistory();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'history') {
+      loadHistory(historyPage, historyPageSize);
+    }
+  }, [activeTab, historyPage, historyPageSize, loadHistory]);
 
   const filteredParties = parties.filter((p) => invoiceType === 'sale' ? p.party_type === 'client' : p.party_type === 'supplier');
 
@@ -153,7 +187,7 @@ export default function InvoicesView() {
     }
     const prod = products.find(p => String(p.id) === String(selectedProduct));
     if (!prod) return;
-    if (invoiceType === 'purchase') {
+    if (invoiceType === 'purchase' || invoiceType === 'supplier_return') {
       if (prod.last_purchase_price) setPurchasePrice(prod.last_purchase_price);
     } else if (invoiceType === 'sale') {
       const cost = prod.current_cost != null ? prod.current_cost : prod.last_purchase_price;
@@ -163,13 +197,12 @@ export default function InvoicesView() {
     }
   }, [selectedProduct, products, invoiceType]);
 
-  // Compute available stock for the currently selected product (sale invoices)
-  const selectedAvailableStock = (() => {
+  const selectedAvailableStock = useMemo(() => {
     if (invoiceType !== 'sale' || !selectedProduct) return null;
     const stockProd = inventory?.products?.find(ip => String(ip.product_id) === String(selectedProduct));
     if (!stockProd) return null;
     return stockProd.batches?.reduce((s, b) => s + Number(b.remaining_quantity || 0), 0) ?? null;
-  })();
+  }, [invoiceType, selectedProduct, inventory]);
 
   const addItem = useCallback(() => {
     if (!selectedProduct) return;
@@ -180,9 +213,9 @@ export default function InvoicesView() {
 
     if (editingItemId) {
       const updates = { quantity: qty };
-      if (invoiceType === 'purchase') {
+      if (invoiceType === 'purchase' || invoiceType === 'supplier_return') {
         updates.purchase_price = parseFloat(purchasePrice) || 0;
-        updates.selling_price = parseFloat(sellingPrice) || 0;
+        if (invoiceType === 'purchase') updates.selling_price = parseFloat(sellingPrice) || 0;
       }
       if (invoiceType === 'sale') {
         updates.sale_price = parseFloat(salePrice) || undefined;
@@ -192,9 +225,9 @@ export default function InvoicesView() {
       setEditingItemId(null);
     } else {
       const newItem = { product_id: parseInt(selectedProduct), quantity: qty };
-      if (invoiceType === 'purchase') {
+      if (invoiceType === 'purchase' || invoiceType === 'supplier_return') {
         newItem.purchase_price = parseFloat(purchasePrice) || 0;
-        newItem.selling_price = parseFloat(sellingPrice) || 0;
+        if (invoiceType === 'purchase') newItem.selling_price = parseFloat(sellingPrice) || 0;
       }
       if (invoiceType === 'sale') {
         newItem.sale_price = parseFloat(salePrice) || undefined;
@@ -238,7 +271,7 @@ export default function InvoicesView() {
       setProductSearch(newProd.name);
       setShowProductDropdown(false);
     } catch (err) {
-      alert(err?.message || 'Error creating product');
+      notifications.show({ title: 'Error', message: err?.message || 'Error creating product', color: 'red' });
     } finally {
       setCreatingProduct(false);
     }
@@ -251,7 +284,7 @@ export default function InvoicesView() {
 
     // If new party mode, create the party first
     if (isNewParty) {
-      if (!newPartyName.trim()) { alert('يرجى إدخال اسم العميل'); return; }
+      if (!newPartyName.trim()) { notifications.show({ title: 'Error', message: t('invoices.pleaseEnterName', { party: invoiceType === 'supplier_return' || invoiceType === 'purchase' ? 'supplier' : 'customer' }), color: 'red' }); return; }
       setSubmitting(true);
       try {
         const partyType = invoiceType === 'sale' ? 'client' : 'supplier';
@@ -269,12 +302,12 @@ export default function InvoicesView() {
         setNewPartyPhone('');
         setNewPartyAddress('');
       } catch (err) {
-        alert(err?.message || 'Error creating party');
+        notifications.show({ title: 'Error', message: err?.message || 'Error creating party', color: 'red' });
         setSubmitting(false);
         return;
       }
     } else if (!partyId) {
-      alert('يرجى اختيار طرف أو إضافة عميل جديد');
+      notifications.show({ title: 'Error', message: t('invoices.pleaseSelectParty', { party: invoiceType === 'supplier_return' || invoiceType === 'purchase' ? 'supplier' : 'customer' }), color: 'red' });
       return;
     }
 
@@ -288,6 +321,9 @@ export default function InvoicesView() {
           if (invoiceType === 'purchase') {
             return { product_id: i.product_id, quantity: i.quantity, purchase_price: i.purchase_price, selling_price: i.selling_price };
           }
+          if (invoiceType === 'supplier_return') {
+            return { product_id: i.product_id, quantity: i.quantity, unit_price: i.purchase_price || 0 };
+          }
           return {
             product_id: i.product_id,
             quantity: i.quantity,
@@ -296,17 +332,23 @@ export default function InvoicesView() {
           };
         }),
       };
-      const result = invoiceType === 'sale' ? await api.createSaleInvoice(payload) : await api.createPurchaseInvoice(payload);
-      setLastInvoice(result);
+      let result;
+      if (invoiceType === 'supplier_return') {
+        result = await api.createSupplierStockReturn(partyId, { items: payload.items });
+        notifications.show({ title: 'Success', message: t('invoices.supplierReturnSuccess'), color: 'green' });
+      } else {
+        result = invoiceType === 'sale' ? await api.createSaleInvoice(payload) : await api.createPurchaseInvoice(payload);
+        setLastInvoice(result);
+      }
       clearCart();
       setAmountPaid('');
       setDeliveryFee('');
       setHasDelivery(false);
       setSalePrice('');
       setAutoFetchedCost(null);
-      loadHistory();
+      loadHistory(historyPage, historyPageSize);
       api.getInventoryReport().then(setInventory);
-    } catch (err) { alert(err?.message || 'Error'); }
+    } catch (err) { notifications.show({ title: 'Error', message: err?.message || 'Error', color: 'red' }); }
     finally { setSubmitting(false); }
   }
 
@@ -354,7 +396,7 @@ export default function InvoicesView() {
     try {
       const hydratedData = await api.previewTemplate(templates[0].id, lastInvoice.id);
       handleOpenPrintPreview(hydratedData);
-    } catch (err) { alert(err?.message || 'Error'); }
+    } catch (err) { notifications.show({ title: 'Error', message: err?.message || 'Error', color: 'red' }); }
     finally { setLoadingPreview(false); }
   }
 
@@ -366,8 +408,8 @@ export default function InvoicesView() {
       } : null)
     : null;
 
-  const subtotal = items.reduce((sum, item) => {
-    if (invoiceType === 'purchase') {
+  const subtotal = useMemo(() => items.reduce((sum, item) => {
+    if (invoiceType === 'purchase' || invoiceType === 'supplier_return') {
       return sum + (item.quantity * (item.purchase_price || 0));
     } else {
       const sp = item.sale_price != null ? item.sale_price : (() => {
@@ -379,20 +421,33 @@ export default function InvoicesView() {
       })();
       return sum + (item.quantity * sp);
     }
-  }, 0);
+  }, 0), [items, invoiceType, inventory]);
 
-  const totalProfit = invoiceType === 'sale'
-    ? items.reduce((sum, item) => {
-        if (item.sale_price != null && item.purchase_price != null) {
-          return sum + (Number(item.sale_price) - Number(item.purchase_price)) * Number(item.quantity);
-        }
-        return sum;
-      }, 0)
-    : 0;
+  const totalProfit = useMemo(() => {
+    if (invoiceType !== 'sale') return 0;
+    return items.reduce((sum, item) => {
+      if (item.sale_price != null && item.purchase_price != null) {
+        return sum + (Number(item.sale_price) - Number(item.purchase_price)) * Number(item.quantity);
+      }
+      return sum;
+    }, 0);
+  }, [invoiceType, items]);
 
-  const totalAmount = subtotal + (parseFloat(deliveryFee) || 0);
+  const totalAmount = useMemo(() => subtotal + (parseFloat(deliveryFee) || 0), [subtotal, deliveryFee]);
 
-  const remainingBalance = Math.max(0, totalAmount - (parseFloat(amountPaid) || 0));
+  const remainingBalance = useMemo(() => Math.max(0, totalAmount - (parseFloat(amountPaid) || 0)), [totalAmount, amountPaid]);
+
+  const filteredInvoiceHistory = useMemo(() => {
+    if (!historySearch) return invoiceHistory;
+    const s = historySearch.toLowerCase();
+    return invoiceHistory.filter(inv => (
+      String(inv.id).includes(s)
+      || inv.invoice_type.replace('_', ' ').toLowerCase().includes(s)
+      || inv.status.toLowerCase().includes(s)
+    ));
+  }, [invoiceHistory, historySearch]);
+
+  const historyTotalPages = Math.max(1, Math.ceil(historyTotal / historyPageSize));
 
   const inputClass = "w-full bg-surface-container-lowest border border-outline-variant/60 rounded-xl px-4 py-2.5 text-sm text-charcoal-ink focus:border-accent focus:ring-2 focus:ring-accent/10 outline-none transition-all duration-200";
   const selectClass = `${inputClass} appearance-none cursor-pointer`;
@@ -426,11 +481,11 @@ export default function InvoicesView() {
           <div className="mb-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-fade-in-up">
             <h2 className="text-h3 text-charcoal-ink">Invoice Details</h2>
             <div className="bg-surface-container-lowest border border-outline-variant/60 rounded-xl p-1 flex gap-1 shadow-whisper">
-              {['sale', 'purchase'].map((t) => (
-                <button key={t} onClick={() => setInvoiceType(t)}
-                  className={`px-4 py-1.5 rounded-lg text-label-md capitalize transition-all duration-200 cursor-pointer btn-tactile
-                    ${invoiceType === t ? 'bg-accent text-on-primary shadow-sm' : 'text-muted-steel hover:bg-surface-container-low'}`}>
-                  {t} Invoice
+              {[{key: 'sale', label: 'Sale Invoice'}, {key: 'purchase', label: 'Purchase Invoice'}, {key: 'supplier_return', label: t('invoices.supplierReturn')}].map((t) => (
+                <button key={t.key} onClick={() => setInvoiceType(t.key)}
+                  className={`px-4 py-1.5 rounded-lg text-label-md transition-all duration-200 cursor-pointer btn-tactile
+                    ${invoiceType === t.key ? (t.key === 'supplier_return' ? 'bg-error text-white shadow-sm' : 'bg-accent text-on-primary shadow-sm') : 'text-muted-steel hover:bg-surface-container-low'}`}>
+                  {t.label}
                 </button>
               ))}
             </div>
@@ -454,7 +509,7 @@ export default function InvoicesView() {
                       }`}
                     >
                       <UserPlus size={14} />
-                      {isNewParty ? 'اختيار موجود' : 'عميل جديد'}
+                      {isNewParty ? t('invoices.selectExisting') : (invoiceType === 'supplier_return' || invoiceType === 'purchase' ? t('invoices.newSupplier') : t('invoices.newCustomer'))}
                     </button>
                   )}
                 </div>
@@ -470,14 +525,14 @@ export default function InvoicesView() {
                 ) : (
                   <div className="space-y-3">
                     <div>
-                      <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">اسم العميل *</label>
+                      <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">{t('invoices.customerSupplier')} *</label>
                       <div className="relative">
                         <UserSquare2 size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-steel/50" />
                         <input
                           type="text"
                           value={newPartyName}
                           onChange={(e) => setNewPartyName(e.target.value)}
-                          placeholder="ادخل اسم العميل..."
+                          placeholder="..."
                           className={`${inputClass} pr-10`}
                           dir="rtl"
                           autoFocus
@@ -486,7 +541,7 @@ export default function InvoicesView() {
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">رقم الهاتف</label>
+                        <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">{t('invoices.phone')}</label>
                         <div className="relative">
                           <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-steel/50" />
                           <input
@@ -500,14 +555,14 @@ export default function InvoicesView() {
                         </div>
                       </div>
                       <div>
-                        <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">العنوان</label>
+                        <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">{t('invoices.address')}</label>
                         <div className="relative">
                           <MapPin size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-steel/50" />
                           <input
                             type="text"
                             value={newPartyAddress}
                             onChange={(e) => setNewPartyAddress(e.target.value)}
-                            placeholder="المنطقة / الشارع"
+                            placeholder="..."
                             className={`${inputClass} pr-10`}
                             dir="rtl"
                           />
@@ -526,7 +581,7 @@ export default function InvoicesView() {
 
                 <div className="flex flex-col sm:flex-row gap-2 mb-4 items-end">
                   <div className="relative flex-1">
-                    <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">Product / المنتج</label>
+                    <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">{t('invoices.product')}</label>
                     <input 
                       type="text" 
                       value={productSearch}
@@ -583,15 +638,15 @@ export default function InvoicesView() {
                       </div>
                     )}
                   </div>
-                  {invoiceType === 'purchase' && (
+                  {(invoiceType === 'purchase' || invoiceType === 'supplier_return') && (
                     <div className="flex flex-col gap-0">
-                      <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">سعر الشراء</label>
+                      <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">{invoiceType === 'supplier_return' ? t('invoices.unitPrice') : t('invoices.purchasePrice')}</label>
                       <input type="number" value={purchasePrice} onChange={(e) => setPurchasePrice(e.target.value)} placeholder="0" className={`sm:w-28 ${inputClass}`} />
                     </div>
                   )}
                   {invoiceType === 'sale' && (
                     <div className="flex flex-col gap-1">
-                      <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">سعر البيع</label>
+                      <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">{t('invoices.salePrice')}</label>
                       <input
                         type="number"
                         value={salePrice}
@@ -615,7 +670,7 @@ export default function InvoicesView() {
                     </div>
                   )}
                   <div className="flex flex-col gap-1">
-                    <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">الكمية</label>
+                    <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">{t('invoices.quantity')}</label>
                     <input
                       type="number"
                       value={itemQuantity}
@@ -716,14 +771,14 @@ export default function InvoicesView() {
                             }`}
                           >
                             <Truck size={14} />
-                            {hasDelivery ? 'يوجد توصيل ✓' : 'إضافة توصيل'}
+                            {hasDelivery ? t('invoices.hasDelivery') : t('invoices.addDelivery')}
                           </button>
                           {hasDelivery && (
                             <input
                               type="number"
                               value={deliveryFee}
                               onChange={(e) => setDeliveryFee(e.target.value)}
-                              placeholder="سعر التوصيل"
+                              placeholder="0.00"
                               className="w-28 bg-surface-container-low border border-outline-variant/60 rounded-lg px-2 py-1.5 text-sm text-right text-charcoal-ink focus:border-accent outline-none"
                               autoFocus
                             />
@@ -731,7 +786,7 @@ export default function InvoicesView() {
                         </div>
                         {hasDelivery && deliveryFee && (
                           <div className="flex justify-between items-center text-body-sm text-muted-steel">
-                            <span>Delivery Fee / توصيل</span>
+                            <span>{t('invoices.deliveryFee')}</span>
                             <span className="font-mono-tabular text-charcoal-ink font-medium">EGP {Number(deliveryFee || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                           </div>
                         )}
@@ -742,7 +797,7 @@ export default function InvoicesView() {
                       </div>
                       {invoiceType === 'sale' && totalProfit !== 0 && (
                         <div className="flex justify-between items-center text-body-sm border-t border-outline-variant/30 pt-2">
-                          <span className="text-muted-steel">Est. Profit / الربح</span>
+                          <span className="text-muted-steel">{t('invoices.estProfit')}</span>
                           <span className={`font-mono-tabular font-bold text-sm ${
                             totalProfit > 0 ? 'text-emerald-600' : 'text-red-500'
                           }`}>
@@ -756,7 +811,7 @@ export default function InvoicesView() {
                       </div>
                       <div className="flex justify-between items-center text-label-md text-charcoal-ink border-t border-outline-variant/30 pt-2">
                         <span>Remaining Balance</span>
-                        <span className="font-mono-tabular font-medium text-error">EGP {Math.max(0, totalAmount - (parseFloat(amountPaid) || 0)).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                        <span className="font-mono-tabular font-medium text-error">EGP {remainingBalance.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                       </div>
                     </>
                   )}
@@ -836,6 +891,7 @@ export default function InvoicesView() {
                   <tr className="border-b border-outline-variant/30 text-label-sm text-muted-steel uppercase tracking-wider">
                     <th className="py-3 px-4 text-left w-10"></th>
                     <th className="py-3 px-4 text-left">ID</th>
+                    <th className="py-3 px-4 text-left">{t('invoices.customerSupplier')}</th>
                     <th className="py-3 px-4 text-left">Type</th>
                     <th className="py-3 px-4 text-right">Total</th>
                     <th className="py-3 px-4 text-center">Status</th>
@@ -844,23 +900,20 @@ export default function InvoicesView() {
                   </tr>
                 </thead>
                 <tbody>
-                  {invoiceHistory.filter(inv => {
-                    if (!historySearch) return true;
-                    const s = historySearch.toLowerCase();
-                    return String(inv.id).includes(s) || inv.invoice_type.replace('_', ' ').toLowerCase().includes(s) || inv.status.toLowerCase().includes(s);
-                  }).map((inv) => (
+                  {filteredInvoiceHistory.map((inv) => (
                   <tr key={inv.id} className="border-b border-outline-variant/20 hover:bg-surface-container-low/40 transition-colors">
                     <td className="py-3 px-4">
                       <input type="checkbox" checked={selectedIds.has(inv.id)} onChange={() => toggleSelect(inv.id)}
                         className="w-4 h-4 rounded border-outline-variant/60 text-accent focus:ring-accent/20 cursor-pointer" />
                     </td>
                     <td className="py-3 px-4 font-mono-tabular text-charcoal-ink">#{String(inv.id).padStart(5, '0')}</td>
-                    <td className="py-3 px-4 capitalize text-muted-steel">{inv.invoice_type.replace('_', ' ')}</td>
+                    <td className="py-3 px-4 text-charcoal-ink truncate max-w-[160px]" title={inv.party_name || ''}>{inv.party_name || '—'}</td>
+                    <td className="py-3 px-4 capitalize text-muted-steel">{t(`invoices.typeLabels.${inv.invoice_type?.toLowerCase()}`, { defaultValue: inv.invoice_type?.replace('_', ' ') })}</td>
                     <td className="py-3 px-4 text-right font-mono-tabular text-charcoal-ink">EGP {Number(inv.total_amount).toLocaleString()}</td>
                     <td className="py-3 px-4 text-center">
                       <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-lg ${inv.status === 'paid' ? 'bg-accent-surface text-accent' : inv.status === 'partial' ? 'bg-amber-100 text-amber-700' : 'bg-error-container/30 text-error'}`}>{inv.status}</span>
                     </td>
-                    <td className="py-3 px-4 font-mono-tabular text-muted-steel text-xs">{inv.created_at ? new Date(inv.created_at).toLocaleDateString() : '-'}</td>
+                    <td className="py-3 px-4 font-mono-tabular text-muted-steel text-xs">{inv.created_at ? new Date(inv.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '-'}</td>
                     <td className="py-3 px-4 text-right">
                       <div className="flex items-center justify-end gap-1">
                         {(inv.invoice_type === 'SALE' || inv.invoice_type === 'PURCHASE') && (
@@ -868,6 +921,13 @@ export default function InvoicesView() {
                             className="p-1.5 rounded-xl text-muted-steel hover:bg-accent-surface hover:text-accent transition-all cursor-pointer btn-tactile"
                             title="Edit">
                             <Edit size={16} />
+                          </button>
+                        )}
+                        {inv.invoice_type?.toLowerCase() === 'sell' && (
+                          <button onClick={() => setInvoiceToReturn(inv)}
+                            className="p-1.5 rounded-xl text-muted-steel hover:bg-error-container/30 hover:text-error transition-all cursor-pointer btn-tactile"
+                            title="Return Invoice">
+                            <RotateCcw size={16} />
                           </button>
                         )}
                         <button onClick={() => handleOpenPrintPreview(inv)}
@@ -887,11 +947,55 @@ export default function InvoicesView() {
                 </tbody>
               </table>
             </div>
-            {invoiceHistory.length === 0 && (
+            {historyLoading && (
+              <div className="p-8 text-center text-muted-steel">
+                Loading invoices...
+              </div>
+            )}
+            {!historyLoading && invoiceHistory.length === 0 && (
               <div className="p-8 text-center text-muted-steel">
                 No invoices found.
               </div>
             )}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 border-t border-outline-variant/30">
+              <div className="flex items-center gap-2 text-sm text-muted-steel">
+                <span>Rows per page</span>
+                <select
+                  value={historyPageSize}
+                  onChange={(e) => {
+                    const nextSize = Number(e.target.value);
+                    setHistoryPageSize(nextSize);
+                    setHistoryPage(1);
+                  }}
+                  className="px-2 py-1.5 bg-surface-container-low border border-outline-variant/60 rounded-lg text-sm focus:border-accent outline-none"
+                >
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                </select>
+                <span>
+                  {historyTotal === 0 ? '0' : (historyPage - 1) * historyPageSize + 1}
+                  -
+                  {Math.min(historyPage * historyPageSize, historyTotal)} of {historyTotal}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}
+                  disabled={historyPage <= 1}
+                  className="px-3 py-1.5 rounded-lg border border-outline-variant/60 text-sm text-charcoal-ink hover:bg-surface-container-low disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                <span className="text-sm text-muted-steel">Page {historyPage} / {historyTotalPages}</span>
+                <button
+                  onClick={() => setHistoryPage((p) => Math.min(historyTotalPages, p + 1))}
+                  disabled={historyPage >= historyTotalPages}
+                  className="px-3 py-1.5 rounded-lg border border-outline-variant/60 text-sm text-charcoal-ink hover:bg-surface-container-low disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -923,7 +1027,7 @@ export default function InvoicesView() {
                 <button onClick={handleClosePrintPreview}
                   className="flex items-center gap-2 px-4 py-2 rounded-xl text-label-md text-muted-steel border border-outline-variant/60 hover:bg-surface-container-low transition-all cursor-pointer btn-tactile">
                   <X size={16} />
-                  Cancel
+                  {t('common.cancel')}
                 </button>
                 <button
                   onClick={async () => {
@@ -943,6 +1047,13 @@ export default function InvoicesView() {
                         .save();
                     } catch (err) {
                       console.error('PDF generation failed:', err);
+                      notifications.show({ title: 'Error', message: 'Failed to generate PDF. Try Print → Save as PDF.', color: 'red' });
+                      try {
+                        // Fallback: open browser print dialog
+                        window.print();
+                      } catch (e) {
+                        console.error('Print fallback failed', e);
+                      }
                     } finally {
                       setDownloadingPdf(false);
                     }
@@ -951,12 +1062,12 @@ export default function InvoicesView() {
                   className="flex items-center gap-2 px-4 py-2 rounded-xl text-label-md bg-charcoal-ink text-white hover:opacity-90 shadow-sm transition-all cursor-pointer btn-tactile disabled:opacity-50"
                 >
                   {downloadingPdf ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
-                  Save PDF
+                  {t('invoices.savePdf')}
                 </button>
                 <button onClick={handleConfirmPrint}
                   className="flex items-center gap-2 px-5 py-2 rounded-xl text-label-md bg-accent text-on-primary hover:bg-accent-hover shadow-sm transition-all cursor-pointer btn-tactile">
                   <Printer size={16} />
-                  Confirm Print
+                  {t('invoices.confirmPrint')}
                 </button>
               </div>
             </div>
@@ -1006,16 +1117,16 @@ export default function InvoicesView() {
                 <div className="w-8 h-8 rounded-lg bg-accent-surface text-accent flex items-center justify-center">
                   <Printer size={16} />
                 </div>
-                <h3 className="text-label-md text-charcoal-ink font-semibold">Bulk Print — {bulkInvoicesToPrint.length} invoices</h3>
+                <h3 className="text-label-md text-charcoal-ink font-semibold">{t('invoices.bulkPrint', { count: bulkInvoicesToPrint.length })}</h3>
               </div>
               <div className="flex items-center gap-2">
                 <button onClick={handleClosePrintPreview}
                   className="flex items-center gap-2 px-4 py-2 rounded-xl text-label-md text-muted-steel border border-outline-variant/60 hover:bg-surface-container-low transition-all cursor-pointer btn-tactile">
-                  <X size={16} /> Cancel
+                  <X size={16} /> {t('common.cancel')}
                 </button>
                 <button onClick={handleConfirmPrint}
                   className="flex items-center gap-2 px-5 py-2 rounded-xl text-label-md bg-accent text-on-primary hover:bg-accent-hover shadow-sm transition-all cursor-pointer btn-tactile">
-                  <Printer size={16} /> Print All
+                  <Printer size={16} /> {t('invoices.printAll')}
                 </button>
               </div>
             </div>
@@ -1100,6 +1211,18 @@ export default function InvoicesView() {
             </div>
           </div>
         </div>
+      )}
+
+      {invoiceToReturn && (
+        <ReturnInvoiceModal
+          invoice={invoiceToReturn}
+          onClose={() => setInvoiceToReturn(null)}
+          onSuccess={() => {
+            setInvoiceToReturn(null);
+            loadHistory(historyPage, historyPageSize);
+            api.getInventoryReport().then(setInventory);
+          }}
+        />
       )}
     </>
   );

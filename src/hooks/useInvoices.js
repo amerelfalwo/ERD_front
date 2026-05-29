@@ -11,7 +11,8 @@ export function useInvoices(partyId = null) {
     setError(null);
     try {
       const data = await api.getInvoices(partyId);
-      setInvoices(data);
+      const list = Array.isArray(data) ? data : (data?.data || data?.items || []);
+      setInvoices(list);
     } catch (err) {
       setError(err.message);
     } finally {

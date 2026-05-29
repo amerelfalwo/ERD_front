@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Search, Users, X, Loader2, Eye, DollarSign, User, Building2, BarChart2, Phone, MapPin, Trash2, TrendingUp } from 'lucide-react';
 import api from '../services/api';
+import { notifications } from '@mantine/notifications';
 
 function AddPartyModal({ isOpen, onClose, onCreated }) {
   const [name, setName] = useState('');
@@ -32,7 +33,7 @@ function AddPartyModal({ isOpen, onClose, onCreated }) {
       onCreated();
       onClose();
     } catch (err) {
-      alert(err?.message || 'Error creating party');
+      notifications.show({ title: 'Error', message: err?.message || 'Error creating party', color: 'red' });
     } finally {
       setSubmitting(false);
     }
@@ -216,10 +217,7 @@ export default function PartiesView() {
       setParties(data);
       const balanceMap = {};
       for (const party of data) {
-        try {
-          const bal = await api.getPartyBalance(party.id);
-          balanceMap[party.id] = bal.balance || bal.total_balance || '0';
-        } catch { balanceMap[party.id] = '0'; }
+        balanceMap[party.id] = party.calculated_balance != null ? String(party.calculated_balance) : '0';
       }
       setBalances(balanceMap);
 
@@ -245,7 +243,7 @@ export default function PartiesView() {
       setPartyToDelete(null);
       fetchParties();
     } catch (err) {
-      alert(err?.message || 'Error');
+      notifications.show({ title: 'Error', message: err?.message || 'Error', color: 'red' });
     } finally {
       setDeletingParty(false);
     }

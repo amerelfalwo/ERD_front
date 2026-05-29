@@ -2,20 +2,21 @@ import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, Plus, Trash2, Save, Loader2, CreditCard, AlertCircle, CheckCircle, Package, Printer } from 'lucide-react';
 import api from '../services/api';
-import { notifications } from '@mantine/notifications';
 
-export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, paperSize, onPaperSizeChange }) {
+export default function InlineInvoiceEditor({ invoice, onCancel, onSaved, onPrint }) {
   const { t } = useTranslation();
   const [items, setItems] = useState([]);
-  const [payments, setPayments] = useState([]);
   const [products, setProducts] = useState([]);
   const [batches, setBatches] = useState({});
   const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState('items');
+  const [feedback, setFeedback] = useState(null);
+
+  // Payments
+  const [payments, setPayments] = useState([]);
   const [loadingPayments, setLoadingPayments] = useState(true);
   const [newPaymentAmount, setNewPaymentAmount] = useState('');
   const [addingPayment, setAddingPayment] = useState(false);
-  const [activeTab, setActiveTab] = useState('items');
-  const [feedback, setFeedback] = useState(null);
 
   const flash = useCallback((type, msg) => {
     setFeedback({ type, msg });
@@ -34,6 +35,7 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
       }))
     );
     api.getProducts().then(setProducts).catch(console.error);
+    
     setLoadingPayments(true);
     api.getInvoicePayments(invoice.id)
       .then(setPayments)
@@ -59,6 +61,7 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
 
   const totalPaid = payments.reduce((acc, p) => acc + parseFloat(p.amount), 0);
   const balance = total - totalPaid;
+
   const printInvoice = {
     ...invoice,
     total_amount: total,
@@ -112,11 +115,9 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
         })),
       };
       const updated = await api.updateInvoice(invoice.id, payload);
-      flash('success', t('editInvoiceModal.modificationsSaved'));
       onSaved(updated);
     } catch (err) {
       flash('error', err.message || t('editInvoiceModal.errorOccurred'));
-    } finally {
       setSaving(false);
     }
   }
@@ -132,7 +133,6 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
       setPayments(updated);
       setNewPaymentAmount('');
       flash('success', t('editInvoiceModal.paymentAdded'));
-      onSaved(null);
     } catch (err) {
       flash('error', err.message || t('editInvoiceModal.errorOccurred'));
     } finally {
@@ -148,7 +148,6 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
       const updated = await api.getInvoicePayments(invoice.id);
       setPayments(updated);
       flash('success', t('editInvoiceModal.paymentModified'));
-      onSaved(null);
     } catch (err) {
       flash('error', err.message || t('editInvoiceModal.errorOccurred'));
     }
@@ -160,7 +159,6 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
       await api.deletePayment(invoice.id, p.id);
       setPayments((prev) => prev.filter((x) => x.id !== p.id));
       flash('success', t('editInvoiceModal.paymentDeleted'));
-      onSaved(null);
     } catch (err) {
       flash('error', err.message || t('editInvoiceModal.errorOccurred'));
     }
@@ -168,22 +166,31 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
 
   const inputCls = 'w-full px-3 py-2 rounded-lg border border-outline-variant/60 bg-surface-container-lowest text-sm text-charcoal-ink focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/20 transition-all';
 
-  if (!invoice) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in-up">
-      <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col border border-outline-variant/40">
-
-        <div className="flex items-center justify-between px-6 py-4 border-b border-outline-variant/30">
+    <td colSpan={7} className="p-0 border-b border-outline-variant/30">
+      <div className="bg-surface-container-lowest border-y-4 border-accent animate-fade-in">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-outline-variant/30 bg-surface-container-low/30">
           <div>
-            <h2 className="text-h2 text-charcoal-ink">{t('editInvoiceModal.editInvoice')}{invoice.id}</h2>
-            <p className="text-body-sm text-muted-steel mt-0.5">
-              {invoice.invoice_type === 'SALE' ? t('saleInvoice') : invoice.invoice_type === 'PURCHASE' ? t('purchaseInvoice') : t('returnInvoice')}
+            <h3 className="text-label-md text-charcoal-ink font-semibold flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-accent"></span>
+              {t('editInvoiceModal.editInvoice')}{invoice.id}
+            </h3>
+            <p className="text-xs text-muted-steel mt-0.5 ml-4">
+              {invoice.invoice_type === 'SALE' ? t('editInvoiceModal.saleInvoice') : invoice.invoice_type === 'PURCHASE' ? t('editInvoiceModal.purchaseInvoice') : invoice.invoice_type}
             </p>
           </div>
-          <button onClick={onClose} className="p-2 rounded-xl hover:bg-surface-container text-muted-steel transition-colors cursor-pointer">
-            <X size={20} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => onPrint?.(printInvoice)} className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-label-sm text-muted-steel hover:bg-surface-container-low transition-colors cursor-pointer btn-tactile">
+              <Printer size={16} /> {t('editInvoiceModal.editInvoicePrint')}
+            </button>
+            <button onClick={onCancel} className="px-4 py-2 rounded-xl text-label-sm text-muted-steel hover:bg-surface-container-low transition-colors cursor-pointer btn-tactile">
+              {t('editInvoiceModal.cancel')}
+            </button>
+            <button onClick={handleSaveItems} disabled={saving} className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-accent text-on-primary text-label-sm hover:bg-accent-hover disabled:opacity-50 shadow-sm transition-all cursor-pointer btn-tactile">
+              {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+              {t('editInvoiceModal.save')}
+            </button>
+          </div>
         </div>
 
         {feedback && (
@@ -202,13 +209,13 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
           ))}
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+        <div className="p-6">
           {activeTab === 'items' && (
-            <>
+            <div className="space-y-3">
               {items.map((item, idx) => (
-                <div key={idx} className="grid grid-cols-12 gap-2 items-start p-3 rounded-xl bg-surface-container-low/40 border border-outline-variant/30">
+                <div key={idx} className="grid grid-cols-12 gap-3 items-end p-4 rounded-xl bg-surface-container-low/40 border border-outline-variant/30">
                   <div className="col-span-5">
-                    <label className="block text-label-sm text-muted-steel mb-1 uppercase tracking-wider">{t('editInvoiceModal.editInvoiceProduct')}</label>
+                    <label className="block text-xs font-semibold text-muted-steel mb-1.5 uppercase tracking-wider">{t('editInvoiceModal.editInvoiceProduct')}</label>
                     <select
                       disabled={invoice.invoice_type === 'PURCHASE'}
                       value={item.batch_id}
@@ -226,17 +233,9 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
                         ))
                       ))}
                     </select>
-                    {invoice.invoice_type === 'PURCHASE' && (() => {
-                      const allBatches = Object.values(batches).flat();
-                      const b = allBatches.find((x) => String(x.id) === String(item.batch_id));
-                      const sold = b ? Number(b.initial_quantity) - Number(b.remaining_quantity) : 0;
-                      return sold > 0 ? (
-                        <p className="text-[11px] text-amber-600 mt-1">{t('editInvoiceModal.editInvoiceSoldCount')} {sold.toFixed(2)} {t('editInvoiceModal.editInvoiceNewQuantityMustBeGreater')} {sold.toFixed(2)}</p>
-                      ) : null;
-                    })()}
                   </div>
-                  <div className="col-span-3">
-                    <label className="block text-label-sm text-muted-steel mb-1 uppercase tracking-wider">{t('editInvoiceModal.editInvoiceQuantity')}</label>
+                  <div className="col-span-2">
+                    <label className="block text-xs font-semibold text-muted-steel mb-1.5 uppercase tracking-wider">{t('editInvoiceModal.editInvoiceQuantity')}</label>
                     <input
                       type="number" step="0.001" min="0.001"
                       value={item.quantity}
@@ -244,8 +243,8 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
                       className={inputCls}
                     />
                   </div>
-                  <div className="col-span-3">
-                    <label className="block text-label-sm text-muted-steel mb-1 uppercase tracking-wider">{t('editInvoiceModal.editInvoicePrice')}</label>
+                  <div className="col-span-2">
+                    <label className="block text-xs font-semibold text-muted-steel mb-1.5 uppercase tracking-wider">{t('editInvoiceModal.editInvoicePrice')}</label>
                     <input
                       type="number" step="0.01" min="0"
                       value={item.unit_price}
@@ -253,109 +252,94 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
                       className={inputCls}
                     />
                   </div>
-                  <div className="col-span-1 flex items-end pb-1">
+                  <div className="col-span-2 text-right">
+                    <label className="block text-xs font-semibold text-muted-steel mb-1.5 uppercase tracking-wider">{t('editInvoiceModal.editInvoiceTotal').replace(': ', '')}</label>
+                    <div className="h-[38px] flex items-center justify-end font-mono-tabular font-semibold text-charcoal-ink">
+                      EGP {((parseFloat(item.quantity) || 0) * (parseFloat(item.unit_price) || 0)).toFixed(2)}
+                    </div>
+                  </div>
+                  <div className="col-span-1 flex items-center justify-end h-[38px]">
                     <button
                       disabled={invoice.invoice_type === 'PURCHASE'}
                       onClick={() => removeItem(idx)}
-                      className="p-1.5 rounded-lg text-red-400 hover:bg-red-50 disabled:hover:bg-transparent disabled:opacity-30 transition-colors cursor-pointer btn-tactile"
+                      className="p-2 rounded-xl text-red-400 hover:bg-red-50 hover:text-red-500 disabled:hover:bg-transparent disabled:opacity-30 transition-colors cursor-pointer btn-tactile"
                     >
-                      <Trash2 size={16} />
+                      <Trash2 size={18} />
                     </button>
-                  </div>
-                  <div className="col-span-12 text-right">
-                    <span className="text-label-sm text-muted-steel">{t('editInvoiceModal.editInvoiceSubtotal')}</span>
-                    <span className="text-label-md font-mono-tabular text-charcoal-ink">
-                      EGP {((parseFloat(item.quantity) || 0) * (parseFloat(item.unit_price) || 0)).toFixed(2)}
-                    </span>
                   </div>
                 </div>
               ))}
 
               {invoice.invoice_type !== 'PURCHASE' ? (
-                <button onClick={addItem} className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border-2 border-dashed border-accent/30 text-accent text-label-sm hover:bg-accent-surface transition-colors cursor-pointer">
+                <button onClick={addItem} className="w-full flex items-center justify-center gap-1.5 py-3 rounded-xl border-2 border-dashed border-accent/30 text-accent text-label-sm hover:bg-accent-surface hover:border-accent/60 transition-colors cursor-pointer mt-4">
                   <Plus size={16} /> {t('editInvoiceModal.editInvoiceAddNewItem')}
                 </button>
               ) : (
-                <div className="text-center p-3 text-label-sm text-sky-700 bg-sky-50 rounded-xl border border-sky-200">
+                <div className="text-center p-4 mt-4 text-sm text-sky-700 bg-sky-50 rounded-xl border border-sky-200">
                   {t('editInvoiceModal.editInvoicePurchaseEditWarning')}
                 </div>
               )}
-            </>
+            </div>
           )}
 
           {activeTab === 'payments' && (
-            <>
-              <div className="flex gap-2 p-3 rounded-xl bg-surface-container-low/40 border border-outline-variant/30">
+            <div className="space-y-4">
+              <div className="flex gap-3 p-4 rounded-xl bg-surface-container-low/40 border border-outline-variant/30">
                 <div className="flex-1">
-                  <label className="block text-label-sm text-muted-steel mb-1 uppercase tracking-wider">{t('editInvoiceModal.editInvoiceNewPayment')}</label>
+                  <label className="block text-xs font-semibold text-muted-steel mb-1.5 uppercase tracking-wider">{t('editInvoiceModal.editInvoiceNewPayment')}</label>
                   <input type="number" step="0.01" min="0" placeholder={t('editInvoiceModal.editInvoiceAmountPlaceholder')} value={newPaymentAmount} onChange={(e) => setNewPaymentAmount(e.target.value)} className={inputCls} />
                 </div>
                 <div className="flex items-end">
-                  <button onClick={handleAddPayment} disabled={addingPayment} className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-accent text-on-primary text-label-sm hover:bg-accent-hover disabled:opacity-50 transition-colors cursor-pointer btn-tactile">
-                    {addingPayment ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-                    {t('editInvoiceModal.editInvoiceAdd')}
+                  <button onClick={handleAddPayment} disabled={addingPayment} className="flex items-center gap-1.5 h-[38px] px-5 rounded-xl bg-accent text-on-primary text-label-sm hover:bg-accent-hover disabled:opacity-50 transition-colors cursor-pointer btn-tactile">
+                    {addingPayment ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                    {t('editInvoiceModal.recordPayment')}
                   </button>
                 </div>
               </div>
 
               {loadingPayments ? (
-                <div className="flex justify-center py-6"><Loader2 size={24} className="animate-spin text-accent" /></div>
+                <div className="flex justify-center py-8"><Loader2 size={24} className="animate-spin text-accent" /></div>
               ) : payments.length === 0 ? (
-                <p className="text-center text-muted-steel text-body-sm py-6">{t('editInvoiceModal.editInvoiceNoPaymentsRecorded')}</p>
+                <p className="text-center text-muted-steel text-sm py-8 bg-surface-container-lowest rounded-xl border border-outline-variant/20 border-dashed">{t('editInvoiceModal.editInvoiceNoPaymentsRecorded')}</p>
               ) : (
                 <div className="space-y-2">
                   {payments.map((p) => (
-                    <div key={p.id} className="flex items-center justify-between px-4 py-3 rounded-xl border border-outline-variant/30 bg-surface-container-lowest">
+                    <div key={p.id} className="flex items-center justify-between px-5 py-4 rounded-xl border border-outline-variant/30 bg-surface-container-lowest shadow-sm hover:shadow-md transition-shadow">
                       <div>
                         <p className="text-label-md font-mono-tabular text-charcoal-ink">EGP {Number(p.amount).toLocaleString('en', { minimumFractionDigits: 2 })}</p>
-                        <p className="text-label-sm text-muted-steel">{p.payment_date ? new Date(p.payment_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '—'}</p>
+                        <p className="text-xs text-muted-steel mt-0.5">{p.payment_date ? new Date(p.payment_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '—'}</p>
                       </div>
-                      <div className="flex gap-1">
-                        <button onClick={() => handleEditPayment(p)} className="px-3 py-1.5 text-label-sm rounded-lg text-accent hover:bg-accent-surface transition-colors cursor-pointer btn-tactile">{t('editInvoiceModal.editInvoiceEdit')}</button>
-                        <button onClick={() => handleDeletePayment(p)} className="px-3 py-1.5 text-label-sm rounded-lg text-red-500 hover:bg-red-50 transition-colors cursor-pointer btn-tactile">{t('editInvoiceModal.editInvoiceDelete')}</button>
+                      <div className="flex gap-2">
+                        <button onClick={() => handleEditPayment(p)} className="px-3 py-1.5 text-xs font-medium rounded-lg text-accent bg-accent/10 hover:bg-accent/20 transition-colors cursor-pointer btn-tactile">{t('editInvoiceModal.editInvoiceEdit')}</button>
+                        <button onClick={() => handleDeletePayment(p)} className="px-3 py-1.5 text-xs font-medium rounded-lg text-red-600 bg-red-50 hover:bg-red-100 transition-colors cursor-pointer btn-tactile">{t('editInvoiceModal.editInvoiceDelete')}</button>
                       </div>
                     </div>
                   ))}
                 </div>
               )}
-            </>
+            </div>
           )}
-        </div>
 
-        <div className="px-6 py-4 border-t border-outline-variant/30 flex items-center justify-between gap-4 bg-surface-container-low/30 rounded-b-2xl">
-          <div className="flex gap-4 text-label-sm">
-            <span className="text-muted-steel">{t('editInvoiceModal.editInvoiceTotal')} <span className="font-mono-tabular text-charcoal-ink">EGP {total.toFixed(2)}</span></span>
-            <span className="text-muted-steel">{t('editInvoiceModal.editInvoicePaid')} <span className="font-mono-tabular text-green-600">EGP {totalPaid.toFixed(2)}</span></span>
-            <span className={`font-medium ${balance > 0 ? 'text-amber-600' : 'text-green-600'}`}>
-              {t('editInvoiceModal.editInvoiceRemaining')} EGP {balance.toFixed(2)}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <select
-              value={paperSize}
-              onChange={(e) => onPaperSizeChange?.(e.target.value)}
-              className="px-3 py-2 rounded-xl text-label-sm border border-outline-variant/60 bg-surface-container-lowest text-muted-steel focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all cursor-pointer"
-            >
-              <option value="a4">A4</option>
-              <option value="a5">A5</option>
-              <option value="receipt">80mm</option>
-            </select>
-            <button
-              onClick={() => onPrint?.(printInvoice)}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-outline-variant/60 text-label-sm text-charcoal-ink hover:bg-surface-container-low transition-all cursor-pointer btn-tactile"
-            >
-              <Printer size={16} />
-              {t('editInvoiceModal.editInvoicePrint')}
-            </button>
-            {activeTab === 'items' && (
-              <button onClick={handleSaveItems} disabled={saving} className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-accent text-on-primary text-label-md hover:bg-accent-hover disabled:opacity-50 shadow-sm transition-all cursor-pointer btn-tactile">
-                {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                {t('editInvoiceModal.editInvoiceSaveChanges')}
-              </button>
-            )}
+          <div className="mt-6 p-4 rounded-xl bg-surface-container border border-outline-variant/20 flex flex-wrap gap-6 justify-between items-center text-sm">
+            <div className="flex items-center gap-6">
+              <div className="flex flex-col">
+                <span className="text-xs text-muted-steel mb-0.5 uppercase tracking-wider">{t('editInvoiceModal.editInvoiceTotal').replace(': ', '')}</span>
+                <span className="font-mono-tabular font-medium text-charcoal-ink">EGP {total.toFixed(2)}</span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-xs text-muted-steel mb-0.5 uppercase tracking-wider">{t('editInvoiceModal.editInvoicePaid').replace(': ', '')}</span>
+                <span className="font-mono-tabular font-medium text-green-600">EGP {totalPaid.toFixed(2)}</span>
+              </div>
+              <div className="flex flex-col border-r border-outline-variant/30 pr-6 mr-2">
+                <span className="text-xs text-muted-steel mb-0.5 uppercase tracking-wider">{t('editInvoiceModal.editInvoiceRemaining').replace(': ', '')}</span>
+                <span className={`font-mono-tabular font-bold ${balance > 0 ? 'text-amber-600' : 'text-green-600'}`}>
+                  EGP {balance.toFixed(2)}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </td>
   );
 }

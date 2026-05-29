@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Plus, Search, Package, ChevronDown, ChevronUp, X, Loader2, Trash2, Pencil } from 'lucide-react';
 import api from '../services/api';
+import { notifications } from '@mantine/notifications';
 
 function AddProductModal({ isOpen, onClose, onCreated }) {
   const [name, setName] = useState('');
@@ -24,7 +25,7 @@ function AddProductModal({ isOpen, onClose, onCreated }) {
       setSellPrice('');
       onCreated();
       onClose();
-    } catch (err) { alert(err?.message || 'Error'); }
+    } catch (err) { notifications.show({ title: 'Error', message: err?.message || 'Error', color: 'red' }); }
     finally { setSubmitting(false); }
   }
 
@@ -97,7 +98,7 @@ function EditProductModal({ isOpen, onClose, product, onUpdated }) {
       });
       onUpdated();
       onClose();
-    } catch (err) { alert(err?.message || 'Error'); }
+    } catch (err) { notifications.show({ title: 'Error', message: err?.message || 'Error', color: 'red' }); }
     finally { setSubmitting(false); }
   }
 
@@ -144,8 +145,9 @@ function EditProductModal({ isOpen, onClose, product, onUpdated }) {
 
 function BatchRow({ batch }) {
   return (
-    <div className="grid grid-cols-4 gap-2 py-2.5 px-6 text-body-sm text-muted-steel bg-surface-container-low/30 hover:bg-surface-container-low/60 transition-colors">
+    <div className="grid grid-cols-5 gap-2 py-2.5 px-6 text-body-sm text-muted-steel bg-surface-container-low/30 hover:bg-surface-container-low/60 transition-colors">
       <span className="font-mono-tabular">#{batch.id}</span>
+      <span className="truncate">{batch.supplier_name || '—'}</span>
       <span className="font-mono-tabular">{Number(batch.purchase_price).toLocaleString()}</span>
       <span className="font-mono-tabular">{Number(batch.current_selling_price).toLocaleString()}</span>
       <span className="font-mono-tabular">{Number(batch.remaining_quantity).toLocaleString()}</span>
@@ -177,11 +179,14 @@ function ProductRow({ product, inventoryProduct, onDelete, onEdit }) {
     <div className="border-b border-outline-variant/30 last:border-0">
       <div className="grid grid-cols-12 gap-2 items-center py-3.5 px-6 cursor-pointer hover:bg-surface-container-low/50 transition-colors duration-200 group" onClick={toggleExpand}>
         <div className="col-span-1 font-mono-tabular text-label-sm text-muted-steel">{product.id}</div>
-        <div className="col-span-3 min-w-0">
-          <span className="text-label-md text-charcoal-ink truncate" dir="auto">{product.name}</span>
+        <div className="col-span-2 min-w-0">
+          <span className="text-label-md text-charcoal-ink truncate block" dir="auto">{product.name}</span>
+        </div>
+        <div className="col-span-2 min-w-0">
+          <span className="text-body-sm text-muted-steel truncate block" dir="auto">{product.supplier_name || '—'}</span>
         </div>
         <div className="col-span-2 font-mono-tabular text-body-sm text-muted-steel text-right">{Number(displayPurchasePrice).toLocaleString()}</div>
-        <div className="col-span-2 font-mono-tabular text-body-sm text-muted-steel text-right">{Number(displaySellPrice).toLocaleString()}</div>
+        <div className="col-span-1 font-mono-tabular text-body-sm text-muted-steel text-right">{Number(displaySellPrice).toLocaleString()}</div>
         <div className="col-span-2 font-mono-tabular text-body-sm text-muted-steel text-right">{totalQty.toLocaleString()}</div>
         <div className="col-span-2 flex items-center justify-end gap-2">
           <span className={`text-label-sm px-2 py-0.5 rounded-lg ${totalQty > 0 ? 'bg-accent-surface text-accent' : 'bg-error-container/30 text-error'}`}>
@@ -206,8 +211,8 @@ function ProductRow({ product, inventoryProduct, onDelete, onEdit }) {
       </div>
       {expanded && (
         <div className="bg-surface-container-low/20 border-t border-outline-variant/20 animate-fade-in-up">
-          <div className="grid grid-cols-4 gap-2 py-2.5 px-6 text-label-sm uppercase tracking-wider text-muted-steel/70">
-            <span>Batch ID</span><span>In Price</span><span>Selling Price</span><span>Remaining</span>
+          <div className="grid grid-cols-5 gap-2 py-2.5 px-6 text-label-sm uppercase tracking-wider text-muted-steel/70">
+            <span>Batch ID</span><span>Supplier</span><span>In Price</span><span>Selling Price</span><span>Remaining</span>
           </div>
           {loadingBatches ? (
             <div className="py-3 px-6 space-y-1.5">{[1,2].map(i => <div key={i} className="h-8 rounded-lg animate-shimmer" />)}</div>
@@ -254,7 +259,7 @@ export default function ProductsView() {
       setProductToDelete(null);
       fetchProducts();
     } catch (err) {
-      alert(err?.message || 'Error');
+      notifications.show({ title: 'Error', message: err?.message || 'Error', color: 'red' });
     } finally {
       setDeletingProduct(false);
     }
@@ -323,9 +328,10 @@ export default function ProductsView() {
       <div className="animate-fade-in-up stagger-2 bg-surface-container-lowest rounded-2xl shadow-whisper border border-outline-variant/60 overflow-hidden">
         <div className="grid grid-cols-12 gap-2 items-center py-3 px-6 border-b border-outline-variant/40 bg-surface-container-low/30">
           <span className="col-span-1 text-label-sm uppercase tracking-wider text-muted-steel/70">ID</span>
-          <span className="col-span-3 text-label-sm uppercase tracking-wider text-muted-steel/70">Product Name</span>
+          <span className="col-span-2 text-label-sm uppercase tracking-wider text-muted-steel/70">Product Name</span>
+          <span className="col-span-2 text-label-sm uppercase tracking-wider text-muted-steel/70">Supplier</span>
           <span className="col-span-2 text-label-sm uppercase tracking-wider text-muted-steel/70 text-right">In Price</span>
-          <span className="col-span-2 text-label-sm uppercase tracking-wider text-muted-steel/70 text-right">Sell Price</span>
+          <span className="col-span-1 text-label-sm uppercase tracking-wider text-muted-steel/70 text-right">Sell</span>
           <span className="col-span-2 text-label-sm uppercase tracking-wider text-muted-steel/70 text-right">Quantity</span>
           <span className="col-span-2 text-label-sm uppercase tracking-wider text-muted-steel/70 text-right">Status</span>
         </div>
@@ -333,9 +339,10 @@ export default function ProductsView() {
           <div>{[1,2,3,4,5].map((i) => (
             <div key={i} className="grid grid-cols-12 gap-2 items-center py-3.5 px-6 border-b border-outline-variant/20">
               <div className="col-span-1"><div className="w-8 h-4 rounded-lg animate-shimmer" /></div>
-              <div className="col-span-3"><div className="w-32 h-4 rounded-lg animate-shimmer" /></div>
+              <div className="col-span-2"><div className="w-24 h-4 rounded-lg animate-shimmer" /></div>
+              <div className="col-span-2"><div className="w-20 h-4 rounded-lg animate-shimmer" /></div>
               <div className="col-span-2"><div className="w-16 h-4 rounded-lg animate-shimmer ml-auto" /></div>
-              <div className="col-span-2"><div className="w-16 h-4 rounded-lg animate-shimmer ml-auto" /></div>
+              <div className="col-span-1"><div className="w-12 h-4 rounded-lg animate-shimmer ml-auto" /></div>
               <div className="col-span-2"><div className="w-12 h-4 rounded-lg animate-shimmer ml-auto" /></div>
               <div className="col-span-2"><div className="w-16 h-4 rounded-lg animate-shimmer ml-auto" /></div>
             </div>

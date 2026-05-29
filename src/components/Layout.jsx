@@ -1,23 +1,32 @@
 import { useState, useMemo } from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
 import {
-  LayoutDashboard, Package, Users, FileText, Settings,
-  Search, Bell, HelpCircle, Menu, X, LogOut, Building2, ChevronDown,
+  LayoutDashboard, Package, Users, Truck, FileText, Settings,
+  Search, Bell, HelpCircle, Menu, X, LogOut, Building2, ChevronDown, Globe,
 } from 'lucide-react';
 import myLogo from '../assets/my.png';
 import { useAuth } from '../context/AuthContext';
-
-const navItems = [
-  { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { path: '/products', label: 'Products', icon: Package },
-  { path: '/parties', label: 'Parties', icon: Users },
-  { path: '/invoices', label: 'Invoices', icon: FileText },
-];
+import { useTranslation } from 'react-i18next';
 
 export default function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { user } = useAuth();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const { t, i18n } = useTranslation();
+
+  const toggleLanguage = () => {
+    const newLang = i18n.language === 'ar' ? 'en' : 'ar';
+    i18n.changeLanguage(newLang);
+    localStorage.setItem('erp_lang', newLang);
+  };
+
+  const navItems = useMemo(() => [
+    { path: '/dashboard', label: t('nav.dashboard'), icon: LayoutDashboard },
+    { path: '/products', label: t('nav.products'), icon: Package },
+    { path: '/customers', label: t('nav.customers'), icon: Users },
+    { path: '/suppliers', label: t('nav.suppliers'), icon: Truck },
+    { path: '/invoices', label: t('nav.invoices'), icon: FileText },
+  ], [t]);
 
   const companyName = user?.tenant?.company_name || 'ERP Dashboard';
   const displayName = user?.username || 'User';
@@ -45,10 +54,10 @@ export default function Layout() {
 
       <nav
         className={`
-          fixed md:static inset-y-0 left-0 z-50 flex flex-col h-screen w-[260px]
-          border-r border-outline-variant/60 bg-surface-container-lowest flex-shrink-0
+          fixed md:static inset-y-0 left-0 rtl:right-0 rtl:left-auto z-50 flex flex-col h-screen w-[260px]
+          border-r rtl:border-l rtl:border-r-0 border-outline-variant/60 bg-surface-container-lowest flex-shrink-0
           transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]
-          ${mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+          ${mobileOpen ? 'translate-x-0' : '-translate-x-full rtl:translate-x-full md:translate-x-0 rtl:md:translate-x-0'}
         `}
       >
         <div className="px-5 pt-7 pb-5 flex justify-between items-start">
@@ -116,7 +125,7 @@ export default function Layout() {
             }
           >
             <Settings size={18} strokeWidth={1.8} />
-            <span>Settings</span>
+            <span>{t('nav.settings')}</span>
           </NavLink>
           <button
             onClick={handleLogout}
@@ -124,7 +133,7 @@ export default function Layout() {
                        text-error/80 hover:bg-error-container/30 transition-all duration-200 cursor-pointer btn-tactile"
           >
             <LogOut size={18} strokeWidth={1.8} />
-            <span>Logout</span>
+            <span>{t('nav.logout')}</span>
           </button>
           {/* ── Built By Credit ── */}
           <a
@@ -134,7 +143,7 @@ export default function Layout() {
             className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-muted-steel/60 hover:text-muted-steel hover:bg-surface-container-high transition-all duration-200 group"
           >
             <img src={myLogo} alt="Amir El-Rifai" className="w-5 h-5 object-contain opacity-50 group-hover:opacity-80 transition-opacity" />
-            <span className="text-[11px] tracking-wide">Built by Amir El-Rifai</span>
+            <span className="text-[11px] tracking-wide">{t('common.builtBy')} Amir El-Rifai</span>
           </a>
         </div>
       </nav>
@@ -157,13 +166,13 @@ export default function Layout() {
 
           <div className="flex items-center gap-2">
             <div className="relative hidden sm:flex items-center">
-              <Search className="absolute left-3 text-muted-steel pointer-events-none" size={16} />
+              <Search className="absolute left-3 rtl:right-3 rtl:left-auto text-muted-steel pointer-events-none" size={16} />
               <input
-                className="pl-9 pr-4 py-2 bg-surface-container-low border border-outline-variant/60 rounded-xl
+                className="pl-9 pr-4 rtl:pr-9 rtl:pl-4 py-2 bg-surface-container-low border border-outline-variant/60 rounded-xl
                            text-sm text-on-surface placeholder:text-outline
                            focus:border-accent focus:ring-2 focus:ring-accent/10 focus:outline-none
                            transition-all duration-200 w-56"
-                placeholder="Search..."
+                placeholder={t('common.search')}
                 type="text"
               />
             </div>
@@ -175,7 +184,17 @@ export default function Layout() {
               <HelpCircle size={18} />
             </button>
 
-            <div className="relative ml-1">
+            {/* Language Switcher */}
+            <button
+              onClick={toggleLanguage}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-muted-steel hover:text-accent hover:bg-accent-surface rounded-xl transition-all duration-200 cursor-pointer btn-tactile"
+              title="Change Language"
+            >
+              <Globe size={15} />
+              <span>{i18n.language === 'ar' ? t('nav.english') : t('nav.arabic')}</span>
+            </button>
+
+            <div className="relative ml-1 rtl:mr-1 rtl:ml-0">
               <button
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
                 className="flex items-center gap-2.5 pl-1 pr-2 py-1 rounded-xl hover:bg-surface-container-high transition-all duration-200 cursor-pointer btn-tactile"
@@ -201,7 +220,7 @@ export default function Layout() {
               {userMenuOpen && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setUserMenuOpen(false)} />
-                  <div className="absolute right-0 top-full mt-1.5 w-56 z-50 animate-scale-in origin-top-right">
+                  <div className="absolute right-0 rtl:left-0 rtl:right-auto top-full mt-1.5 w-56 z-50 animate-scale-in origin-top-right rtl:origin-top-left">
                     <div className="bg-surface-container-lowest rounded-xl border border-outline-variant/60 shadow-whisper-lg py-1.5 overflow-hidden">
                       <div className="px-4 py-3 border-b border-outline-variant/40">
                         <p className="text-label-sm text-on-surface font-medium truncate">{displayName}</p>
@@ -213,7 +232,7 @@ export default function Layout() {
                                    hover:bg-error-container/20 transition-colors cursor-pointer"
                       >
                         <LogOut size={15} strokeWidth={1.8} />
-                        Sign out
+                        {t('common.signOut')}
                       </button>
                     </div>
                   </div>
@@ -238,7 +257,7 @@ export default function Layout() {
             rel="noopener noreferrer"
             className="flex items-center gap-1.5 group"
           >
-            <span className="text-[11px] text-muted-steel/40 group-hover:text-muted-steel/70 transition-colors">Built by</span>
+            <span className="text-[11px] text-muted-steel/40 group-hover:text-muted-steel/70 transition-colors">{t('common.builtBy')}</span>
             <img src={myLogo} alt="Amir El-Rifai" className="h-4 w-4 object-contain opacity-40 group-hover:opacity-70 transition-opacity" />
             <span className="text-[11px] font-medium text-muted-steel/50 group-hover:text-accent transition-colors">Amir El-Rifai</span>
           </a>

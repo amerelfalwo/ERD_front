@@ -1,4 +1,5 @@
 import { Building2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 const fmt = (n, digits = 2) =>
   Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
@@ -22,13 +23,14 @@ export default function InvoicePrintTemplate({
   taxNumber,
   paperSize = '80mm',
 }) {
+  const { t } = useTranslation();
   if (!invoice) return null;
 
   const isSale     = ['sale', 'SALE'].includes(invoice.invoice_type);
   const isReturn   = ['sale_return', 'purchase_return', 'SALE_RETURN', 'PURCHASE_RETURN'].includes(invoice.invoice_type);
 
-  const invoiceDate   = new Date(invoice.created_at).toLocaleDateString('ar-EG', { year: 'numeric', month: '2-digit', day: '2-digit' });
-  const invoiceTime   = new Date(invoice.created_at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+  const invoiceDate   = new Date(invoice.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  const invoiceTime   = new Date(invoice.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
   const invoiceNumber = String(invoice.id).padStart(5, '0');
   
   const total         = Number(invoice.total_amount   || 0);
@@ -41,7 +43,7 @@ export default function InvoicePrintTemplate({
   const footerText    = invoice.footer_custom_text || defaultFooterText || null;
   const resolvedLogo  = resolveLogoUrl(logoUrl);
 
-  const badgeLabel = isReturn ? 'إشعار مرتجع' : isSale ? 'فاتورة مبيعات' : 'فاتورة مشتريات';
+  const badgeLabel = isReturn ? t('printTemplate.returnNotice') : isSale ? t('printTemplate.saleInvoice') : t('printTemplate.purchaseInvoice');
 
   const isReceipt = paperSize === 'receipt' || paperSize === '80mm';
   const isA5 = paperSize === 'a5';
@@ -75,22 +77,22 @@ export default function InvoicePrintTemplate({
           <div className="mb-4 text-[11px]">
             <div className="flex flex-col gap-y-1">
               <div className="flex items-baseline gap-x-1.5">
-                <span className="font-semibold text-gray-500 shrink-0">تاريخ الشراء:</span>
+                <span className="font-semibold text-gray-500 shrink-0">{t('printTemplate.purchaseDate')}:</span>
                 <span className="font-mono" dir="ltr">{invoiceDate} {invoiceTime}</span>
               </div>
               <div className="flex items-baseline gap-x-1.5">
-                <span className="font-semibold text-gray-500 shrink-0">فاتورة باسم:</span>
-                <span className="font-bold">د/ {partyName || 'نقدي'}</span>
+                <span className="font-semibold text-gray-500 shrink-0">{t('printTemplate.billedTo')}:</span>
+                <span className="font-bold">{t('printTemplate.doctorPrefix')} {partyName || t('printTemplate.cashCustomer')}</span>
               </div>
               {partyPhone && (
                 <div className="flex items-baseline gap-x-1.5">
-                  <span className="font-semibold text-gray-500 shrink-0">رقم الجوال:</span>
+                  <span className="font-semibold text-gray-500 shrink-0">{t('printTemplate.mobile')}:</span>
                   <span className="font-mono" style={{ direction: 'ltr', unicodeBidi: 'embed' }}>{partyPhone}</span>
                 </div>
               )}
               {partyAddress && (
                 <div className="flex items-baseline gap-x-1.5">
-                  <span className="font-semibold text-gray-500 shrink-0">العنوان:</span>
+                  <span className="font-semibold text-gray-500 shrink-0">{t('printTemplate.addressLabel')}:</span>
                   <span className="break-words">{partyAddress}</span>
                 </div>
               )}
@@ -103,10 +105,10 @@ export default function InvoicePrintTemplate({
           <table className="w-full text-right mb-4 text-[11px]">
             <thead>
               <tr className="border-b border-gray-300">
-                <th className="py-1 px-1 font-bold">الصنف</th>
-                <th className="py-1 px-1 text-center font-bold">كمية</th>
-                <th className="py-1 px-1 text-center font-bold">سعر</th>
-                <th className="py-1 px-1 text-left font-bold">إجمالي</th>
+                <th className="py-1 px-1 font-bold">{t('printTemplate.item')}</th>
+                <th className="py-1 px-1 text-center font-bold">{t('printTemplate.qty')}</th>
+                <th className="py-1 px-1 text-center font-bold">{t('printTemplate.price')}</th>
+                <th className="py-1 px-1 text-left font-bold">{t('printTemplate.total')}</th>
               </tr>
             </thead>
             <tbody>
@@ -131,17 +133,17 @@ export default function InvoicePrintTemplate({
           {/* Totals Section */}
           <div className="flex flex-col space-y-1 mb-4 text-[12px]">
             <div className="flex justify-between">
-              <span className="text-gray-600">إجمالي الأصناف:</span>
+              <span className="text-gray-600">{t('printTemplate.itemsTotal')}:</span>
               <span className="font-mono font-bold" dir="ltr">{fmt(subtotal)}</span>
             </div>
             {deliveryFee > 0 && (
               <div className="flex justify-between">
-                <span className="text-gray-600">رسوم التوصيل:</span>
+                <span className="text-gray-600">{t('printTemplate.deliveryFee')}:</span>
                 <span className="font-mono" dir="ltr">{fmt(deliveryFee)}</span>
               </div>
             )}
             <div className="flex justify-between items-center py-1 mt-1 border-t border-gray-200">
-              <span className="font-bold text-sm">الإجمالي الكلي:</span>
+              <span className="font-bold text-sm">{t('printTemplate.grandTotal')}:</span>
               <span className="font-mono font-bold text-sm" dir="ltr">EGP {fmt(total)}</span>
             </div>
 
@@ -149,11 +151,11 @@ export default function InvoicePrintTemplate({
             {previousBalance > 0 && (
               <>
                 <div className="flex justify-between items-center py-1 mt-1 border-t border-gray-200">
-                  <span className="font-bold text-xs text-gray-700">الحساب السابق:</span>
+                  <span className="font-bold text-xs text-gray-700">{t('printTemplate.previousBalance')}:</span>
                   <span className="font-mono font-bold text-xs text-gray-700" dir="ltr">EGP {fmt(previousBalance)}</span>
                 </div>
                 <div className="flex justify-between items-center py-1 mt-1 border-t border-gray-300 bg-gray-100 rounded px-1">
-                  <span className="font-bold text-sm">إجمالي الحساب:</span>
+                  <span className="font-bold text-sm">{t('printTemplate.totalAccount')}:</span>
                   <span className="font-mono font-bold text-sm" dir="ltr">EGP {fmt(totalBalanceAfter)}</span>
                 </div>
               </>
@@ -166,7 +168,7 @@ export default function InvoicePrintTemplate({
           <div className="text-center flex flex-col items-center mt-4 space-y-1 text-[11px]">
             {taxNumber && (
               <div className="bg-gray-100 px-2 py-1 rounded w-full flex justify-between">
-                <span className="text-gray-600">الرقم الضريبي:</span>
+                <span className="text-gray-600">{t('printTemplate.taxNumber')}:</span>
                 <span className="font-mono font-bold">{taxNumber}</span>
               </div>
             )}
@@ -174,7 +176,7 @@ export default function InvoicePrintTemplate({
               <p className="font-semibold text-gray-800 mt-2 whitespace-pre-wrap">{footerText}</p>
             ) : (
               <p className="text-[10px] text-gray-500 mt-4">
-                شكراً لتعاملكم معنا
+                {t('printTemplate.thankYou')}
               </p>
             )}
           </div>
@@ -205,10 +207,10 @@ export default function InvoicePrintTemplate({
           
           {/* Right: Customer Info & Invoice Number */}
           <div className="text-right">
-            <p className="text-gray-500 mb-3">رقم الفاتورة: <span className="font-mono font-semibold text-gray-800">#{invoiceNumber}</span></p>
+            <p className="text-gray-500 mb-3">{t('printTemplate.invoiceNumber')}: <span className="font-mono font-semibold text-gray-800">#{invoiceNumber}</span></p>
             <div>
-              <h3 className="font-bold text-gray-700 mb-1">بيانات العميل:</h3>
-              <p className="font-bold text-gray-800">د/ {partyName || 'نقدي'}</p>
+              <h3 className="font-bold text-gray-700 mb-1">{t('printTemplate.customerInfo')}:</h3>
+              <p className="font-bold text-gray-800">{t('printTemplate.doctorPrefix')} {partyName || t('printTemplate.cashCustomer')}</p>
               {partyPhone && <p className="font-mono text-gray-800 mt-1" dir="ltr">{partyPhone}</p>}
               {partyAddress && <p className="text-gray-800 mt-1 text-sm">{partyAddress}</p>}
             </div>
@@ -217,7 +219,7 @@ export default function InvoicePrintTemplate({
           {/* Center: Invoice Type */}
           <div className="text-center flex flex-col items-center">
             <h2 className={`${titleTextSize} font-bold text-slate-800 mb-1`}>{badgeLabel}</h2>
-            {taxNumber && <p className="text-gray-500 mt-1 text-sm">الرقم الضريبي: <span className="font-mono">{taxNumber}</span></p>}
+            {taxNumber && <p className="text-gray-500 mt-1 text-sm">{t('printTemplate.taxNumber')}: <span className="font-mono">{taxNumber}</span></p>}
           </div>
 
           {/* Left: Logo & Date */}
@@ -229,7 +231,7 @@ export default function InvoicePrintTemplate({
                 <Building2 size={iconSize} className="text-white" />
               </div>
             )}
-            <p className="text-gray-500 text-sm">التاريخ: <span className="font-mono text-gray-800">{invoiceDate}</span></p>
+            <p className="text-gray-500 text-sm">{t('invoices.history')} : <span className="font-mono text-gray-800">{invoiceDate}</span></p>
             <p className="font-mono text-gray-800 text-sm">{invoiceTime}</p>
           </div>
           
@@ -240,10 +242,10 @@ export default function InvoicePrintTemplate({
           <table className="w-full text-right">
             <thead className="bg-slate-50 border-b border-gray-200">
               <tr>
-                <th className={`py-3 px-4 font-bold text-gray-700 w-1/2 ${tableTextSize}`}>الصنف</th>
-                <th className={`py-3 px-4 text-center font-bold text-gray-700 w-1/6 ${tableTextSize}`}>الكمية</th>
-                <th className={`py-3 px-4 text-center font-bold text-gray-700 w-1/6 ${tableTextSize}`}>السعر</th>
-                <th className={`py-3 px-4 text-left font-bold text-gray-700 w-1/6 ${tableTextSize}`}>الإجمالي</th>
+                <th className={`py-3 px-4 font-bold text-gray-700 w-1/2 ${tableTextSize}`}>{t('printTemplate.item')}</th>
+                <th className={`py-3 px-4 text-center font-bold text-gray-700 w-1/6 ${tableTextSize}`}>{t('printTemplate.qty')}</th>
+                <th className={`py-3 px-4 text-center font-bold text-gray-700 w-1/6 ${tableTextSize}`}>{t('printTemplate.price')}</th>
+                <th className={`py-3 px-4 text-left font-bold text-gray-700 w-1/6 ${tableTextSize}`}>{t('printTemplate.total')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -269,17 +271,17 @@ export default function InvoicePrintTemplate({
           <div className="flex w-full">
             <div className="w-1/2 mr-auto bg-slate-50 rounded-lg p-4 border border-gray-200">
               <div className="flex justify-between mb-2">
-                <span className="text-gray-600">إجمالي الأصناف:</span>
+                <span className="text-gray-600">{t('printTemplate.itemsTotal')}:</span>
                 <span className="font-mono font-semibold" dir="ltr">{fmt(subtotal)}</span>
               </div>
               {deliveryFee > 0 && (
                 <div className="flex justify-between mb-2">
-                  <span className="text-gray-600">رسوم التوصيل:</span>
+                  <span className="text-gray-600">{t('printTemplate.deliveryFee')}:</span>
                   <span className="font-mono font-semibold" dir="ltr">{fmt(deliveryFee)}</span>
                 </div>
               )}
               <div className="flex justify-between items-center py-2 border-t border-gray-200 mt-2">
-                <span className={`font-bold ${isA5 ? 'text-lg' : 'text-xl'} text-slate-800`}>الإجمالي الكلي:</span>
+                <span className={`font-bold ${isA5 ? 'text-lg' : 'text-xl'} text-slate-800`}>{t('printTemplate.grandTotal')}:</span>
                 <span className={`font-mono font-bold ${isA5 ? 'text-lg' : 'text-xl'} text-slate-800`} dir="ltr">EGP {fmt(total)}</span>
               </div>
 
@@ -290,11 +292,11 @@ export default function InvoicePrintTemplate({
               {previousBalance > 0 && (
                 <>
                   <div className="flex justify-between items-center py-2 border-t border-gray-200 mt-2">
-                    <span className="font-bold text-gray-700">الحساب السابق:</span>
+                    <span className="font-bold text-gray-700">{t('printTemplate.previousBalance')}:</span>
                     <span className="font-mono font-bold text-gray-700" dir="ltr">EGP {fmt(previousBalance)}</span>
                   </div>
                   <div className="flex justify-between items-center py-2 border-t border-gray-200 mt-2 bg-gray-100 rounded px-2">
-                    <span className={`font-bold ${isA5 ? 'text-lg' : 'text-xl'} text-slate-900`}>إجمالي الحساب:</span>
+                    <span className={`font-bold ${isA5 ? 'text-lg' : 'text-xl'} text-slate-900`}>{t('printTemplate.totalAccount')}:</span>
                     <span className={`font-mono font-bold ${isA5 ? 'text-lg' : 'text-xl'} text-slate-900`} dir="ltr">EGP {fmt(totalBalanceAfter)}</span>
                   </div>
                 </>
@@ -308,9 +310,6 @@ export default function InvoicePrintTemplate({
                 <p className="font-semibold text-gray-700 whitespace-pre-wrap leading-relaxed">{footerText}</p>
               </div>
             )}
-            <p className={`${isA5 ? 'text-xs' : 'text-sm'} text-gray-400`}>
-              شكراً لتعاملكم معنا — هذه الوثيقة منشأة آلياً
-            </p>
           </div>
         </div>
 

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Settings as SettingsIcon, Save, Loader2, CheckCircle, FileText, Server, ImageIcon, Upload } from 'lucide-react';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { notifyError, notifySuccess } from '../utils/notify';
 
 const RAW_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 const API_BASE_URL = RAW_BASE_URL.replace(/\/+$/, '');
@@ -63,8 +64,9 @@ export default function SettingsView() {
         default_footer_text: updated.default_footer_text || updated.print_notes || null,
       });
       setShowSaved(true);
+      notifySuccess('Settings saved successfully');
       setTimeout(() => setShowSaved(false), 2500);
-    } catch (err) { alert(err?.message || 'Error'); }
+    } catch (err) { notifyError(err); }
     finally { setSaving(false); }
   }
 
@@ -80,6 +82,7 @@ export default function SettingsView() {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,
       });
+
       if (!res.ok) {
         const error = await res.json().catch(() => ({}));
         throw new Error(error.detail || 'Upload failed');
@@ -90,8 +93,9 @@ export default function SettingsView() {
       updateTenantContext({ logo_url: updatedTenant.logo_url });
       
       setShowSaved(true);
+      notifySuccess('Logo uploaded successfully');
       setTimeout(() => setShowSaved(false), 2500);
-    } catch (err) { alert(err?.message || 'Error'); }
+    } catch (err) { notifyError(err); }
     finally { setSavingLogo(false); }
   }
 
