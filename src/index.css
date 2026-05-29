@@ -1,4 +1,5 @@
 @import url('https://api.fontshare.com/v2/css?f[]=satoshi@900,700,500,300,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
@@ -65,6 +66,7 @@
 
   /* ── Typography (Satoshi + JetBrains Mono) ── */
   --font-sans: "Satoshi", system-ui, -apple-system, sans-serif;
+  --font-sans-ar: "Cairo", system-ui, -apple-system, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 }
 
@@ -139,6 +141,15 @@
     margin: 0;
     line-height: 1.6;
     color: var(--color-charcoal-ink);
+  }
+
+  html[dir="rtl"] body {
+    font-family: var(--font-sans-ar);
+    letter-spacing: 0;
+  }
+
+  html[dir="rtl"] .text-label-sm {
+    letter-spacing: 0;
   }
 
   ::selection {
