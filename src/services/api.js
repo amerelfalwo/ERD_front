@@ -110,7 +110,7 @@ export const api = {
     return request(`/invoices?${params.toString()}`);
   },
   createPurchaseInvoice: (data) => request('/invoices/purchase', { method: 'POST', body: JSON.stringify(data) }),
-  createSaleInvoice: (data) => request('/invoices/sale', { method: 'POST', body: JSON.stringify(data) }),
+  createSaleInvoice: (data) => request('/invoices/sell', { method: 'POST', body: JSON.stringify(data) }),
   getInvoice: (invoiceId) => request(`/invoices/${invoiceId}`),
   updateInvoice: (invoiceId, data) => request(`/invoices/${invoiceId}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteInvoice: (invoiceId) => request(`/invoices/${invoiceId}`, { method: 'DELETE' }),

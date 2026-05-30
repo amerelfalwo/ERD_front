@@ -182,9 +182,9 @@
       "unpaid": "Unpaid"
     },
     "typeLabels": {
-      "sale": "Sale",
+      "sale": "Sell",
       "purchase": "Purchase",
-      "sale_return": "Sale Return",
+      "sale_return": "Sell Return",
       "purchase_return": "Purchase Return",
       "supplier_return": "Supplier Return"
     },

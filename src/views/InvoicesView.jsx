@@ -118,6 +118,8 @@ export default function InvoicesView() {
   const [historyPage, setHistoryPage] = useState(1);
   const [historyPageSize, setHistoryPageSize] = useState(20);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyTypeFilter, setHistoryTypeFilter] = useState('all');
+  const [historyStatusFilter, setHistoryStatusFilter] = useState('all');
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [bulkInvoicesToPrint, setBulkInvoicesToPrint] = useState([]);
   const [editingInvoice, setEditingInvoice] = useState(null);
@@ -130,6 +132,8 @@ export default function InvoicesView() {
   const [newPartyPhone, setNewPartyPhone] = useState('');
   const [newPartyAddress, setNewPartyAddress] = useState('');
   const [hasDelivery, setHasDelivery] = useState(false);
+  const [supplierProducts, setSupplierProducts] = useState([]);
+  const [supplierStockMap, setSupplierStockMap] = useState({});
 
   const tenantName = user?.tenant?.company_name || 'ERP Dashboard';
   const defaultFooterText = user?.tenant?.default_footer_text || user?.tenant?.print_notes || null;
@@ -141,7 +145,11 @@ export default function InvoicesView() {
     setHistoryLoading(true);
     try {
       const skip = (page - 1) * pageSize;
-      const response = await api.getInvoices({ skip, limit: pageSize, partyId: selectedParty || undefined });
+      const response = await api.getInvoices({
+        skip,
+        limit: pageSize,
+        invoiceType: historyTypeFilter !== 'all' ? historyTypeFilter : undefined,
+      });
       const list = Array.isArray(response) ? response : (response?.data || response?.items || []);
       const total = Array.isArray(response) ? list.length : Number(response?.total ?? list.length);
       setInvoiceHistory(list);
@@ -153,7 +161,7 @@ export default function InvoicesView() {
     } finally {
       setHistoryLoading(false);
     }
-  }, [historyPage, historyPageSize, selectedParty]);
+  }, [historyPage, historyPageSize, historyTypeFilter]);
 
   async function handleDeleteInvoice(invoiceId) {
     try {
@@ -173,6 +181,33 @@ export default function InvoicesView() {
   }, []);
 
   useEffect(() => {
+    if (invoiceType !== 'supplier_return' || !selectedParty) {
+      setSupplierProducts([]);
+      setSupplierStockMap({});
+      return;
+    }
+    let canceled = false;
+    api.getSupplierSummary(selectedParty)
+      .then((res) => {
+        if (canceled) return;
+        const list = Array.isArray(res?.products) ? res.products : [];
+        setSupplierProducts(list);
+        const map = {};
+        list.forEach((p) => {
+          map[p.id] = Number(p.supplier_stock ?? p.remaining_stock ?? 0);
+        });
+        setSupplierStockMap(map);
+      })
+      .catch(() => {
+        if (!canceled) {
+          setSupplierProducts([]);
+          setSupplierStockMap({});
+        }
+      });
+    return () => { canceled = true; };
+  }, [invoiceType, selectedParty]);
+
+  useEffect(() => {
     if (activeTab === 'history') {
       loadHistory(historyPage, historyPageSize);
     }
@@ -185,7 +220,8 @@ export default function InvoicesView() {
       setAutoFetchedCost(null);
       return;
     }
-    const prod = products.find(p => String(p.id) === String(selectedProduct));
+    const prod = (invoiceType === 'supplier_return' ? supplierProducts : products)
+      .find(p => String(p.id) === String(selectedProduct));
     if (!prod) return;
     if (invoiceType === 'purchase' || invoiceType === 'supplier_return') {
       if (prod.last_purchase_price) setPurchasePrice(prod.last_purchase_price);
@@ -195,7 +231,7 @@ export default function InvoicesView() {
       const sell = prod.current_selling_price;
       if (sell != null && !salePrice) setSalePrice(String(sell));
     }
-  }, [selectedProduct, products, invoiceType]);
+  }, [selectedProduct, products, supplierProducts, invoiceType]);
 
   const selectedAvailableStock = useMemo(() => {
     if (invoiceType !== 'sale' || !selectedProduct) return null;
@@ -204,12 +240,19 @@ export default function InvoicesView() {
     return stockProd.batches?.reduce((s, b) => s + Number(b.remaining_quantity || 0), 0) ?? null;
   }, [invoiceType, selectedProduct, inventory]);
 
+  const selectedSupplierStock = useMemo(() => {
+    if (invoiceType !== 'supplier_return' || !selectedProduct) return null;
+    const stock = supplierStockMap[String(selectedProduct)] ?? supplierStockMap[Number(selectedProduct)];
+    return stock != null ? Number(stock) : null;
+  }, [invoiceType, selectedProduct, supplierStockMap]);
+
   const addItem = useCallback(() => {
     if (!selectedProduct) return;
     const qty = parseInt(itemQuantity) || 1;
 
-    // Block adding when stock is exhausted for sale invoices
+    // Block adding when stock is exhausted for sale or supplier returns
     if (invoiceType === 'sale' && selectedAvailableStock != null && selectedAvailableStock <= 0 && !editingItemId) return;
+    if (invoiceType === 'supplier_return' && selectedSupplierStock != null && selectedSupplierStock <= 0 && !editingItemId) return;
 
     if (editingItemId) {
       const updates = { quantity: qty };
@@ -438,14 +481,21 @@ export default function InvoicesView() {
   const remainingBalance = useMemo(() => Math.max(0, totalAmount - (parseFloat(amountPaid) || 0)), [totalAmount, amountPaid]);
 
   const filteredInvoiceHistory = useMemo(() => {
-    if (!historySearch) return invoiceHistory;
+    let list = invoiceHistory;
+    if (historyStatusFilter !== 'all') {
+      list = list.filter(inv => String(inv.status).toLowerCase() === historyStatusFilter);
+    }
+    if (historyTypeFilter !== 'all') {
+      list = list.filter(inv => String(inv.invoice_type || '').toLowerCase() === historyTypeFilter);
+    }
+    if (!historySearch) return list;
     const s = historySearch.toLowerCase();
-    return invoiceHistory.filter(inv => (
+    return list.filter(inv => (
       String(inv.id).includes(s)
       || inv.invoice_type.replace('_', ' ').toLowerCase().includes(s)
       || inv.status.toLowerCase().includes(s)
     ));
-  }, [invoiceHistory, historySearch]);
+  }, [invoiceHistory, historySearch, historyStatusFilter, historyTypeFilter]);
 
   const historyTotalPages = Math.max(1, Math.ceil(historyTotal / historyPageSize));
 
@@ -588,7 +638,8 @@ export default function InvoicesView() {
                       onChange={(e) => {
                         setProductSearch(e.target.value);
                         setShowProductDropdown(true);
-                        const exact = products.find(p => p.name.toLowerCase() === e.target.value.toLowerCase());
+                        const pool = invoiceType === 'supplier_return' ? supplierProducts : products;
+                        const exact = pool.find(p => p.name.toLowerCase() === e.target.value.toLowerCase());
                         setSelectedProduct(exact ? exact.id : '');
                       }}
                       onFocus={() => setShowProductDropdown(true)}
@@ -598,12 +649,13 @@ export default function InvoicesView() {
                     />
                     {showProductDropdown && (
                       <div className="absolute top-full mt-1 left-0 w-full bg-surface-container-lowest border border-outline-variant/60 rounded-xl shadow-lg z-50 max-h-48 overflow-y-auto">
-                        {products
+                        {(invoiceType === 'supplier_return' ? supplierProducts : products)
                           .filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase()))
                           .filter(p => editingItemId === p.id || !items.some(i => i.product_id === p.id))
                           .map(p => {
                             const stock = inventory?.products?.find(ip => String(ip.product_id) === String(p.id));
                             const stockQty = stock ? stock.batches?.reduce((s, b) => s + Number(b.remaining_quantity || 0), 0) : null;
+                            const supplierQty = supplierStockMap[p.id] != null ? Number(supplierStockMap[p.id]) : null;
                             return (
                               <div 
                                 key={p.id} 
@@ -620,10 +672,15 @@ export default function InvoicesView() {
                                     Stock: {stockQty}
                                   </span>
                                 )}
+                                {invoiceType === 'supplier_return' && supplierQty != null && (
+                                  <span className={`text-[10px] font-mono-tabular px-1.5 py-0.5 rounded-md ${supplierQty > 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>
+                                    Supplier Stock: {supplierQty}
+                                  </span>
+                                )}
                               </div>
                             );
                           })}
-                        {productSearch && !products.some(p => p.name.toLowerCase() === productSearch.toLowerCase()) && invoiceType === 'purchase' && (
+                        {productSearch && !(invoiceType === 'supplier_return' ? supplierProducts : products).some(p => p.name.toLowerCase() === productSearch.toLowerCase()) && invoiceType === 'purchase' && (
                           <div 
                             className="px-4 py-2 text-accent hover:bg-accent-surface cursor-pointer flex items-center gap-2 text-sm border-t border-outline-variant/30"
                             onClick={handleCreateNewProduct}
@@ -632,7 +689,7 @@ export default function InvoicesView() {
                             Add new product: "{productSearch}"
                           </div>
                         )}
-                        {!productSearch && products.filter(p => editingItemId === p.id || !items.some(i => i.product_id === p.id)).length === 0 && (
+                        {!productSearch && (invoiceType === 'supplier_return' ? supplierProducts : products).filter(p => editingItemId === p.id || !items.some(i => i.product_id === p.id)).length === 0 && (
                           <div className="px-4 py-2 text-muted-steel text-sm">No products available</div>
                         )}
                       </div>
@@ -684,6 +741,13 @@ export default function InvoicesView() {
                             return;
                           }
                         }
+                        if (invoiceType === 'supplier_return' && selectedProduct) {
+                          const avail = selectedSupplierStock;
+                          if (avail != null && parseInt(val) > avail) {
+                            setItemQuantity(String(avail));
+                            return;
+                          }
+                        }
                         setItemQuantity(val);
                       }}
                       placeholder="1"
@@ -700,9 +764,14 @@ export default function InvoicesView() {
                       );
                       return null;
                     })()}
+                    {invoiceType === 'supplier_return' && selectedSupplierStock != null && (
+                      <span className={`text-[10px] font-mono-tabular px-1 ${selectedSupplierStock > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                        Available: {selectedSupplierStock}
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-1">
-                    <button onClick={addItem} disabled={!selectedProduct || (invoiceType === 'sale' && selectedAvailableStock != null && selectedAvailableStock <= 0 && !editingItemId)}
+                    <button onClick={addItem} disabled={!selectedProduct || (invoiceType === 'sale' && selectedAvailableStock != null && selectedAvailableStock <= 0 && !editingItemId) || (invoiceType === 'supplier_return' && selectedSupplierStock != null && selectedSupplierStock <= 0 && !editingItemId)}
                       className={`px-4 py-2 rounded-xl text-on-primary text-label-md shadow-sm transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer btn-tactile ${
                         editingItemId ? 'bg-amber-500 hover:bg-amber-600' : 'bg-accent hover:bg-accent-hover'
                       }`}>
@@ -865,7 +934,51 @@ export default function InvoicesView() {
         <div className="max-w-7xl mx-auto space-y-6 px-6">
           <div className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl shadow-whisper animate-fade-in-up">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between p-6 border-b border-outline-variant/30 gap-4">
-              <h3 className="text-h3 text-charcoal-ink">Previous Invoices</h3>
+              <div className="flex flex-col gap-3">
+                <h3 className="text-h3 text-charcoal-ink">Previous Invoices</h3>
+                <div className="flex flex-wrap items-center gap-2">
+                  {[
+                    { key: 'all', label: t('common.all') },
+                    { key: 'sale', label: t('invoices.typeLabels.sale') },
+                    { key: 'purchase', label: t('invoices.typeLabels.purchase') },
+                    { key: 'sell_return', label: t('invoices.typeLabels.sale_return') },
+                    { key: 'purchase_return', label: t('invoices.typeLabels.purchase_return') },
+                    { key: 'supplier_return', label: t('invoices.typeLabels.supplier_return') },
+                  ].map((f) => (
+                    <button
+                      key={f.key}
+                      onClick={() => { setHistoryTypeFilter(f.key); setHistoryPage(1); }}
+                      className={`px-3 py-1.5 rounded-xl text-label-sm border transition-all cursor-pointer btn-tactile ${
+                        historyTypeFilter === f.key
+                          ? 'bg-accent text-on-primary border-accent'
+                          : 'border-outline-variant/60 text-muted-steel hover:bg-surface-container-low'
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {[
+                    { key: 'all', label: t('common.all') },
+                    { key: 'paid', label: t('invoices.status.paid') },
+                    { key: 'partial', label: t('invoices.status.partial') },
+                    { key: 'unpaid', label: t('invoices.status.unpaid') },
+                  ].map((f) => (
+                    <button
+                      key={f.key}
+                      onClick={() => { setHistoryStatusFilter(f.key); setHistoryPage(1); }}
+                      className={`px-3 py-1.5 rounded-xl text-label-sm border transition-all cursor-pointer btn-tactile ${
+                        historyStatusFilter === f.key
+                          ? 'bg-charcoal-ink text-white border-charcoal-ink'
+                          : 'border-outline-variant/60 text-muted-steel hover:bg-surface-container-low'
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div className="flex items-center gap-3">
                 <div className="relative">
                   <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-steel" />
@@ -952,7 +1065,7 @@ export default function InvoicesView() {
                 Loading invoices...
               </div>
             )}
-            {!historyLoading && invoiceHistory.length === 0 && (
+            {!historyLoading && filteredInvoiceHistory.length === 0 && (
               <div className="p-8 text-center text-muted-steel">
                 No invoices found.
               </div>
