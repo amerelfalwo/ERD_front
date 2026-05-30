@@ -35,7 +35,7 @@ export function useProducts() {
   const getCostFor = useCallback(
     (productId) => {
       const p = products.find((x) => x.id === productId);
-      return p ? (p.current_cost ?? null) : null;
+      return p ? (p.purchase_price ?? null) : null;
     },
     [products]
   );
@@ -43,7 +43,7 @@ export function useProducts() {
   const getSellingPriceFor = useCallback(
     (productId) => {
       const p = products.find((x) => x.id === productId);
-      return p ? (p.current_selling_price ?? null) : null;
+      return p ? (p.sell_price ?? null) : null;
     },
     [products]
   );

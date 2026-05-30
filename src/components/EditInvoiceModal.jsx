@@ -90,9 +90,9 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
       const productBatches = batches[batch.product_id] || [];
       const highestBatch = productBatches.reduce((acc, b) => {
         if (!acc) return b;
-        return Number(b.current_selling_price) > Number(acc.current_selling_price) ? b : acc;
+        return Number(b.selling_price) > Number(acc.selling_price) ? b : acc;
       }, null);
-      const latestPrice = highestBatch?.current_selling_price ?? batch.current_selling_price ?? batch.purchase_price ?? '';
+      const latestPrice = highestBatch?.selling_price ?? batch.selling_price ?? batch.purchase_price ?? '';
       updateItem(idx, 'unit_price', String(latestPrice));
     }
   }

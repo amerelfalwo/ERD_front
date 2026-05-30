@@ -149,7 +149,7 @@ function BatchRow({ batch }) {
       <span className="font-mono-tabular">#{batch.id}</span>
       <span className="truncate">{batch.supplier_name || '—'}</span>
       <span className="font-mono-tabular">{Number(batch.purchase_price).toLocaleString()}</span>
-      <span className="font-mono-tabular">{Number(batch.current_selling_price).toLocaleString()}</span>
+      <span className="font-mono-tabular">{Number(batch.selling_price).toLocaleString()}</span>
       <span className="font-mono-tabular">{Number(batch.remaining_quantity).toLocaleString()}</span>
     </div>
   );
@@ -162,8 +162,8 @@ function ProductRow({ product, inventoryProduct, onDelete, onEdit }) {
 
   const totalQty = inventoryProduct?.batches?.reduce((sum, b) => sum + parseFloat(b.remaining_quantity || 0), 0) || 0;
   
-  const displayPurchasePrice = product.current_cost ?? product.purchase_price ?? 0;
-  const displaySellPrice = product.current_selling_price ?? product.sell_price ?? 0;
+  const displayPurchasePrice = product.purchase_price ?? product.last_purchase_price ?? 0;
+  const displaySellPrice = product.sell_price ?? 0;
 
   async function toggleExpand() {
     if (!expanded && batches.length === 0) {

@@ -16,11 +16,21 @@ import { useTranslation } from 'react-i18next';
 import html2pdf from 'html2pdf.js';
 
 
-function InvoiceItemRow({ item, products, invoiceType, onQuantityChange, onRemove, onEdit, maxStock }) {
+function InvoiceItemRow({ item, products, invoiceType, onQuantityChange, onRemove, onEdit, maxStock, inventory }) {
   const { t } = useTranslation();
   const product = products.find((p) => p.id === item.product_id);
   const displayName = item.product_name || product?.name || `#${item.product_id ?? item.batch_id}`;
-  const unitPrice = invoiceType === 'sale' ? Number(item.sale_price || 0) : Number(item.purchase_price || 0);
+
+  const getSalePrice = () => {
+    if (item.sale_price != null) return item.sale_price;
+    const invProd = inventory?.products?.find(p => String(p.product_id) === String(item.product_id));
+    const best = invProd?.batches?.filter(b => Number(b.remaining_quantity) > 0)
+      .reduce((acc, b) => (!acc || Number(b.selling_price) > Number(acc.selling_price) ? b : acc), null)
+      ?? invProd?.batches?.reduce((acc, b) => (!acc || Number(b.selling_price) > Number(acc.selling_price) ? b : acc), null);
+    return best?.selling_price || 0;
+  };
+
+  const unitPrice = invoiceType === 'sale' ? Number(getSalePrice()) : Number(item.purchase_price || 0);
   const lineTotal = unitPrice * Number(item.quantity);
 
   const handleQtyInput = (e) => {
@@ -170,7 +180,7 @@ export default function InvoicesView() {
       loadHistory(historyPage, historyPageSize);
       api.getInventoryReport().then(setInventory);
     } catch (err) {
-      notifications.show({ title: 'Error', message: err.response?.data?.detail || 'Failed to delete invoice', color: 'red' });
+      notifications.show({ title: 'Error', message: err.message || 'Failed to delete invoice', color: 'red' });
     }
   }
 
@@ -226,9 +236,9 @@ export default function InvoicesView() {
     if (invoiceType === 'purchase' || invoiceType === 'supplier_return') {
       if (prod.last_purchase_price) setPurchasePrice(prod.last_purchase_price);
     } else if (invoiceType === 'sale') {
-      const cost = prod.current_cost != null ? prod.current_cost : prod.last_purchase_price;
+      const cost = prod.purchase_price != null ? prod.purchase_price : prod.last_purchase_price;
       setAutoFetchedCost(cost != null ? Number(cost) : null);
-      const sell = prod.current_selling_price;
+      const sell = prod.sell_price;
       if (sell != null && !salePrice) setSalePrice(String(sell));
     }
   }, [selectedProduct, products, supplierProducts, invoiceType]);
@@ -261,7 +271,8 @@ export default function InvoicesView() {
         if (invoiceType === 'purchase') updates.selling_price = parseFloat(sellingPrice) || 0;
       }
       if (invoiceType === 'sale') {
-        updates.sale_price = parseFloat(salePrice) || undefined;
+        const parsedSalePrice = parseFloat(salePrice);
+        updates.sale_price = !isNaN(parsedSalePrice) ? parsedSalePrice : undefined;
         updates.purchase_price = autoFetchedCost != null ? autoFetchedCost : undefined;
       }
       updateItem(editingItemId, updates);
@@ -273,7 +284,8 @@ export default function InvoicesView() {
         if (invoiceType === 'purchase') newItem.selling_price = parseFloat(sellingPrice) || 0;
       }
       if (invoiceType === 'sale') {
-        newItem.sale_price = parseFloat(salePrice) || undefined;
+        const parsedSalePrice = parseFloat(salePrice);
+        newItem.sale_price = !isNaN(parsedSalePrice) ? parsedSalePrice : undefined;
         newItem.purchase_price = autoFetchedCost != null ? autoFetchedCost : undefined;
       }
       storeAddItem(newItem);
@@ -370,7 +382,7 @@ export default function InvoicesView() {
           return {
             product_id: i.product_id,
             quantity: i.quantity,
-            ...(i.sale_price != null ? { sale_price: i.sale_price } : {}),
+            ...(i.sale_price != null ? { sell_price: i.sale_price } : {}),
             ...(i.purchase_price != null ? { purchase_price: i.purchase_price } : {}),
           };
         }),
@@ -798,7 +810,7 @@ export default function InvoicesView() {
                       items.map((item) => {
                         const stockProd = inventory?.products?.find(ip => String(ip.product_id) === String(item.product_id));
                         const maxStock = invoiceType === 'sale' && stockProd ? stockProd.batches?.reduce((s, b) => s + Number(b.remaining_quantity || 0), 0) : undefined;
-                        return <InvoiceItemRow key={item.product_id} item={item} products={products} invoiceType={invoiceType} onQuantityChange={updateQuantity} onRemove={removeItem} onEdit={handleEditItem} maxStock={maxStock} />;
+                        return <InvoiceItemRow key={item.product_id} item={item} products={products} invoiceType={invoiceType} onQuantityChange={updateQuantity} onRemove={removeItem} onEdit={handleEditItem} maxStock={maxStock} inventory={inventory} />;
                       })
                     ) : (
                       <div className="flex flex-col items-center justify-center py-10 text-muted-steel">
@@ -1330,7 +1342,7 @@ export default function InvoicesView() {
         <ReturnInvoiceModal
           invoice={invoiceToReturn}
           onClose={() => setInvoiceToReturn(null)}
-          onSuccess={() => {
+          onSaved={() => {
             setInvoiceToReturn(null);
             loadHistory(historyPage, historyPageSize);
             api.getInventoryReport().then(setInventory);

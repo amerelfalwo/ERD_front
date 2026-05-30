@@ -40,6 +40,9 @@ async function request(endpoint, options = {}) {
     console.error('API error', { status: response.status, message });
     throw new Error(message);
   }
+  if (response.status === 204) {
+    return null;
+  }
   return response.json();
 }
 
