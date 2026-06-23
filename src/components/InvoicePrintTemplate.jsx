@@ -1,16 +1,9 @@
 import { Building2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { getLogoUrl } from '../utils/url';
 
 const fmt = (n, digits = 2) =>
   Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
-
-const RAW_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/+$/, '');
-
-function resolveLogoUrl(url) {
-  if (!url) return null;
-  if (url.startsWith('http://') || url.startsWith('https://')) return url;
-  return `${RAW_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
-}
 
 export default function InvoicePrintTemplate({
   invoice,
@@ -41,7 +34,7 @@ export default function InvoicePrintTemplate({
   const previousBalance = Number(invoice.previous_balance || 0);
   const totalBalanceAfter = Number(invoice.total_balance_after ?? (balance + previousBalance));
   const footerText    = invoice.footer_custom_text || defaultFooterText || null;
-  const resolvedLogo  = resolveLogoUrl(logoUrl);
+  const resolvedLogo  = getLogoUrl(logoUrl);
 
   const badgeLabel = isReturn ? t('printTemplate.returnNotice') : isSale ? t('printTemplate.saleInvoice') : t('printTemplate.purchaseInvoice');
 

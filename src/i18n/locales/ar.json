@@ -8,7 +8,8 @@
     "settings": "الإعدادات",
     "logout": "تسجيل الخروج",
     "english": "English",
-    "arabic": "عربي"
+    "arabic": "عربي",
+    "notifications": "الإشعارات"
   },
   "common": {
     "currency": "ج.م",
@@ -28,6 +29,12 @@
     "validationError": "خطأ في التحقق",
     "success": "تم بنجاح",
     "unknown": "غير معروف",
+    "markAllAsRead": "تحديد الكل كمقروء",
+    "viewAllNotifications": "عرض كل الإشعارات",
+    "noNewNotifications": "لا توجد إشعارات جديدة",
+    "welcomeMessage": "مرحباً بك في النظام",
+    "systemReady": "نظام إدارة الموارد جاهز للاستخدام.",
+    "now": "الآن",
     "noData": "لا توجد بيانات",
     "actions": "الإجراءات",
     "status": "الحالة",
@@ -42,7 +49,13 @@
     "all": "الكل",
     "update": "تحديث",
     "print": "طباعة",
-    "download": "تحميل"
+    "download": "تحميل",
+    "currencyEGP": "ج.م",
+    "rowsPerPage": "الصفوف لكل صفحة",
+    "of": "من",
+    "page": "صفحة",
+    "previous": "السابق",
+    "next": "التالي"
   },
   "dashboard": {
     "title": "التقارير والتحليلات",
@@ -204,7 +217,15 @@
     "hasDelivery": "يوجد توصيل ✓",
     "addDelivery": "إضافة توصيل",
     "deliveryFee": "سعر التوصيل",
-    "estProfit": "الربح المقدر"
+    "estProfit": "الربح المقدر",
+    "price": "السعر",
+    "fetchHistoryError": "فشل تحميل سجل الفواتير",
+    "deleteInvoiceError": "فشل حذف الفاتورة",
+    "loadInitialDataError": "فشل تحميل البيانات الأولية",
+    "loadSupplierDataError": "فشل تحميل بيانات المورد",
+    "createProductError": "خطأ في إنشاء المنتج",
+    "createPartyError": "خطأ في إنشاء الطرف",
+    "returnInvoice": "استرجاع الفاتورة"
   },
   "customers": {
     "title": "العملاء",
@@ -214,7 +235,7 @@
     "customerName": "اسم العميل",
     "enterCustomerName": "أدخل اسم العميل",
     "phone": "رقم الهاتف",
-    "phonePlaceholder": "رقم الهاتف",
+    "phonePlaceholder": "01000000000",
     "initialBalance": "الرصيد الافتتاحي",
     "saveChanges": "حفظ التغييرات",
     "createCustomer": "إنشاء عميل",
@@ -544,5 +565,36 @@
     "recordPayment": "تسجيل الدفعة",
     "cancel": "إلغاء",
     "save": "حفظ"
+  },
+  "settings": {
+    "title": "الإعدادات",
+    "description": "قم بتهيئة معلومات متجرك وتفضيلاتك.",
+    "save": "حفظ الإعدادات",
+    "saved": "تم الحفظ!",
+    "storeInfo": "معلومات المتجر",
+    "storeName": "اسم المتجر",
+    "storeNamePlaceholder": "اسم متجرك",
+    "phone": "رقم الهاتف",
+    "phonePlaceholder": "رقم الهاتف",
+    "address": "العنوان",
+    "addressPlaceholder": "عنوان المتجر",
+    "taxNumber": "الرقم الضريبي",
+    "taxNumberPlaceholder": "رقم التسجيل الضريبي",
+    "brandIdentity": "هوية العلامة التجارية",
+    "uploadLogoDesc": "قم برفع شعارك ليظهر على الفواتير والمستندات.",
+    "noLogo": "لا يوجد شعار",
+    "uploadLogo": "رفع الشعار",
+    "logoHint": "صيغة PNG أو JPG، بحد أقصى 5 ميجابايت.",
+    "printNotes": "ملاحظات الطباعة",
+    "defaultInvoiceFooter": "تذييل الفاتورة الافتراضي",
+    "defaultInvoiceFooterPlaceholder": "الملاحظات المعروضة على الفواتير المطبوعة...",
+    "system": "النظام",
+    "version": "الإصدار",
+    "backend": "الخلفية",
+    "database": "قاعدة البيانات",
+    "saveSuccess": "تم حفظ الإعدادات بنجاح",
+    "saveFailed": "فشل الحفظ",
+    "uploadSuccess": "تم رفع الشعار بنجاح",
+    "uploadFailed": "فشل الرفع"
   }
 }

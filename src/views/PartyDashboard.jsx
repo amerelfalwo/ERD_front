@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -48,13 +48,13 @@ export default function PartyDashboard() {
   const [paymentToDelete, setPaymentToDelete] = useState(null);
   const [productToReturn, setProductToReturn] = useState(null);
 
-  function toggleRow(id) {
+  const toggleRow = useCallback((id) => {
     setExpandedRows(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
-  }
+  }, []);
 
   const { user } = useAuth();
   const tenantName = user?.tenant?.company_name || 'ERP Dashboard';
@@ -64,7 +64,7 @@ export default function PartyDashboard() {
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const invoicePrintRef = useRef(null);
 
-  const loadSummary = () => {
+  const loadSummary = useCallback(() => {
     setLoading(true);
     const fetchFn = isCustomer ? api.getCustomerSummary : api.getSupplierSummary;
     fetchFn(partyId)
@@ -75,31 +75,34 @@ export default function PartyDashboard() {
       })
       .catch((err) => {
         console.error("Dashboard Load Error:", err);
+        notifications.show({ title: 'Error', message: err?.message || 'Failed to load dashboard data.', color: 'red' });
         // navigate(backPath);
       })
       .finally(() => setLoading(false));
-  };
+  }, [partyId, isCustomer]);
 
 
   useEffect(() => {
     loadSummary();
-  }, [partyId, navigate]);
+  }, [loadSummary]);
 
-  async function handleRecordPayment() {
+  const handleRecordPayment = useCallback(async () => {
     setPaymentError('');
     const amt = Number(paymentAmount);
     if (!amt || amt <= 0) {
       setPaymentError('Enter a valid amount.');
       return;
     }
-    if (amt > summary.financials.balance) {
+    const balance = Number(summary?.financials?.balance || 0);
+    if (amt > Math.abs(balance)) {
       setPaymentError('Amount cannot exceed outstanding balance.');
       return;
     }
     setPaymentSubmitting(true);
     try {
       const payFn = isCustomer ? api.createCustomerPayment : api.createSupplierPayment;
-      await payFn(partyId, { amount_paid: amt });
+      const amount_paid = balance < 0 ? -amt : amt;
+      await payFn(partyId, { amount_paid });
       setToastMessage(t('partyDashboard.paymentRecorded'));
       setTimeout(() => setToastMessage(''), 3000);
       setIsPaymentModalOpen(false);
@@ -110,9 +113,9 @@ export default function PartyDashboard() {
     } finally {
       setPaymentSubmitting(false);
     }
-  }
+  }, [paymentAmount, summary?.financials?.balance, isCustomer, partyId, t, loadSummary]);
 
-  async function handleUpdatePayment(paymentId) {
+  const handleUpdatePayment = useCallback(async (paymentId) => {
     const amt = Number(editPaymentAmount);
     if (!amt || amt <= 0) return;
     setPaymentActionLoading(paymentId);
@@ -125,13 +128,13 @@ export default function PartyDashboard() {
       setTimeout(() => setToastMessage(''), 3000);
       loadSummary();
     } catch (err) {
-      notifications.show({ title: 'Error', message: err.response?.data?.detail || 'Failed to update payment.', color: 'red' });
+      notifications.show({ title: 'Error', message: err?.message || 'Failed to update payment.', color: 'red' });
     } finally {
       setPaymentActionLoading(null);
     }
-  }
+  }, [editPaymentAmount, isCustomer, partyId, t, loadSummary]);
 
-  async function handleDeletePayment(paymentId) {
+  const handleDeletePayment = useCallback(async (paymentId) => {
     setPaymentActionLoading(paymentId);
     try {
       const deleteFn = isCustomer ? api.deleteCustomerPayment : api.deleteSupplierPayment;
@@ -141,51 +144,51 @@ export default function PartyDashboard() {
       setTimeout(() => setToastMessage(''), 3000);
       loadSummary();
     } catch (err) {
-      notifications.show({ title: 'Error', message: err.response?.data?.detail || 'Failed to delete payment.', color: 'red' });
+      notifications.show({ title: 'Error', message: err?.message || 'Failed to delete payment.', color: 'red' });
     } finally {
       setPaymentActionLoading(null);
     }
-  }
+  }, [isCustomer, partyId, t, loadSummary]);
 
 
 
-  async function handleDeleteInvoice(invoiceId) {
+  const handleDeleteInvoice = useCallback(async (invoiceId) => {
     try {
       await api.deleteInvoice(invoiceId);
       setInvoiceToDelete(null);
       loadSummary();
     } catch (err) {
-      notifications.show({ title: 'Error', message: err.response?.data?.detail || 'Failed to delete invoice', color: 'red' });
+      notifications.show({ title: 'Error', message: err?.message || 'Failed to delete invoice', color: 'red' });
     }
-  }
+  }, [loadSummary]);
 
-  function toggleSelect(id) {
+  const toggleSelect = useCallback((id) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
-  }
+  }, []);
 
-  function handleBulkPrint() {
+  const handleBulkPrint = useCallback(() => {
     if (!summary) return;
     const selected = summary.invoices.filter(inv => selectedIds.has(inv.id));
     if (selected.length === 0) return;
     setBulkInvoicesToPrint(selected);
-  }
+  }, [summary, selectedIds]);
 
-  function handleClosePrint() {
+  const handleClosePrint = useCallback(() => {
     setInvoiceToPrint(null);
     setBulkInvoicesToPrint([]);
-  }
+  }, []);
 
-  function handleConfirmPrint() {
+  const handleConfirmPrint = useCallback(() => {
     document.body.classList.add('printing');
     setTimeout(() => {
       window.print();
       document.body.classList.remove('printing');
     }, 100);
-  }
+  }, []);
 
   if (loading) {
     return (
@@ -212,9 +215,9 @@ export default function PartyDashboard() {
 
   const { party, financials, invoices, products } = summary;
 
-  const fmt = (n) => `EGP ${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
-  const balance = Number(financials.balance || 0);
-  const totalBeforePayments = Number(financials.initial_balance || 0) + Number(financials.total_purchases || 0) - Number(financials.total_returns || 0);
+  const fmt = useCallback((n) => `EGP ${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`, []);
+  const balance = useMemo(() => Number(financials.balance || 0), [financials.balance]);
+  const totalBeforePayments = useMemo(() => Number(financials.initial_balance || 0) + Number(financials.total_purchases || 0) - Number(financials.total_returns || 0), [financials.initial_balance, financials.total_purchases, financials.total_returns]);
 
   return (
     <>
@@ -772,8 +775,12 @@ export default function PartyDashboard() {
               
               <div className="mb-6 space-y-4">
                 <div className="bg-surface-container-low p-4 rounded-xl border border-outline-variant/30 flex justify-between items-center">
-                  <span className="text-label-sm text-muted-steel">{t('partyDashboard.outstandingBalance')}:</span>
-                  <span className="text-label-md text-error font-mono-tabular">{t('common.currency')} {Number(financials.balance).toLocaleString()}</span>
+                  <span className="text-label-sm text-muted-steel">
+                    {financials.balance < 0 ? t('partyDashboard.weOweThem') : t('partyDashboard.outstandingBalance')}:
+                  </span>
+                  <span className={`text-label-md font-mono-tabular ${financials.balance < 0 ? 'text-accent' : 'text-error'}`}>
+                    {t('common.currency')} {Math.abs(Number(financials.balance)).toLocaleString()}
+                  </span>
                 </div>
                 
                 <div>
@@ -782,7 +789,7 @@ export default function PartyDashboard() {
                     type="number"
                     step="0.01"
                     min="0"
-                    max={financials.balance}
+                    max={Math.abs(financials.balance)}
                     value={paymentAmount}
                     onChange={(e) => {
                       setPaymentAmount(e.target.value);
@@ -805,7 +812,7 @@ export default function PartyDashboard() {
                 </button>
                 <button
                   onClick={handleRecordPayment}
-                  disabled={paymentSubmitting || !paymentAmount || Number(paymentAmount) <= 0 || Number(paymentAmount) > financials.balance}
+                  disabled={paymentSubmitting || !paymentAmount || Number(paymentAmount) <= 0 || Number(paymentAmount) > Math.abs(financials.balance)}
                   className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-label-md bg-accent text-on-primary hover:bg-accent-hover shadow-sm transition-all cursor-pointer btn-tactile disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {paymentSubmitting && <Loader2 size={16} className="animate-spin" />}

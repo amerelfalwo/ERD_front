@@ -50,7 +50,7 @@ export default function SupplierReturnProductModal({ supplierId, product, onClos
       onSaved();
     } catch (err) {
       console.error(err);
-      setError(err.response?.data?.detail || 'Failed to process return');
+      setError(err?.message || 'Failed to process return');
     } finally {
       setIsSubmitting(false);
     }

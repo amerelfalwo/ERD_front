@@ -1,10 +1,12 @@
-import { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Users, X, Loader2, Eye, DollarSign, User, Building2, BarChart2, Phone, MapPin, Trash2, TrendingUp } from 'lucide-react';
+import { Plus, Search, Users, X, Loader2, Eye, DollarSign, User, Building2, BarChart2, Phone, MapPin, Trash2, TrendingUp, Printer } from 'lucide-react';
 import api from '../services/api';
 import { notifications } from '@mantine/notifications';
+import { useAuth } from '../context/AuthContext';
 
-function AddPartyModal({ isOpen, onClose, onCreated }) {
+const AddPartyModal = React.memo(function AddPartyModal({ isOpen, onClose, onCreated }) {
   const [name, setName] = useState('');
   const [partyType, setPartyType] = useState('client');
   const [phone, setPhone] = useState('');
@@ -117,11 +119,14 @@ function AddPartyModal({ isOpen, onClose, onCreated }) {
       </div>
     </div>
   );
-}
+});
 
-function StatementModal({ isOpen, onClose, partyId, partyName }) {
+const StatementModal = React.memo(function StatementModal({ isOpen, onClose, partyId, partyName }) {
   const [statement, setStatement] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isPrinting, setIsPrinting] = useState(false);
+  const { user } = useAuth();
+  const tenantName = user?.tenant?.company_name || 'ERP Dashboard';
 
   useEffect(() => {
     if (!isOpen || !partyId) return;
@@ -131,6 +136,16 @@ function StatementModal({ isOpen, onClose, partyId, partyName }) {
       .catch(() => setStatement(null))
       .finally(() => setLoading(false));
   }, [isOpen, partyId]);
+
+  function handlePrint() {
+    setIsPrinting(true);
+    document.body.classList.add('printing');
+    setTimeout(() => {
+      window.print();
+      document.body.classList.remove('printing');
+      setIsPrinting(false);
+    }, 100);
+  }
 
   if (!isOpen) return null;
 
@@ -143,9 +158,16 @@ function StatementModal({ isOpen, onClose, partyId, partyName }) {
             <h3 className="text-h3 text-charcoal-ink tracking-tight">Account Statement</h3>
             <p className="text-body-sm text-muted-steel mt-1" dir="auto">{partyName}</p>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-xl text-muted-steel hover:bg-surface-container-low transition-colors cursor-pointer btn-tactile">
-            <X size={18} />
-          </button>
+          <div className="flex items-center gap-2">
+            {statement?.transactions?.length > 0 && !loading && (
+              <button onClick={handlePrint} className="p-1.5 rounded-xl text-muted-steel hover:bg-surface-container-low transition-colors cursor-pointer btn-tactile">
+                <Printer size={18} />
+              </button>
+            )}
+            <button onClick={onClose} className="p-1.5 rounded-xl text-muted-steel hover:bg-surface-container-low transition-colors cursor-pointer btn-tactile">
+              <X size={18} />
+            </button>
+          </div>
         </div>
         <div className="p-6 overflow-y-auto">
           {loading ? (
@@ -164,7 +186,12 @@ function StatementModal({ isOpen, onClose, partyId, partyName }) {
                   <div className="col-span-2 flex flex-col justify-center">
                     <div className="flex items-center gap-2">
                       <span className="font-mono-tabular text-muted-steel">{item.date}</span>
-                      <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded-md ${item.type === 'INVOICE' ? 'bg-accent-surface text-accent' : 'bg-success/20 text-success'}`}>
+                      <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded-md ${
+                        item.type === 'INVOICE' ? 'bg-accent-surface text-accent' : 
+                        item.type === 'RETURN' ? 'bg-warning/20 text-warning' :
+                        item.type === 'INITIAL' ? 'bg-surface-container-high text-muted-steel' :
+                        'bg-success/20 text-success'
+                      }`}>
                         {item.type}
                       </span>
                     </div>
@@ -190,9 +217,57 @@ function StatementModal({ isOpen, onClose, partyId, partyName }) {
           )}
         </div>
       </div>
+      
+      {/* Print Portal */}
+      {statement && createPortal(
+        <div className="print-portal invoice-print-area" style={{ display: isPrinting ? 'block' : 'none', padding: '40px', fontFamily: 'sans-serif' }}>
+          <div style={{ textAlign: 'center', marginBottom: '30px' }}>
+            <h1 style={{ fontSize: '24px', fontWeight: 'bold', margin: '0 0 10px 0' }}>{tenantName}</h1>
+            <h2 style={{ fontSize: '18px', color: '#555', margin: '0 0 5px 0' }}>Account Statement</h2>
+            <h3 style={{ fontSize: '16px', margin: '0' }}>{partyName}</h3>
+            <p style={{ fontSize: '12px', color: '#777', marginTop: '10px' }}>Generated on: {new Date().toLocaleDateString()}</p>
+          </div>
+          
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '20px', fontSize: '14px' }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid #ddd', textAlign: 'left' }}>
+                <th style={{ padding: '10px 5px', color: '#555' }}>Date</th>
+                <th style={{ padding: '10px 5px', color: '#555' }}>Type</th>
+                <th style={{ padding: '10px 5px', color: '#555' }}>Reference</th>
+                <th style={{ padding: '10px 5px', textAlign: 'right', color: '#555' }}>Amount</th>
+                <th style={{ padding: '10px 5px', textAlign: 'right', color: '#555' }}>Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              {statement.transactions.map((item, idx) => (
+                <tr key={idx} style={{ borderBottom: '1px solid #eee' }}>
+                  <td style={{ padding: '10px 5px', color: '#333' }}>{item.date}</td>
+                  <td style={{ padding: '10px 5px', color: '#333', fontWeight: 'bold' }}>{item.type}</td>
+                  <td style={{ padding: '10px 5px', color: '#333' }}>{item.reference}</td>
+                  <td style={{ padding: '10px 5px', textAlign: 'right', color: item.type === 'PAYMENT' ? 'green' : '#333' }}>
+                    {item.type === 'PAYMENT' ? '-' : ''}{Number(item.amount).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                  </td>
+                  <td style={{ padding: '10px 5px', textAlign: 'right', fontWeight: 'bold', color: '#333' }}>
+                    {Number(item.balance).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colSpan="4" style={{ padding: '15px 5px', textAlign: 'right', fontWeight: 'bold', fontSize: '16px' }}>Total Balance:</td>
+                <td style={{ padding: '15px 5px', textAlign: 'right', fontWeight: 'bold', fontSize: '16px' }}>
+                  EGP {Number(statement.total_balance).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>,
+        document.body
+      )}
     </div>
   );
-}
+});
 
 export default function PartiesView() {
   const navigate = useNavigate();
@@ -209,8 +284,7 @@ export default function PartiesView() {
   const [partyToDelete, setPartyToDelete] = useState(null);
   const [deletingParty, setDeletingParty] = useState(false);
 
-  async function fetchParties() {
-    await Promise.resolve();
+  const fetchParties = useCallback(async () => {
     setLoading(true);
     try {
       const data = await api.getParties();
@@ -229,25 +303,29 @@ export default function PartiesView() {
         }
         setProfits(profitMap);
       } catch { /* profits are optional */ }
-    } catch (err) { console.error(err); }
+    } catch (err) { 
+      console.error(err);
+      notifications.show({ title: 'Error', message: 'Failed to load parties.', color: 'red' });
+    }
     finally { setLoading(false); }
-  }
+  }, []);
 
-  useEffect(() => { fetchParties(); }, []);
+  useEffect(() => { fetchParties(); }, [fetchParties]);
 
-  async function handleDeleteParty() {
+  const handleDeleteParty = useCallback(async () => {
     if (!partyToDelete) return;
     setDeletingParty(true);
     try {
       await api.deleteParty(partyToDelete.id);
       setPartyToDelete(null);
       fetchParties();
+      notifications.show({ title: 'Success', message: 'Party deleted successfully', color: 'green' });
     } catch (err) {
       notifications.show({ title: 'Error', message: err?.message || 'Error', color: 'red' });
     } finally {
       setDeletingParty(false);
     }
-  }
+  }, [partyToDelete, fetchParties]);
 
   const filteredParties = useMemo(() => {
     return parties

@@ -8,7 +8,8 @@
     "settings": "Settings",
     "logout": "Logout",
     "english": "English",
-    "arabic": "عربي"
+    "arabic": "عربي",
+    "notifications": "Notifications"
   },
   "common": {
     "currency": "EGP",
@@ -28,6 +29,12 @@
     "validationError": "Validation Error",
     "success": "Success",
     "unknown": "Unknown",
+    "markAllAsRead": "Mark all as read",
+    "viewAllNotifications": "View all notifications",
+    "noNewNotifications": "No new notifications",
+    "welcomeMessage": "Welcome to the system",
+    "systemReady": "ERP system is ready to use.",
+    "now": "Now",
     "noData": "No data",
     "actions": "Actions",
     "status": "Status",
@@ -42,7 +49,13 @@
     "all": "All",
     "update": "Update",
     "print": "Print",
-    "download": "Download"
+    "download": "Download",
+    "currencyEGP": "EGP",
+    "rowsPerPage": "Rows per page",
+    "of": "of",
+    "page": "Page",
+    "previous": "Previous",
+    "next": "Next"
   },
   "dashboard": {
     "title": "Reports & Analytics",
@@ -204,7 +217,15 @@
     "hasDelivery": "Has Delivery ✓",
     "addDelivery": "Add Delivery",
     "deliveryFee": "Delivery Fee",
-    "estProfit": "Est. Profit"
+    "estProfit": "Est. Profit",
+    "price": "Price",
+    "fetchHistoryError": "Failed to load invoice history",
+    "deleteInvoiceError": "Failed to delete invoice",
+    "loadInitialDataError": "Failed to load initial data",
+    "loadSupplierDataError": "Failed to load supplier data",
+    "createProductError": "Error creating product",
+    "createPartyError": "Error creating party",
+    "returnInvoice": "Return Invoice"
   },
   "customers": {
     "title": "Customers",
@@ -543,5 +564,36 @@
     "recordPayment": "Record Payment",
     "cancel": "Cancel",
     "save": "Save"
+  },
+  "settings": {
+    "title": "Settings",
+    "description": "Configure your store information and preferences.",
+    "save": "Save Settings",
+    "saved": "Saved!",
+    "storeInfo": "Store Information",
+    "storeName": "Store Name",
+    "storeNamePlaceholder": "Your store name",
+    "phone": "Phone",
+    "phonePlaceholder": "Phone number",
+    "address": "Address",
+    "addressPlaceholder": "Store address",
+    "taxNumber": "Tax Number",
+    "taxNumberPlaceholder": "Tax registration number",
+    "brandIdentity": "Brand Identity",
+    "uploadLogoDesc": "Upload your logo to appear across invoices and documents.",
+    "noLogo": "No Logo",
+    "uploadLogo": "Upload Logo",
+    "logoHint": "PNG or JPG, max 5MB.",
+    "printNotes": "Print Notes",
+    "defaultInvoiceFooter": "Default Invoice Footer",
+    "defaultInvoiceFooterPlaceholder": "Notes shown on printed invoices...",
+    "system": "System",
+    "version": "Version",
+    "backend": "Backend",
+    "database": "Database",
+    "saveSuccess": "Settings saved successfully",
+    "saveFailed": "Save failed",
+    "uploadSuccess": "Logo uploaded successfully",
+    "uploadFailed": "Upload failed"
   }
 }

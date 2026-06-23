@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
 import { createPortal } from 'react-dom';
 import {
   ShoppingCart, Plus, Minus, Trash2, Printer, Loader2,
@@ -16,14 +16,14 @@ import { useTranslation } from 'react-i18next';
 import html2pdf from 'html2pdf.js';
 
 
-function InvoiceItemRow({ item, products, invoiceType, onQuantityChange, onRemove, onEdit, maxStock, inventory }) {
+const InvoiceItemRow = memo(function InvoiceItemRow({ item, products, invoiceType, onQuantityChange, onRemove, onEdit, maxStock, inventoryProductsMap }) {
   const { t } = useTranslation();
   const product = products.find((p) => p.id === item.product_id);
   const displayName = item.product_name || product?.name || `#${item.product_id ?? item.batch_id}`;
 
   const getSalePrice = () => {
     if (item.sale_price != null) return item.sale_price;
-    const invProd = inventory?.products?.find(p => String(p.product_id) === String(item.product_id));
+    const invProd = inventoryProductsMap?.[String(item.product_id)];
     const best = invProd?.batches?.filter(b => Number(b.remaining_quantity) > 0)
       .reduce((acc, b) => (!acc || Number(b.selling_price) > Number(acc.selling_price) ? b : acc), null)
       ?? invProd?.batches?.reduce((acc, b) => (!acc || Number(b.selling_price) > Number(acc.selling_price) ? b : acc), null);
@@ -49,22 +49,22 @@ function InvoiceItemRow({ item, products, invoiceType, onQuantityChange, onRemov
   };
 
   return (
-    <div className="grid grid-cols-12 gap-2 items-center px-4 py-2.5 border-b border-outline-variant/20 hover:bg-surface-container-low/40 transition-colors group">
+    <div className="grid grid-cols-12 gap-2 items-center px-5 py-3 mx-2 my-1 rounded-2xl border border-transparent hover:border-outline-variant/30 hover:bg-surface-container-low/50 hover:shadow-sm transition-all duration-300 group">
       <div className="col-span-4 flex flex-col">
         <span className="text-label-md text-charcoal-ink truncate">{displayName}</span>
         {invoiceType === 'purchase' && item.purchase_price !== undefined && (
           <span className="font-mono-tabular text-label-sm text-muted-steel mt-0.5">
-            Buy: {Number(item.purchase_price).toLocaleString()} | Sell: {Number(item.selling_price).toLocaleString()}
+            {t('invoices.buy', { defaultValue: 'Buy' })}: {Number(item.purchase_price).toLocaleString()} | {t('invoices.sell', { defaultValue: 'Sell' })}: {Number(item.selling_price).toLocaleString()}
           </span>
         )}
         {invoiceType === 'supplier_return' && item.purchase_price !== undefined && (
           <span className="font-mono-tabular text-label-sm text-error mt-0.5">
-            Unit Price: {Number(item.purchase_price).toLocaleString()}
+            {t('invoices.unitPrice', { defaultValue: 'Unit Price' })}: {Number(item.purchase_price).toLocaleString()}
           </span>
         )}
         {invoiceType === 'sale' && item.sale_price != null && (
           <span className="font-mono-tabular text-label-sm text-muted-steel mt-0.5">
-            Price: {Number(item.sale_price).toLocaleString()}
+            {t('invoices.price', { defaultValue: 'Price' })}: {Number(item.sale_price).toLocaleString()}
           </span>
         )}
       </div>
@@ -82,15 +82,15 @@ function InvoiceItemRow({ item, products, invoiceType, onQuantityChange, onRemov
         </div>
       </div>
       <div className="col-span-3 text-right">
-        <span className="font-mono-tabular text-label-md text-charcoal-ink font-medium">EGP {lineTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+        <span className="font-mono-tabular text-label-md text-charcoal-ink font-medium">{lineTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })} {t('common.currencyEGP', { defaultValue: 'EGP' })}</span>
       </div>
       <div className="col-span-2 flex justify-end gap-1">
-        <button onClick={() => onEdit(item)} className="p-1.5 rounded-xl text-muted-steel/50 hover:bg-accent-surface hover:text-accent transition-all opacity-0 group-hover:opacity-100 cursor-pointer btn-tactile" title="Edit"><Edit size={14} /></button>
-        <button onClick={() => onRemove(item.product_id)} className="p-1.5 rounded-xl text-error/50 hover:bg-error-container/20 hover:text-error transition-all opacity-0 group-hover:opacity-100 cursor-pointer btn-tactile" title="Delete"><Trash2 size={14} /></button>
+        <button onClick={() => onEdit(item)} className="p-1.5 rounded-xl text-muted-steel/50 hover:bg-accent-surface hover:text-accent transition-all opacity-0 group-hover:opacity-100 cursor-pointer btn-tactile" title={t('common.edit', { defaultValue: 'Edit' })}><Edit size={14} /></button>
+        <button onClick={() => onRemove(item.product_id)} className="p-1.5 rounded-xl text-error/50 hover:bg-error-container/20 hover:text-error transition-all opacity-0 group-hover:opacity-100 cursor-pointer btn-tactile" title={t('common.delete', { defaultValue: 'Delete' })}><Trash2 size={14} /></button>
       </div>
     </div>
   );
-}
+});
 
 
 export default function InvoicesView() {
@@ -122,6 +122,7 @@ export default function InvoicesView() {
   const [invoiceToPrint, setInvoiceToPrint] = useState(null);
   const [paperSize, setPaperSize] = useState('a4');
   const [amountPaid, setAmountPaid] = useState('');
+  const [isAmountPaidDirty, setIsAmountPaidDirty] = useState(false);
   const [deliveryFee, setDeliveryFee] = useState('');
   const [invoiceHistory, setInvoiceHistory] = useState([]);
   const [historyTotal, setHistoryTotal] = useState(0);
@@ -145,6 +146,16 @@ export default function InvoicesView() {
   const [supplierProducts, setSupplierProducts] = useState([]);
   const [supplierStockMap, setSupplierStockMap] = useState({});
 
+  const inventoryProductsMap = useMemo(() => {
+    const map = {};
+    if (inventory?.products) {
+      inventory.products.forEach(p => {
+        map[String(p.product_id)] = p;
+      });
+    }
+    return map;
+  }, [inventory]);
+
   const tenantName = user?.tenant?.company_name || 'ERP Dashboard';
   const defaultFooterText = user?.tenant?.default_footer_text || user?.tenant?.print_notes || null;
   const logoUrl = user?.tenant?.logo_url || null;
@@ -165,7 +176,8 @@ export default function InvoicesView() {
       setInvoiceHistory(list);
       setHistoryTotal(total);
       setSelectedIds(new Set());
-    } catch {
+    } catch (err) {
+      notifications.show({ title: t('common.error', { defaultValue: 'Error' }), message: err?.message || t('invoices.fetchHistoryError', { defaultValue: 'Failed to load invoice history' }), color: 'red' });
       setInvoiceHistory([]);
       setHistoryTotal(0);
     } finally {
@@ -173,21 +185,24 @@ export default function InvoicesView() {
     }
   }, [historyPage, historyPageSize, historyTypeFilter]);
 
-  async function handleDeleteInvoice(invoiceId) {
+  const handleDeleteInvoice = useCallback(async (invoiceId) => {
     try {
       await api.deleteInvoice(invoiceId);
       setInvoiceToDelete(null);
       loadHistory(historyPage, historyPageSize);
       api.getInventoryReport().then(setInventory);
     } catch (err) {
-      notifications.show({ title: 'Error', message: err.message || 'Failed to delete invoice', color: 'red' });
+      notifications.show({ title: t('common.error', { defaultValue: 'Error' }), message: err.message || t('invoices.deleteInvoiceError', { defaultValue: 'Failed to delete invoice' }), color: 'red' });
     }
-  }
+  }, [historyPage, historyPageSize, loadHistory]);
 
   useEffect(() => {
     Promise.all([api.getParties(), api.getProducts(), api.getInventoryReport(), api.getTemplates()])
       .then(([p, pr, inv, tmpl]) => { setParties(p); setProducts(pr); setInventory(inv); setTemplates(tmpl); })
-      .catch(console.error);
+      .catch((err) => {
+        console.error(err);
+        notifications.show({ title: t('common.error', { defaultValue: 'Error' }), message: t('invoices.loadInitialDataError', { defaultValue: 'Failed to load initial data.' }), color: 'red' });
+      });
   }, []);
 
   useEffect(() => {
@@ -208,7 +223,8 @@ export default function InvoicesView() {
         });
         setSupplierStockMap(map);
       })
-      .catch(() => {
+      .catch((err) => {
+        notifications.show({ title: t('common.error', { defaultValue: 'Error' }), message: err?.message || t('invoices.loadSupplierDataError', { defaultValue: 'Failed to load supplier data' }), color: 'red' });
         if (!canceled) {
           setSupplierProducts([]);
           setSupplierStockMap({});
@@ -223,7 +239,9 @@ export default function InvoicesView() {
     }
   }, [activeTab, historyPage, historyPageSize, loadHistory]);
 
-  const filteredParties = parties.filter((p) => invoiceType === 'sale' ? p.party_type === 'client' : p.party_type === 'supplier');
+  const filteredParties = useMemo(() => {
+    return parties.filter((p) => invoiceType === 'sale' ? p.party_type === 'client' : p.party_type === 'supplier');
+  }, [parties, invoiceType]);
 
   useEffect(() => {
     if (!selectedProduct) {
@@ -245,10 +263,10 @@ export default function InvoicesView() {
 
   const selectedAvailableStock = useMemo(() => {
     if (invoiceType !== 'sale' || !selectedProduct) return null;
-    const stockProd = inventory?.products?.find(ip => String(ip.product_id) === String(selectedProduct));
+    const stockProd = inventoryProductsMap?.[String(selectedProduct)];
     if (!stockProd) return null;
     return stockProd.batches?.reduce((s, b) => s + Number(b.remaining_quantity || 0), 0) ?? null;
-  }, [invoiceType, selectedProduct, inventory]);
+  }, [invoiceType, selectedProduct, inventoryProductsMap]);
 
   const selectedSupplierStock = useMemo(() => {
     if (invoiceType !== 'supplier_return' || !selectedProduct) return null;
@@ -299,7 +317,7 @@ export default function InvoicesView() {
     setAutoFetchedCost(null);
   }, [selectedProduct, invoiceType, purchasePrice, sellingPrice, salePrice, itemQuantity, autoFetchedCost, storeAddItem, updateItem, editingItemId, selectedAvailableStock]);
 
-  function handleEditItem(item) {
+  const handleEditItem = useCallback((item) => {
     const prod = products.find(p => p.id === item.product_id);
     setSelectedProduct(String(item.product_id));
     setProductSearch(prod?.name || '');
@@ -313,33 +331,33 @@ export default function InvoicesView() {
       setSalePrice(String(item.sale_price || ''));
       setAutoFetchedCost(item.purchase_price != null ? Number(item.purchase_price) : null);
     }
-  }
+  }, [products, invoiceType]);
 
 
-  async function handleCreateNewProduct() {
+  const handleCreateNewProduct = useCallback(async () => {
     if (!productSearch.trim()) return;
     setCreatingProduct(true);
     try {
       const newProd = await api.createProduct({ name: productSearch.trim() });
-      setProducts([...products, newProd]);
+      setProducts(prev => [...prev, newProd]);
       setSelectedProduct(newProd.id);
       setProductSearch(newProd.name);
       setShowProductDropdown(false);
     } catch (err) {
-      notifications.show({ title: 'Error', message: err?.message || 'Error creating product', color: 'red' });
+      notifications.show({ title: t('common.error', { defaultValue: 'Error' }), message: err?.message || t('invoices.createProductError', { defaultValue: 'Error creating product' }), color: 'red' });
     } finally {
       setCreatingProduct(false);
     }
-  }
+  }, [productSearch]);
 
-  async function handleSubmit() {
+  const handleSubmit = useCallback(async () => {
     if (items.length === 0) return;
 
     let partyId = selectedParty ? parseInt(selectedParty) : null;
 
     // If new party mode, create the party first
     if (isNewParty) {
-      if (!newPartyName.trim()) { notifications.show({ title: 'Error', message: t('invoices.pleaseEnterName', { party: invoiceType === 'supplier_return' || invoiceType === 'purchase' ? 'supplier' : 'customer' }), color: 'red' }); return; }
+      if (!newPartyName.trim()) { notifications.show({ title: t('common.error', { defaultValue: 'Error' }), message: t('invoices.pleaseEnterName', { party: invoiceType === 'supplier_return' || invoiceType === 'purchase' ? 'supplier' : 'customer' }), color: 'red' }); return; }
       setSubmitting(true);
       try {
         const partyType = invoiceType === 'sale' ? 'client' : 'supplier';
@@ -357,12 +375,12 @@ export default function InvoicesView() {
         setNewPartyPhone('');
         setNewPartyAddress('');
       } catch (err) {
-        notifications.show({ title: 'Error', message: err?.message || 'Error creating party', color: 'red' });
+        notifications.show({ title: t('common.error', { defaultValue: 'Error' }), message: err?.message || t('invoices.createPartyError', { defaultValue: 'Error creating party' }), color: 'red' });
         setSubmitting(false);
         return;
       }
     } else if (!partyId) {
-      notifications.show({ title: 'Error', message: t('invoices.pleaseSelectParty', { party: invoiceType === 'supplier_return' || invoiceType === 'purchase' ? 'supplier' : 'customer' }), color: 'red' });
+      notifications.show({ title: t('common.error', { defaultValue: 'Error' }), message: t('invoices.pleaseSelectParty', { party: invoiceType === 'supplier_return' || invoiceType === 'purchase' ? 'supplier' : 'customer' }), color: 'red' });
       return;
     }
 
@@ -390,36 +408,37 @@ export default function InvoicesView() {
       let result;
       if (invoiceType === 'supplier_return') {
         result = await api.createSupplierStockReturn(partyId, { items: payload.items });
-        notifications.show({ title: 'Success', message: t('invoices.supplierReturnSuccess'), color: 'green' });
+        notifications.show({ title: t('common.success', { defaultValue: 'Success' }), message: t('invoices.supplierReturnSuccess'), color: 'green' });
       } else {
         result = invoiceType === 'sale' ? await api.createSaleInvoice(payload) : await api.createPurchaseInvoice(payload);
         setLastInvoice(result);
       }
       clearCart();
       setAmountPaid('');
+      setIsAmountPaidDirty(false);
       setDeliveryFee('');
       setHasDelivery(false);
       setSalePrice('');
       setAutoFetchedCost(null);
       loadHistory(historyPage, historyPageSize);
       api.getInventoryReport().then(setInventory);
-    } catch (err) { notifications.show({ title: 'Error', message: err?.message || 'Error', color: 'red' }); }
+    } catch (err) { notifications.show({ title: t('common.error', { defaultValue: 'Error' }), message: err?.message || t('common.error', { defaultValue: 'Error' }), color: 'red' }); }
     finally { setSubmitting(false); }
-  }
+  }, [items, selectedParty, isNewParty, newPartyName, newPartyPhone, newPartyAddress, invoiceType, t, amountPaid, hasDelivery, deliveryFee, clearCart, loadHistory, historyPage, historyPageSize]);
 
-  function handleOpenPrintPreview(invoiceData) {
+  const handleOpenPrintPreview = useCallback((invoiceData) => {
     setInvoiceToPrint(invoiceData);
-  }
+  }, []);
 
-  function handleClosePrintPreview() {
+  const handleClosePrintPreview = useCallback(() => {
     setInvoiceToPrint(null);
     setBulkInvoicesToPrint([]);
-  }
+  }, []);
 
   const printPortalRef = useRef(null);
   const invoicePrintRef = useRef(null);
 
-  function handleConfirmPrint() {
+  const handleConfirmPrint = useCallback(() => {
     const portal = printPortalRef.current;
     if (!portal) { window.print(); return; }
     portal.style.display = 'block';
@@ -429,31 +448,31 @@ export default function InvoicesView() {
       portal.style.display = 'none';
       document.body.classList.remove('printing');
     });
-  }
+  }, []);
 
-  function toggleSelect(id) {
+  const toggleSelect = useCallback((id) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
-  }
+  }, []);
 
-  function handleBulkPrint() {
+  const handleBulkPrint = useCallback(() => {
     const selected = invoiceHistory.filter(inv => selectedIds.has(inv.id));
     if (selected.length === 0) return;
     setBulkInvoicesToPrint(selected);
-  }
+  }, [invoiceHistory, selectedIds]);
 
-  async function handlePrintFromTemplate() {
+  const handlePrintFromTemplate = useCallback(async () => {
     if (!lastInvoice || templates.length === 0) return;
     setLoadingPreview(true);
     try {
       const hydratedData = await api.previewTemplate(templates[0].id, lastInvoice.id);
       handleOpenPrintPreview(hydratedData);
-    } catch (err) { notifications.show({ title: 'Error', message: err?.message || 'Error', color: 'red' }); }
+    } catch (err) { notifications.show({ title: t('common.error', { defaultValue: 'Error' }), message: err?.message || t('common.error', { defaultValue: 'Error' }), color: 'red' }); }
     finally { setLoadingPreview(false); }
-  }
+  }, [lastInvoice, templates, handleOpenPrintPreview]);
 
   const partyForPrint = invoiceToPrint
     ? parties.find((p) => p.id === invoiceToPrint.party_id) || (invoiceToPrint.party_name ? {
@@ -468,7 +487,7 @@ export default function InvoicesView() {
       return sum + (item.quantity * (item.purchase_price || 0));
     } else {
       const sp = item.sale_price != null ? item.sale_price : (() => {
-        const invProd = inventory?.products?.find(p => String(p.product_id) === String(item.product_id));
+        const invProd = inventoryProductsMap?.[String(item.product_id)];
         const best = invProd?.batches?.filter(b => Number(b.remaining_quantity) > 0)
           .reduce((acc, b) => (!acc || Number(b.selling_price) > Number(acc.selling_price) ? b : acc), null)
           ?? invProd?.batches?.reduce((acc, b) => (!acc || Number(b.selling_price) > Number(acc.selling_price) ? b : acc), null);
@@ -476,7 +495,7 @@ export default function InvoicesView() {
       })();
       return sum + (item.quantity * sp);
     }
-  }, 0), [items, invoiceType, inventory]);
+  }, 0), [items, invoiceType, inventoryProductsMap]);
 
   const totalProfit = useMemo(() => {
     if (invoiceType !== 'sale') return 0;
@@ -489,6 +508,12 @@ export default function InvoicesView() {
   }, [invoiceType, items]);
 
   const totalAmount = useMemo(() => subtotal + (parseFloat(deliveryFee) || 0), [subtotal, deliveryFee]);
+
+  useEffect(() => {
+    if (!isAmountPaidDirty) {
+      setAmountPaid(totalAmount > 0 ? String(totalAmount) : '');
+    }
+  }, [totalAmount, isAmountPaidDirty]);
 
   const remainingBalance = useMemo(() => Math.max(0, totalAmount - (parseFloat(amountPaid) || 0)), [totalAmount, amountPaid]);
 
@@ -511,28 +536,29 @@ export default function InvoicesView() {
 
   const historyTotalPages = Math.max(1, Math.ceil(historyTotal / historyPageSize));
 
-  const inputClass = "w-full bg-surface-container-lowest border border-outline-variant/60 rounded-xl px-4 py-2.5 text-sm text-charcoal-ink focus:border-accent focus:ring-2 focus:ring-accent/10 outline-none transition-all duration-200";
+  const inputClass = "w-full bg-surface-container-lowest/50 backdrop-blur-sm border border-outline-variant/50 rounded-2xl px-5 py-3 text-sm text-charcoal-ink focus:bg-surface-container-lowest focus:border-accent focus:ring-4 focus:ring-accent/10 outline-none transition-all duration-300 shadow-inner hover:border-accent/50";
   const selectClass = `${inputClass} appearance-none cursor-pointer`;
 
   return (
     <>
       <div className="print:hidden">
         <div className="max-w-7xl mx-auto px-6 pt-6">
-          <div className="mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-fade-in-up">
-            <div>
-              <h2 className="text-h1 text-charcoal-ink">Invoices</h2>
-              <p className="text-body-base text-muted-steel mt-1">Manage sales, purchases, and returns.</p>
+          <div className="mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 animate-fade-in-up">
+            <div className="relative">
+              <div className="absolute -inset-1 bg-gradient-to-r from-accent/20 to-accent-muted/20 blur-xl opacity-50 rounded-full"></div>
+              <h2 className="relative text-4xl font-extrabold text-charcoal-ink tracking-tight bg-clip-text text-transparent bg-gradient-to-br from-charcoal-ink to-muted-steel">{t('invoices.title')}</h2>
+              <p className="relative text-body-base text-muted-steel mt-2 max-w-md">{t('invoices.subtitle')}</p>
             </div>
-            <div className="bg-surface-container-lowest border border-outline-variant/60 rounded-xl p-1 flex gap-1 shadow-whisper">
+            <div className="bg-surface-container-low/60 backdrop-blur-md border border-outline-variant/50 rounded-xl p-1.5 flex gap-1.5 shadow-sm relative overflow-hidden">
               <button onClick={() => setActiveTab('create')}
-                className={`px-4 py-2 rounded-lg text-label-md transition-all duration-200 cursor-pointer btn-tactile flex items-center gap-2
-                  ${activeTab === 'create' ? 'bg-accent text-on-primary shadow-sm' : 'text-muted-steel hover:bg-surface-container-low'}`}>
-                <Plus size={16} /> Add Invoice
+                className={`relative z-10 px-6 py-2.5 rounded-lg text-label-md font-medium transition-all duration-200 cursor-pointer flex items-center gap-2
+                  ${activeTab === 'create' ? 'bg-charcoal-ink text-white shadow-sm' : 'text-muted-steel hover:bg-surface-container-lowest hover:text-charcoal-ink'}`}>
+                <Plus size={18} /> {t('invoices.addInvoice')}
               </button>
               <button onClick={() => setActiveTab('history')}
-                className={`px-4 py-2 rounded-lg text-label-md transition-all duration-200 cursor-pointer btn-tactile flex items-center gap-2
-                  ${activeTab === 'history' ? 'bg-accent text-on-primary shadow-sm' : 'text-muted-steel hover:bg-surface-container-low'}`}>
-                <Package size={16} /> History
+                className={`relative z-10 px-6 py-2.5 rounded-lg text-label-md font-medium transition-all duration-200 cursor-pointer flex items-center gap-2
+                  ${activeTab === 'history' ? 'bg-charcoal-ink text-white shadow-sm' : 'text-muted-steel hover:bg-surface-container-lowest hover:text-charcoal-ink'}`}>
+                <Package size={18} /> {t('invoices.history')}
               </button>
             </div>
           </div>
@@ -540,14 +566,21 @@ export default function InvoicesView() {
 
         {activeTab === 'create' && (
         <div className="max-w-7xl mx-auto space-y-6 px-6">
-          <div className="mb-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-fade-in-up">
-            <h2 className="text-h3 text-charcoal-ink">Invoice Details</h2>
-            <div className="bg-surface-container-lowest border border-outline-variant/60 rounded-xl p-1 flex gap-1 shadow-whisper">
-              {[{key: 'sale', label: 'Sale Invoice'}, {key: 'purchase', label: 'Purchase Invoice'}, {key: 'supplier_return', label: t('invoices.supplierReturn')}].map((t) => (
-                <button key={t.key} onClick={() => setInvoiceType(t.key)}
-                  className={`px-4 py-1.5 rounded-lg text-label-md transition-all duration-200 cursor-pointer btn-tactile
-                    ${invoiceType === t.key ? (t.key === 'supplier_return' ? 'bg-error text-white shadow-sm' : 'bg-accent text-on-primary shadow-sm') : 'text-muted-steel hover:bg-surface-container-low'}`}>
-                  {t.label}
+          <div className="mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-fade-in-up">
+            <h2 className="text-2xl font-bold text-charcoal-ink tracking-tight flex items-center gap-3">
+              <span className="w-8 h-8 rounded-xl bg-accent-surface flex items-center justify-center text-accent shadow-sm">
+                <ShoppingCart size={18} />
+              </span>
+              {t('invoices.invoiceDetails')}
+            </h2>
+            <div className="bg-surface-container-low/60 backdrop-blur-md border border-outline-variant/50 rounded-xl p-1.5 flex gap-1.5 shadow-sm overflow-x-auto w-full sm:w-auto">
+              {[{key: 'sale', label: t('invoices.saleInvoice')}, {key: 'purchase', label: t('invoices.purchaseInvoice')}, {key: 'supplier_return', label: t('invoices.supplierReturn')}].map((invType) => (
+                <button key={invType.key} onClick={() => setInvoiceType(invType.key)}
+                  className={`px-5 py-2 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer flex-1 sm:flex-none text-center whitespace-nowrap
+                    ${invoiceType === invType.key 
+                      ? (invType.key === 'supplier_return' ? 'bg-error text-white shadow-sm ring-1 ring-error/60' : 'bg-surface-container-lowest text-charcoal-ink shadow-sm ring-1 ring-outline-variant/60')
+                      : 'text-muted-steel hover:bg-surface-container-low/80 hover:text-charcoal-ink'}`}>
+                  {invType.label}
                 </button>
               ))}
             </div>
@@ -555,11 +588,12 @@ export default function InvoicesView() {
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             <div className="lg:col-span-8 space-y-6">
-              <div className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl p-6 shadow-whisper animate-fade-in-up stagger-1">
-                <div className="flex items-center justify-between mb-4 pb-3 border-b border-outline-variant/30">
+              <div className="relative bg-surface-container-lowest/80 backdrop-blur-2xl border border-outline-variant/50 rounded-3xl p-7 shadow-xl shadow-charcoal-ink/5 hover:shadow-2xl hover:shadow-charcoal-ink/10 transition-all duration-500 animate-fade-in-up stagger-1 overflow-hidden group">
+                <div className="absolute -top-32 -right-32 w-64 h-64 bg-accent/5 rounded-full blur-3xl group-hover:bg-accent/10 transition-colors duration-700 pointer-events-none" />
+                <div className="flex items-center justify-between mb-4 pb-3 border-b border-outline-variant/30 relative z-10">
                   <div className="flex items-center gap-2.5">
                     <div className="p-1.5 rounded-lg bg-accent-surface text-accent"><UserSquare2 size={18} /></div>
-                    <h3 className="text-h3 text-charcoal-ink">{invoiceType === 'sale' ? 'Client' : 'Supplier'} Information</h3>
+                    <h3 className="text-h3 text-charcoal-ink">{invoiceType === 'sale' ? t('invoices.clientInfo') : t('invoices.supplierInfo')}</h3>
                   </div>
                   {invoiceType === 'sale' && (
                     <button
@@ -578,9 +612,9 @@ export default function InvoicesView() {
 
                 {!isNewParty ? (
                   <div>
-                    <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">Select Party</label>
+                    <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">{invoiceType === 'sale' ? t('invoices.selectClient') : t('invoices.selectSupplier')}</label>
                     <select value={selectedParty} onChange={(e) => setSelectedParty(e.target.value)} className={selectClass}>
-                      <option value="">Choose a party...</option>
+                      <option value="">{invoiceType === 'sale' ? t('invoices.selectClientPlaceholder') : t('invoices.selectSupplierPlaceholder')}</option>
                       {filteredParties.map((p) => <option key={p.id} value={p.id}>{p.name}{p.phone ? ` — ${p.phone}` : ''}</option>)}
                     </select>
                   </div>
@@ -610,7 +644,7 @@ export default function InvoicesView() {
                             type="tel"
                             value={newPartyPhone}
                             onChange={(e) => setNewPartyPhone(e.target.value)}
-                            placeholder="01xxxxxxxxx"
+                            placeholder="01000000000"
                             className={`${inputClass} pl-10`}
                             dir="ltr"
                           />
@@ -635,10 +669,11 @@ export default function InvoicesView() {
                 )}
               </div>
 
-              <div className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl p-6 shadow-whisper animate-fade-in-up stagger-2">
-                <div className="flex items-center gap-2.5 mb-4 pb-3 border-b border-outline-variant/30">
+              <div className="relative bg-surface-container-lowest/80 backdrop-blur-2xl border border-outline-variant/50 rounded-3xl p-7 shadow-xl shadow-charcoal-ink/5 hover:shadow-2xl hover:shadow-charcoal-ink/10 transition-all duration-500 animate-fade-in-up stagger-2 overflow-hidden group">
+                <div className="absolute -bottom-32 -left-32 w-64 h-64 bg-accent/5 rounded-full blur-3xl group-hover:bg-accent/10 transition-colors duration-700 pointer-events-none" />
+                <div className="flex items-center gap-2.5 mb-4 pb-3 border-b border-outline-variant/30 relative z-10">
                   <div className="p-1.5 rounded-lg bg-accent-surface text-accent"><Package size={18} /></div>
-                  <h3 className="text-h3 text-charcoal-ink">Line Items</h3>
+                  <h3 className="text-h3 text-charcoal-ink">{t('invoices.lineItems')}</h3>
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-2 mb-4 items-end">
@@ -656,7 +691,7 @@ export default function InvoicesView() {
                       }}
                       onFocus={() => setShowProductDropdown(true)}
                       onBlur={() => setTimeout(() => setShowProductDropdown(false), 200)}
-                      placeholder="Search or type to add product..."
+                      placeholder={t('invoices.searchOrAddProduct')}
                       className={inputClass}
                     />
                     {showProductDropdown && (
@@ -665,7 +700,7 @@ export default function InvoicesView() {
                           .filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase()))
                           .filter(p => editingItemId === p.id || !items.some(i => i.product_id === p.id))
                           .map(p => {
-                            const stock = inventory?.products?.find(ip => String(ip.product_id) === String(p.id));
+                            const stock = inventoryProductsMap?.[String(p.id)];
                             const stockQty = stock ? stock.batches?.reduce((s, b) => s + Number(b.remaining_quantity || 0), 0) : null;
                             const supplierQty = supplierStockMap[p.id] != null ? Number(supplierStockMap[p.id]) : null;
                             return (
@@ -681,12 +716,12 @@ export default function InvoicesView() {
                                 <span>{p.name}</span>
                                 {invoiceType === 'sale' && stockQty != null && (
                                   <span className={`text-[10px] font-mono-tabular px-1.5 py-0.5 rounded-md ${stockQty > 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>
-                                    Stock: {stockQty}
+                                    {t('invoices.stock')}: {stockQty}
                                   </span>
                                 )}
                                 {invoiceType === 'supplier_return' && supplierQty != null && (
                                   <span className={`text-[10px] font-mono-tabular px-1.5 py-0.5 rounded-md ${supplierQty > 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>
-                                    Supplier Stock: {supplierQty}
+                                    {t('invoices.stock')}: {supplierQty}
                                   </span>
                                 )}
                               </div>
@@ -698,11 +733,11 @@ export default function InvoicesView() {
                             onClick={handleCreateNewProduct}
                           >
                             {creatingProduct ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-                            Add new product: "{productSearch}"
+                            {t('invoices.addNewProductPrompt', { name: productSearch })}
                           </div>
                         )}
                         {!productSearch && (invoiceType === 'supplier_return' ? supplierProducts : products).filter(p => editingItemId === p.id || !items.some(i => i.product_id === p.id)).length === 0 && (
-                          <div className="px-4 py-2 text-muted-steel text-sm">No products available</div>
+                          <div className="px-4 py-2 text-muted-steel text-sm">{t('invoices.noProductsAvailable')}</div>
                         )}
                       </div>
                     )}
@@ -725,7 +760,7 @@ export default function InvoicesView() {
                       />
                       {autoFetchedCost != null && (
                         <span className="text-[10px] text-muted-steel px-1">
-                          Cost: <span className="font-mono font-semibold text-charcoal-ink">{autoFetchedCost.toLocaleString()}</span>
+                          {t('invoices.cost')}: <span className="font-mono font-semibold text-charcoal-ink">{autoFetchedCost.toLocaleString()}</span>
                           {salePrice && parseFloat(salePrice) > 0 && (
                             <span className={`ml-2 font-bold ${
                               parseFloat(salePrice) - autoFetchedCost > 0 ? 'text-emerald-600' : 'text-red-500'
@@ -746,7 +781,7 @@ export default function InvoicesView() {
                       onChange={(e) => {
                         const val = e.target.value;
                         if (invoiceType === 'sale' && selectedProduct) {
-                          const stockProd = inventory?.products?.find(ip => String(ip.product_id) === String(selectedProduct));
+                          const stockProd = inventoryProductsMap?.[String(selectedProduct)];
                           const avail = stockProd ? stockProd.batches?.reduce((s, b) => s + Number(b.remaining_quantity || 0), 0) : null;
                           if (avail != null && parseInt(val) > avail) {
                             setItemQuantity(String(avail));
@@ -767,56 +802,56 @@ export default function InvoicesView() {
                       className={`sm:w-20 ${inputClass} text-center`}
                     />
                     {invoiceType === 'sale' && selectedProduct && (() => {
-                      const stockProd = inventory?.products?.find(ip => String(ip.product_id) === String(selectedProduct));
+                      const stockProd = inventoryProductsMap?.[String(selectedProduct)];
                       const avail = stockProd ? stockProd.batches?.reduce((s, b) => s + Number(b.remaining_quantity || 0), 0) : null;
                       if (avail != null) return (
                         <span className={`text-[10px] font-mono-tabular px-1 ${avail > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                          Available: {avail}
+                          {t('invoices.available')}: {avail}
                         </span>
                       );
                       return null;
                     })()}
                     {invoiceType === 'supplier_return' && selectedSupplierStock != null && (
                       <span className={`text-[10px] font-mono-tabular px-1 ${selectedSupplierStock > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                        Available: {selectedSupplierStock}
+                        {t('invoices.available', { defaultValue: 'Available' })}: {selectedSupplierStock}
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-2">
                     <button onClick={addItem} disabled={!selectedProduct || (invoiceType === 'sale' && selectedAvailableStock != null && selectedAvailableStock <= 0 && !editingItemId) || (invoiceType === 'supplier_return' && selectedSupplierStock != null && selectedSupplierStock <= 0 && !editingItemId)}
-                      className={`px-4 py-2 rounded-xl text-on-primary text-label-md shadow-sm transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer btn-tactile ${
-                        editingItemId ? 'bg-amber-500 hover:bg-amber-600' : 'bg-accent hover:bg-accent-hover'
+                      className={`h-[46px] px-6 rounded-xl text-white font-semibold shadow-sm transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer active:scale-[0.98] ${
+                        editingItemId ? 'bg-amber-600 hover:bg-amber-700' : 'bg-accent hover:bg-accent-hover'
                       }`}>
-                      {editingItemId ? <><Edit size={14} /> Update</> : <><Plus size={16} /> Add</>}
+                      {editingItemId ? <><Edit size={16} /> {t('common.update')}</> : <><Plus size={18} /> {t('common.add')}</>}
                     </button>
                     {editingItemId && (
                       <button onClick={() => { setEditingItemId(null); setSelectedProduct(''); setProductSearch(''); setPurchasePrice(''); setSellingPrice(''); setSalePrice(''); setItemQuantity('1'); setAutoFetchedCost(null); }}
-                        className="p-2 rounded-xl text-muted-steel border border-outline-variant/60 hover:bg-surface-container-low transition-all cursor-pointer btn-tactile">
-                        <X size={16} />
+                        className="h-[46px] w-[46px] rounded-2xl text-muted-steel border-2 border-outline-variant/40 hover:border-error/50 hover:bg-error/5 hover:text-error flex items-center justify-center transition-all duration-300 cursor-pointer">
+                        <X size={18} strokeWidth={2.5} />
                       </button>
                     )}
                   </div>
                 </div>
 
-                <div className="border border-outline-variant/40 rounded-xl overflow-hidden">
-                  <div className="grid grid-cols-12 gap-2 px-4 py-2.5 bg-surface-container-low/30 border-b border-outline-variant/30 text-label-sm text-muted-steel/70 uppercase tracking-wider">
-                    <div className="col-span-4">Product</div>
-                    <div className="col-span-3 text-center">Qty</div>
-                    <div className="col-span-3 text-right">Total</div>
-                    <div className="col-span-2 text-right">Actions</div>
+                <div className="border border-outline-variant/30 rounded-2xl overflow-hidden bg-surface-container-lowest/50 backdrop-blur-sm shadow-inner relative z-10">
+                  <div className="grid grid-cols-12 gap-2 px-5 py-3 bg-surface-container-low/50 border-b border-outline-variant/30 text-xs font-bold text-muted-steel uppercase tracking-widest">
+                    <div className="col-span-4">{t('invoices.productHeader')}</div>
+                    <div className="col-span-3 text-center">{t('invoices.qtyHeader')}</div>
+                    <div className="col-span-3 text-right">{t('invoices.totalHeader')}</div>
+                    <div className="col-span-2 text-right">{t('invoices.actionsHeader')}</div>
                   </div>
                   <div className="bg-surface-container-lowest">
                     {items.length > 0 ? (
                       items.map((item) => {
-                        const stockProd = inventory?.products?.find(ip => String(ip.product_id) === String(item.product_id));
+                        const stockProd = inventoryProductsMap?.[String(item.product_id)];
                         const maxStock = invoiceType === 'sale' && stockProd ? stockProd.batches?.reduce((s, b) => s + Number(b.remaining_quantity || 0), 0) : undefined;
-                        return <InvoiceItemRow key={item.product_id} item={item} products={products} invoiceType={invoiceType} onQuantityChange={updateQuantity} onRemove={removeItem} onEdit={handleEditItem} maxStock={maxStock} inventory={inventory} />;
+                        return <InvoiceItemRow key={item.product_id} item={item} products={products} invoiceType={invoiceType} onQuantityChange={updateQuantity} onRemove={removeItem} onEdit={handleEditItem} maxStock={maxStock} inventoryProductsMap={inventoryProductsMap} />;
                       })
                     ) : (
                       <div className="flex flex-col items-center justify-center py-10 text-muted-steel">
                         <ShoppingCart size={32} strokeWidth={1.2} className="mb-3 opacity-30" />
-                        <p className="text-body-base text-charcoal-ink">No items added yet</p>
-                        <p className="text-body-sm text-muted-steel mt-1">Select a product and click Add</p>
+                        <p className="text-body-base text-charcoal-ink">{t('invoices.noItemsAdded')}</p>
+                        <p className="text-body-sm text-muted-steel mt-1">{t('invoices.noItemsHint')}</p>
                       </div>
                     )}
                   </div>
@@ -825,19 +860,20 @@ export default function InvoicesView() {
             </div>
 
             <div className="lg:col-span-4 space-y-6">
-              <div className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl p-6 shadow-whisper relative overflow-hidden animate-fade-in-up stagger-3">
-                <div className="absolute top-0 left-0 w-full h-[3px] bg-accent rounded-t-2xl" />
-                <h3 className="text-h3 text-charcoal-ink mb-4 mt-1">Current Order</h3>
-                <div className="space-y-3 mb-6">
+              <div className="bg-surface-container-lowest/80 backdrop-blur-2xl border border-outline-variant/50 rounded-3xl p-7 shadow-xl shadow-charcoal-ink/5 relative overflow-hidden animate-fade-in-up stagger-3 group hover:shadow-2xl transition-all duration-500">
+                <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-accent via-accent-muted to-accent opacity-80 group-hover:opacity-100 transition-opacity duration-300" />
+                <div className="absolute -top-24 -right-24 w-48 h-48 bg-accent/10 rounded-full blur-2xl group-hover:bg-accent/20 transition-colors duration-700 pointer-events-none" />
+                <h3 className="text-h3 text-charcoal-ink mb-4 mt-1 relative z-10">{t('invoices.currentOrder')}</h3>
+                <div className="space-y-3 mb-6 relative z-10">
                   <div className="flex justify-between items-center text-body-sm text-muted-steel">
-                    <span>Items Count</span>
+                    <span>{t('invoices.itemsCount')}</span>
                     <span className="font-mono-tabular text-charcoal-ink font-medium">{items.length}</span>
                   </div>
                   {items.length > 0 && (
                     <>
                       <div className="flex justify-between items-center text-body-sm text-muted-steel border-t border-outline-variant/30 pt-2">
-                        <span>Subtotal</span>
-                        <span className="font-mono-tabular text-charcoal-ink font-medium">EGP {subtotal.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                        <span>{t('invoices.subtotal')}</span>
+                        <span className="font-mono-tabular text-charcoal-ink font-medium">{t('common.currency')} {subtotal.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                       </div>
 
                       {/* Delivery Toggle */}
@@ -868,13 +904,15 @@ export default function InvoicesView() {
                         {hasDelivery && deliveryFee && (
                           <div className="flex justify-between items-center text-body-sm text-muted-steel">
                             <span>{t('invoices.deliveryFee')}</span>
-                            <span className="font-mono-tabular text-charcoal-ink font-medium">EGP {Number(deliveryFee || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                            <span className="font-mono-tabular text-charcoal-ink font-medium">{t('common.currency')} {Number(deliveryFee || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                           </div>
                         )}
                       </div>
-                      <div className="flex justify-between items-center text-body-sm text-muted-steel border-t border-outline-variant/30 pt-2">
-                        <span>Total Amount</span>
-                        <span className="font-mono-tabular text-charcoal-ink font-medium">EGP {totalAmount.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                      <div className="flex justify-between items-center border-t border-outline-variant/30 pt-4 mt-2">
+                        <span className="text-sm font-semibold text-charcoal-ink">{t('invoices.totalAmount')}</span>
+                        <span className="text-3xl font-black bg-clip-text text-transparent bg-gradient-to-r from-accent to-accent-muted drop-shadow-sm font-mono-tabular tracking-tight">
+                          {t('common.currency')} {totalAmount.toLocaleString(undefined, {minimumFractionDigits: 2})}
+                        </span>
                       </div>
                       {invoiceType === 'sale' && totalProfit !== 0 && (
                         <div className="flex justify-between items-center text-body-sm border-t border-outline-variant/30 pt-2">
@@ -882,56 +920,56 @@ export default function InvoicesView() {
                           <span className={`font-mono-tabular font-bold text-sm ${
                             totalProfit > 0 ? 'text-emerald-600' : 'text-red-500'
                           }`}>
-                            {totalProfit > 0 ? '+' : ''}EGP {totalProfit.toLocaleString(undefined, {minimumFractionDigits: 2})}
+                            {totalProfit > 0 ? '+' : ''}{t('common.currency')} {totalProfit.toLocaleString(undefined, {minimumFractionDigits: 2})}
                           </span>
                         </div>
                       )}
                       <div className="flex justify-between items-center text-body-sm text-muted-steel pt-1">
-                        <span>Amount Paid</span>
-                        <input type="number" value={amountPaid} onChange={(e) => setAmountPaid(e.target.value)} placeholder="0.00" className="w-24 bg-surface-container-low border border-outline-variant/60 rounded-lg px-2 py-1 text-sm text-right text-charcoal-ink focus:border-accent outline-none" />
+                        <span>{t('invoices.amountPaid')}</span>
+                        <input type="number" value={amountPaid} onChange={(e) => { setIsAmountPaidDirty(true); setAmountPaid(e.target.value); }} placeholder="0.00" className="w-24 bg-surface-container-low border border-outline-variant/60 rounded-lg px-2 py-1 text-sm text-right text-charcoal-ink focus:border-accent outline-none" />
                       </div>
                       <div className="flex justify-between items-center text-label-md text-charcoal-ink border-t border-outline-variant/30 pt-2">
-                        <span>Remaining Balance</span>
-                        <span className="font-mono-tabular font-medium text-error">EGP {remainingBalance.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                        <span>{t('invoices.remainingBalance')}</span>
+                        <span className="font-mono-tabular font-medium text-error">{t('common.currency')} {remainingBalance.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                       </div>
                     </>
                   )}
                 </div>
                 <button onClick={handleSubmit} disabled={submitting || (!selectedParty && !isNewParty) || items.length === 0 || (isNewParty && !newPartyName.trim())}
-                  className="w-full bg-accent hover:bg-accent-hover text-on-primary text-label-md py-2.5 rounded-xl flex items-center justify-center gap-2 transition-all duration-200 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer btn-tactile">
-                  {submitting ? <Loader2 size={18} className="animate-spin" /> : <><CheckCircle2 size={18} /> Generate Invoice</>}
+                  className="w-full bg-accent hover:bg-accent-hover text-on-primary font-bold text-base py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all duration-200 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer active:scale-[0.98] mt-6 relative z-10">
+                  {submitting ? <Loader2 size={20} className="animate-spin" /> : <><CheckCircle2 size={20} /> {t('invoices.generateInvoice')}</>}
                 </button>
               </div>
 
               {lastInvoice && (
                 <div className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl p-6 shadow-whisper relative overflow-hidden animate-scale-in">
                   <div className="absolute top-0 left-0 w-full h-[3px] bg-gradient-to-r from-accent to-accent-muted rounded-t-2xl" />
-                  <h3 className="text-h3 text-charcoal-ink mb-4 mt-1">Last Generated Invoice</h3>
+                  <h3 className="text-h3 text-charcoal-ink mb-4 mt-1">{t('invoices.lastGenerated')}</h3>
                   <div className="space-y-3">
                     <div className="flex justify-between items-center text-body-sm text-muted-steel border-b border-outline-variant/20 pb-2">
-                      <span>Invoice ID</span>
+                      <span>{t('invoices.invoiceId')}</span>
                       <span className="font-mono-tabular text-charcoal-ink">#{lastInvoice.id}</span>
                     </div>
                     <div className="flex justify-between items-center text-body-sm text-muted-steel border-b border-outline-variant/20 pb-2">
-                      <span>Status</span>
-                      <span className={`text-label-sm px-2 py-0.5 rounded-lg ${lastInvoice.status === 'paid' ? 'bg-accent-surface text-accent' : 'bg-error-container/30 text-error'}`}>{lastInvoice.status}</span>
+                      <span>{t('common.status')}</span>
+                      <span className={`text-label-sm px-2 py-0.5 rounded-lg ${lastInvoice.status === 'paid' ? 'bg-accent-surface text-accent' : 'bg-error-container/30 text-error'}`}>{t(`invoices.status.${lastInvoice.status}`, { defaultValue: lastInvoice.status })}</span>
                     </div>
                     <div className="flex justify-between items-center pt-2 border-t border-outline-variant/30">
-                      <span className="text-label-md text-charcoal-ink">Total Amount</span>
-                      <span className="text-h2 text-accent font-mono-tabular tracking-tight">EGP {Number(lastInvoice.total_amount).toLocaleString()}</span>
+                      <span className="text-label-md text-charcoal-ink">{t('invoices.totalAmount')}</span>
+                      <span className="text-h2 text-accent font-mono-tabular tracking-tight">{t('common.currency')} {Number(lastInvoice.total_amount).toLocaleString()}</span>
                     </div>
                   </div>
                   <div className="mt-5 flex gap-2">
                     <button onClick={() => handleOpenPrintPreview(lastInvoice)}
                       className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-label-md bg-charcoal-ink text-white hover:opacity-90 transition-all duration-200 shadow-sm cursor-pointer btn-tactile">
                       <Printer size={18} />
-                      Print Invoice
+                      {t('invoices.printInvoice')}
                     </button>
                     {templates.length > 0 && (
                       <button onClick={handlePrintFromTemplate} disabled={loadingPreview}
                         className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-label-md border border-outline-variant/60 text-charcoal-ink hover:bg-surface-container-low transition-all duration-200 cursor-pointer btn-tactile disabled:opacity-50">
                         {loadingPreview ? <Loader2 size={18} className="animate-spin" /> : <Printer size={18} />}
-                        Template
+                        {t('invoices.template')}
                       </button>
                     )}
                   </div>
@@ -943,11 +981,32 @@ export default function InvoicesView() {
         )}
 
       {activeTab === 'history' && (
-        <div className="max-w-7xl mx-auto space-y-6 px-6">
-          <div className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl shadow-whisper animate-fade-in-up">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between p-6 border-b border-outline-variant/30 gap-4">
-              <div className="flex flex-col gap-3">
-                <h3 className="text-h3 text-charcoal-ink">Previous Invoices</h3>
+        <div className="max-w-7xl mx-auto space-y-6 px-6 pb-12">
+          <div className="bg-surface-container-lowest/80 backdrop-blur-2xl border border-outline-variant/50 rounded-3xl shadow-xl shadow-charcoal-ink/5 animate-fade-in-up overflow-hidden">
+            <div className="p-7 border-b border-outline-variant/30 bg-surface-container-low/30 flex flex-col gap-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <h3 className="text-h3 text-charcoal-ink">{t('invoices.previousInvoices')}</h3>
+                <div className="flex items-center gap-3 w-full sm:w-auto">
+                  <div className="relative group w-full sm:w-auto">
+                    <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-steel group-focus-within:text-accent transition-colors duration-300" />
+                    <input 
+                      type="text" 
+                      placeholder={t('invoices.searchByIdOrType')}
+                      value={historySearch}
+                      onChange={(e) => setHistorySearch(e.target.value)}
+                      className="pl-10 pr-4 py-2.5 w-full sm:w-64 bg-surface-container-low border border-outline-variant/60 rounded-xl text-sm focus:border-accent focus:ring-2 focus:ring-accent/20 focus:bg-surface-container-lowest transition-all outline-none"
+                    />
+                  </div>
+                  {selectedIds.size > 0 && (
+                    <button onClick={handleBulkPrint}
+                      className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-label-md bg-charcoal-ink text-white hover:opacity-90 transition-all shadow-sm cursor-pointer btn-tactile whitespace-nowrap">
+                      <Printer size={16} /> {t('invoices.printSelected')} ({selectedIds.size})
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex flex-col lg:flex-row lg:items-center gap-4 lg:gap-6">
                 <div className="flex flex-wrap items-center gap-2">
                   {[
                     { key: 'all', label: t('common.all') },
@@ -970,6 +1029,9 @@ export default function InvoicesView() {
                     </button>
                   ))}
                 </div>
+                
+                <div className="hidden lg:block w-px h-6 bg-outline-variant/50"></div>
+
                 <div className="flex flex-wrap items-center gap-2">
                   {[
                     { key: 'all', label: t('common.all') },
@@ -991,78 +1053,76 @@ export default function InvoicesView() {
                   ))}
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-steel" />
-                  <input 
-                    type="text" 
-                    placeholder="Search by ID or Type..." 
-                    value={historySearch}
-                    onChange={(e) => setHistorySearch(e.target.value)}
-                    className="pl-9 pr-4 py-2 bg-surface-container-low border border-outline-variant/60 rounded-xl text-sm focus:border-accent outline-none"
-                  />
-                </div>
-                {selectedIds.size > 0 && (
-                  <button onClick={handleBulkPrint}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-label-md bg-charcoal-ink text-white hover:opacity-90 transition-all shadow-sm cursor-pointer btn-tactile">
-                    <Printer size={16} /> Print Selected ({selectedIds.size})
-                  </button>
-                )}
-              </div>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
+              <table className="w-full text-sm text-left">
+                <thead className="bg-surface-container-low/40">
                   <tr className="border-b border-outline-variant/30 text-label-sm text-muted-steel uppercase tracking-wider">
-                    <th className="py-3 px-4 text-left w-10"></th>
-                    <th className="py-3 px-4 text-left">ID</th>
-                    <th className="py-3 px-4 text-left">{t('invoices.customerSupplier')}</th>
-                    <th className="py-3 px-4 text-left">Type</th>
-                    <th className="py-3 px-4 text-right">Total</th>
-                    <th className="py-3 px-4 text-center">Status</th>
-                    <th className="py-3 px-4 text-left">Date</th>
-                    <th className="py-3 px-4 text-right">Actions</th>
+                    <th className="py-4 px-6 w-12 rounded-tl-xl"></th>
+                    <th className="py-4 px-6 font-semibold">{t('common.id')}</th>
+                    <th className="py-4 px-6 font-semibold">{t('invoices.customerSupplier')}</th>
+                    <th className="py-4 px-6 font-semibold">{t('invoices.type')}</th>
+                    <th className="py-4 px-6 font-semibold text-right">{t('common.total')}</th>
+                    <th className="py-4 px-6 font-semibold text-center">{t('common.status')}</th>
+                    <th className="py-4 px-6 font-semibold">{t('common.date')}</th>
+                    <th className="py-4 px-6 font-semibold text-right rounded-tr-xl">{t('common.actions')}</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-outline-variant/20">
                   {filteredInvoiceHistory.map((inv) => (
-                  <tr key={inv.id} className="border-b border-outline-variant/20 hover:bg-surface-container-low/40 transition-colors">
-                    <td className="py-3 px-4">
-                      <input type="checkbox" checked={selectedIds.has(inv.id)} onChange={() => toggleSelect(inv.id)}
-                        className="w-4 h-4 rounded border-outline-variant/60 text-accent focus:ring-accent/20 cursor-pointer" />
+                  <tr key={inv.id} className="group hover:bg-surface-container-low/50 transition-all duration-200">
+                    <td className="py-4 px-6">
+                      <div className="flex items-center justify-center">
+                        <input type="checkbox" checked={selectedIds.has(inv.id)} onChange={() => toggleSelect(inv.id)}
+                          className="w-4 h-4 rounded border-outline-variant/50 text-accent focus:ring-accent/20 cursor-pointer transition-colors" />
+                      </div>
                     </td>
-                    <td className="py-3 px-4 font-mono-tabular text-charcoal-ink">#{String(inv.id).padStart(5, '0')}</td>
-                    <td className="py-3 px-4 text-charcoal-ink truncate max-w-[160px]" title={inv.party_name || ''}>{inv.party_name || '—'}</td>
-                    <td className="py-3 px-4 capitalize text-muted-steel">{t(`invoices.typeLabels.${inv.invoice_type?.toLowerCase()}`, { defaultValue: inv.invoice_type?.replace('_', ' ') })}</td>
-                    <td className="py-3 px-4 text-right font-mono-tabular text-charcoal-ink">EGP {Number(inv.total_amount).toLocaleString()}</td>
-                    <td className="py-3 px-4 text-center">
-                      <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-lg ${inv.status === 'paid' ? 'bg-accent-surface text-accent' : inv.status === 'partial' ? 'bg-amber-100 text-amber-700' : 'bg-error-container/30 text-error'}`}>{inv.status}</span>
+                    <td className="py-4 px-6 font-mono-tabular text-charcoal-ink font-medium">#{String(inv.id).padStart(5, '0')}</td>
+                    <td className="py-4 px-6 text-charcoal-ink font-medium truncate max-w-[160px]" title={inv.party_name || ''}>{inv.party_name || '—'}</td>
+                    <td className="py-4 px-6">
+                      <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider ${
+                        inv.invoice_type === 'SALE' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/50' : 
+                        inv.invoice_type === 'PURCHASE' ? 'bg-blue-50 text-blue-700 border border-blue-200/50' : 
+                        'bg-surface-container-low text-muted-steel border border-outline-variant/50'
+                      }`}>
+                        {t(`invoices.typeLabels.${inv.invoice_type?.toLowerCase()}`, { defaultValue: inv.invoice_type?.replace('_', ' ') })}
+                      </span>
                     </td>
-                    <td className="py-3 px-4 font-mono-tabular text-muted-steel text-xs">{inv.created_at ? new Date(inv.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '-'}</td>
-                    <td className="py-3 px-4 text-right">
-                      <div className="flex items-center justify-end gap-1">
+                    <td className="py-4 px-6 text-right font-mono-tabular text-charcoal-ink font-bold">{Number(inv.total_amount).toLocaleString()} {t('common.currencyEGP', { defaultValue: 'EGP' })}</td>
+                    <td className="py-4 px-6 text-center">
+                      <span className={`inline-flex items-center justify-center px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider shadow-sm ${
+                        inv.status === 'paid' ? 'bg-emerald-100/80 text-emerald-800 border border-emerald-200/50' : 
+                        inv.status === 'partial' ? 'bg-amber-100/80 text-amber-800 border border-amber-200/50' : 
+                        'bg-red-100/80 text-red-800 border border-red-200/50'
+                      }`}>
+                        {t(`invoices.status.${inv.status}`, { defaultValue: inv.status })}
+                      </span>
+                    </td>
+                    <td className="py-4 px-6 font-mono-tabular text-muted-steel text-xs">{inv.created_at ? new Date(inv.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '-'}</td>
+                    <td className="py-4 px-6 text-right">
+                      <div className="flex items-center justify-end gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
                         {(inv.invoice_type === 'SALE' || inv.invoice_type === 'PURCHASE') && (
                           <button onClick={() => setEditingInvoice(inv)}
-                            className="p-1.5 rounded-xl text-muted-steel hover:bg-accent-surface hover:text-accent transition-all cursor-pointer btn-tactile"
-                            title="Edit">
+                            className="p-2 rounded-xl text-muted-steel hover:bg-accent/10 hover:text-accent transition-all cursor-pointer btn-tactile"
+                            title={t('common.edit', { defaultValue: 'Edit' })}>
                             <Edit size={16} />
                           </button>
                         )}
                         {inv.invoice_type?.toLowerCase() === 'sell' && (
                           <button onClick={() => setInvoiceToReturn(inv)}
-                            className="p-1.5 rounded-xl text-muted-steel hover:bg-error-container/30 hover:text-error transition-all cursor-pointer btn-tactile"
-                            title="Return Invoice">
+                            className="p-2 rounded-xl text-muted-steel hover:bg-amber-500/10 hover:text-amber-600 transition-all cursor-pointer btn-tactile"
+                            title={t('invoices.returnInvoice', { defaultValue: 'Return Invoice' })}>
                             <RotateCcw size={16} />
                           </button>
                         )}
                         <button onClick={() => handleOpenPrintPreview(inv)}
-                          className="p-1.5 rounded-xl text-muted-steel hover:bg-accent-surface hover:text-accent transition-all cursor-pointer btn-tactile"
-                          title="Print">
+                          className="p-2 rounded-xl text-muted-steel hover:bg-charcoal-ink/10 hover:text-charcoal-ink transition-all cursor-pointer btn-tactile"
+                          title={t('common.print', { defaultValue: 'Print' })}>
                           <Printer size={16} />
                         </button>
                         <button onClick={() => setInvoiceToDelete(inv)}
-                          className="p-1.5 rounded-xl text-muted-steel hover:bg-error-container/30 hover:text-error transition-all cursor-pointer btn-tactile"
-                          title="Delete">
+                          className="p-2 rounded-xl text-muted-steel hover:bg-error/10 hover:text-error transition-all cursor-pointer btn-tactile"
+                          title={t('common.delete', { defaultValue: 'Delete' })}>
                           <Trash2 size={16} />
                         </button>
                       </div>
@@ -1074,17 +1134,17 @@ export default function InvoicesView() {
             </div>
             {historyLoading && (
               <div className="p-8 text-center text-muted-steel">
-                Loading invoices...
+                {t('common.loading')}
               </div>
             )}
             {!historyLoading && filteredInvoiceHistory.length === 0 && (
               <div className="p-8 text-center text-muted-steel">
-                No invoices found.
+                {t('invoices.noInvoices')}
               </div>
             )}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 border-t border-outline-variant/30">
-              <div className="flex items-center gap-2 text-sm text-muted-steel">
-                <span>Rows per page</span>
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-5 border-t border-outline-variant/30 bg-surface-container-low/20">
+              <div className="flex items-center gap-3 text-sm text-muted-steel">
+                <span className="font-medium">{t('common.rowsPerPage', { defaultValue: 'Rows per page' })}</span>
                 <select
                   value={historyPageSize}
                   onChange={(e) => {
@@ -1092,32 +1152,34 @@ export default function InvoicesView() {
                     setHistoryPageSize(nextSize);
                     setHistoryPage(1);
                   }}
-                  className="px-2 py-1.5 bg-surface-container-low border border-outline-variant/60 rounded-lg text-sm focus:border-accent outline-none"
+                  className="px-3 py-1.5 bg-surface-container-lowest border border-outline-variant/60 rounded-xl text-sm font-medium focus:border-accent focus:ring-2 focus:ring-accent/10 outline-none transition-all cursor-pointer shadow-sm hover:border-outline-variant"
                 >
                   <option value={10}>10</option>
                   <option value={20}>20</option>
                 </select>
-                <span>
+                <span className="ml-2 font-medium">
                   {historyTotal === 0 ? '0' : (historyPage - 1) * historyPageSize + 1}
                   -
-                  {Math.min(historyPage * historyPageSize, historyTotal)} of {historyTotal}
+                  {Math.min(historyPage * historyPageSize, historyTotal)} {t('common.of', { defaultValue: 'of' })} {historyTotal}
                 </span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1">
                 <button
                   onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}
                   disabled={historyPage <= 1}
-                  className="px-3 py-1.5 rounded-lg border border-outline-variant/60 text-sm text-charcoal-ink hover:bg-surface-container-low disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 rounded-xl border border-outline-variant/60 text-sm font-semibold text-charcoal-ink hover:bg-surface-container-low hover:text-accent disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
                 >
-                  Previous
+                  {t('common.previous', { defaultValue: 'Previous' })}
                 </button>
-                <span className="text-sm text-muted-steel">Page {historyPage} / {historyTotalPages}</span>
+                <div className="px-4 py-2 flex items-center justify-center font-medium text-sm text-charcoal-ink min-w-[5rem]">
+                  {historyPage} <span className="text-muted-steel mx-1">/</span> {historyTotalPages}
+                </div>
                 <button
                   onClick={() => setHistoryPage((p) => Math.min(historyTotalPages, p + 1))}
                   disabled={historyPage >= historyTotalPages}
-                  className="px-3 py-1.5 rounded-lg border border-outline-variant/60 text-sm text-charcoal-ink hover:bg-surface-container-low disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 rounded-xl border border-outline-variant/60 text-sm font-semibold text-charcoal-ink hover:bg-surface-container-low hover:text-accent disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
                 >
-                  Next
+                  {t('common.next', { defaultValue: 'Next' })}
                 </button>
               </div>
             </div>
@@ -1135,8 +1197,8 @@ export default function InvoicesView() {
                   <Printer size={16} />
                 </div>
                 <div>
-                  <h3 className="text-label-md text-charcoal-ink font-semibold leading-tight">Print Preview</h3>
-                  <p className="text-[11px] text-muted-steel mt-0.5">Invoice #{String(invoiceToPrint.id).padStart(5, '0')}</p>
+                  <h3 className="text-label-md text-charcoal-ink font-semibold leading-tight">{t('invoices.printPreview')}</h3>
+                  <p className="text-[11px] text-muted-steel mt-0.5">{t('invoices.invoiceId')} #{String(invoiceToPrint.id).padStart(5, '0')}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -1145,9 +1207,9 @@ export default function InvoicesView() {
                   onChange={(e) => setPaperSize(e.target.value)}
                   className="px-3 py-2 rounded-xl text-label-md border border-outline-variant/60 bg-surface-container-lowest text-muted-steel focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all text-sm cursor-pointer"
                 >
-                  <option value="a4">A4 Paper</option>
-                  <option value="a5">A5 Paper</option>
-                  <option value="receipt">Receipt (80mm)</option>
+                  <option value="a4">{t('invoices.a4Paper')}</option>
+                  <option value="a5">{t('invoices.a5Paper')}</option>
+                  <option value="receipt">{t('invoices.receipt')}</option>
                 </select>
                 <button onClick={handleClosePrintPreview}
                   className="flex items-center gap-2 px-4 py-2 rounded-xl text-label-md text-muted-steel border border-outline-variant/60 hover:bg-surface-container-low transition-all cursor-pointer btn-tactile">
@@ -1172,7 +1234,7 @@ export default function InvoicesView() {
                         .save();
                     } catch (err) {
                       console.error('PDF generation failed:', err);
-                      notifications.show({ title: 'Error', message: 'Failed to generate PDF. Try Print → Save as PDF.', color: 'red' });
+                      notifications.show({ title: t('common.error'), message: t('invoices.pdfFailed'), color: 'red' });
                       try {
                         // Fallback: open browser print dialog
                         window.print();
@@ -1315,22 +1377,22 @@ export default function InvoicesView() {
               <div className="w-12 h-12 rounded-xl bg-error-container/30 text-error flex items-center justify-center mb-4">
                 <Trash2 size={24} />
               </div>
-              <h3 className="text-h3 text-charcoal-ink mb-2">Delete Invoice</h3>
+              <h3 className="text-h3 text-charcoal-ink mb-2">{t('invoices.deleteInvoice')}</h3>
               <p className="text-muted-steel text-sm leading-relaxed mb-6">
-                Are you sure you want to delete Invoice #{String(invoiceToDelete.id).padStart(5, '0')}? This action cannot be undone. Associated stock will be adjusted accordingly.
+                {t('invoices.deleteInvoiceMessage', { id: String(invoiceToDelete.id).padStart(5, '0') })}
               </p>
               <div className="flex items-center gap-3 justify-end">
                 <button
                   onClick={() => setInvoiceToDelete(null)}
                   className="px-5 py-2.5 rounded-xl text-label-md text-muted-steel hover:bg-surface-container-low transition-all cursor-pointer btn-tactile"
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </button>
                 <button
                   onClick={() => handleDeleteInvoice(invoiceToDelete.id)}
                   className="px-5 py-2.5 rounded-xl text-label-md bg-error text-white hover:bg-error/90 shadow-sm transition-all cursor-pointer btn-tactile"
                 >
-                  Confirm Delete
+                  {t('invoices.confirmDelete')}
                 </button>
               </div>
             </div>

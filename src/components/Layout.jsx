@@ -2,16 +2,18 @@ import { useState, useMemo } from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Package, Users, Truck, FileText, Settings,
-  Search, Bell, HelpCircle, Menu, X, LogOut, Building2, ChevronDown, Globe,
+  Bell, Menu, X, LogOut, Building2, ChevronDown, Globe,
 } from 'lucide-react';
 import myLogo from '../assets/my.png';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
+import { getLogoUrl } from '../utils/url';
 
 export default function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { user } = useAuth();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const { t, i18n } = useTranslation();
 
   const toggleLanguage = () => {
@@ -64,7 +66,7 @@ export default function Layout() {
           <div className="flex items-center gap-3 min-w-0 flex-1">
             <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm overflow-hidden ${user?.tenant?.logo_url ? 'bg-transparent' : 'bg-accent'}`}>
               {user?.tenant?.logo_url ? (
-                <img src={user.tenant.logo_url} alt="Logo" className="w-full h-full object-contain" />
+                <img src={getLogoUrl(user.tenant.logo_url)} alt="Logo" className="w-full h-full object-contain" />
               ) : (
                 <Building2 size={18} className="text-on-primary" strokeWidth={1.8} />
               )}
@@ -165,24 +167,47 @@ export default function Layout() {
           <div className="hidden md:block flex-1" />
 
           <div className="flex items-center gap-2">
-            <div className="relative hidden sm:flex items-center">
-              <Search className="absolute left-3 rtl:right-3 rtl:left-auto text-muted-steel pointer-events-none" size={16} />
-              <input
-                className="pl-9 pr-4 rtl:pr-9 rtl:pl-4 py-2 bg-surface-container-low border border-outline-variant/60 rounded-xl
-                           text-sm text-on-surface placeholder:text-outline
-                           focus:border-accent focus:ring-2 focus:ring-accent/10 focus:outline-none
-                           transition-all duration-200 w-56"
-                placeholder={t('common.search')}
-                type="text"
-              />
+
+
+            <div className="relative ml-1 rtl:mr-1 rtl:ml-0">
+              <button 
+                onClick={() => setNotificationsOpen(!notificationsOpen)}
+                className="hidden sm:flex items-center justify-center w-9 h-9 text-muted-steel hover:text-accent hover:bg-accent-surface rounded-xl transition-all duration-200 cursor-pointer btn-tactile relative"
+              >
+                <Bell size={18} />
+                <span className="absolute top-2.5 right-2.5 w-1.5 h-1.5 bg-error rounded-full border border-surface-container-lowest"></span>
+              </button>
+
+              {notificationsOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setNotificationsOpen(false)} />
+                  <div className="absolute right-0 rtl:left-0 rtl:right-auto top-full mt-1.5 w-72 sm:w-80 z-50 animate-scale-in origin-top-right rtl:origin-top-left">
+                    <div className="bg-surface-container-lowest rounded-xl border border-outline-variant/60 shadow-whisper-lg overflow-hidden flex flex-col">
+                      <div className="px-4 py-3 border-b border-outline-variant/40 bg-surface-container-low flex items-center justify-between">
+                        <h3 className="text-label-md font-semibold text-on-surface">{t('nav.notifications')}</h3>
+                        <span className="text-[11px] text-accent hover:underline cursor-pointer">{t('common.markAllAsRead')}</span>
+                      </div>
+                      <div className="max-h-[300px] overflow-y-auto">
+                        <div className="px-4 py-3 border-b border-outline-variant/20 hover:bg-surface-container-high transition-colors cursor-pointer flex gap-3">
+                          <div className="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <Bell size={14} className="text-accent" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-label-sm text-on-surface leading-snug">{t('common.welcomeMessage')}</p>
+                            <p className="text-[11px] text-muted-steel mt-0.5 truncate">{t('common.systemReady')}</p>
+                            <p className="text-[10px] text-muted-steel/70 mt-1">{t('common.now')}</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="p-2 border-t border-outline-variant/40 bg-surface-container-low text-center">
+                        <button className="text-[12px] text-accent font-medium hover:underline cursor-pointer">{t('common.viewAllNotifications')}</button>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
-            <button className="hidden sm:flex items-center justify-center w-9 h-9 text-muted-steel hover:text-accent hover:bg-accent-surface rounded-xl transition-all duration-200 cursor-pointer btn-tactile">
-              <Bell size={18} />
-            </button>
-            <button className="hidden sm:flex items-center justify-center w-9 h-9 text-muted-steel hover:text-accent hover:bg-accent-surface rounded-xl transition-all duration-200 cursor-pointer btn-tactile">
-              <HelpCircle size={18} />
-            </button>
 
             {/* Language Switcher */}
             <button

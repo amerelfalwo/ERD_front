@@ -2,8 +2,10 @@ import { useState, useEffect, useMemo } from 'react';
 import { Plus, Search, Package, ChevronDown, ChevronUp, X, Loader2, Trash2, Pencil } from 'lucide-react';
 import api from '../services/api';
 import { notifications } from '@mantine/notifications';
+import { useTranslation } from 'react-i18next';
 
 function AddProductModal({ isOpen, onClose, onCreated }) {
+  const { t } = useTranslation();
   const [name, setName] = useState('');
   const [purchasePrice, setPurchasePrice] = useState('');
   const [sellPrice, setSellPrice] = useState('');
@@ -25,7 +27,7 @@ function AddProductModal({ isOpen, onClose, onCreated }) {
       setSellPrice('');
       onCreated();
       onClose();
-    } catch (err) { notifications.show({ title: 'Error', message: err?.message || 'Error', color: 'red' }); }
+    } catch (err) { notifications.show({ title: t('common.error'), message: err?.message || t('products.failedCreate'), color: 'red' }); }
     finally { setSubmitting(false); }
   }
 
@@ -34,34 +36,34 @@ function AddProductModal({ isOpen, onClose, onCreated }) {
       <div className="absolute inset-0 bg-charcoal-ink/15 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-surface-container-lowest rounded-2xl border border-outline-variant/60 shadow-whisper-lg w-full max-w-md animate-scale-in">
         <div className="flex items-center justify-between p-6 border-b border-outline-variant/40">
-          <h3 className="text-h3 text-charcoal-ink tracking-tight">Add New Product</h3>
+          <h3 className="text-h3 text-charcoal-ink tracking-tight">{t('products.addNewProduct')}</h3>
           <button onClick={onClose} className="p-1.5 rounded-xl text-muted-steel hover:bg-surface-container-low transition-colors cursor-pointer btn-tactile"><X size={18} /></button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
-            <label className="block text-label-sm text-muted-steel mb-1.5 uppercase tracking-wider">Product Name</label>
-            <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter product name" autoFocus
+            <label className="block text-label-sm text-muted-steel mb-1.5 uppercase tracking-wider">{t('products.productName')}</label>
+            <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder={t('products.enterProductName')} autoFocus
               className="w-full px-4 py-2.5 rounded-xl border border-outline-variant/60 bg-surface-container-lowest text-sm text-charcoal-ink placeholder:text-outline focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all duration-200"
             />
           </div>
           <div>
-            <label className="block text-label-sm text-muted-steel mb-1.5 uppercase tracking-wider">Purchase Price</label>
+            <label className="block text-label-sm text-muted-steel mb-1.5 uppercase tracking-wider">{t('products.purchasePrice')}</label>
             <input type="number" step="any" value={purchasePrice} onChange={(e) => setPurchasePrice(e.target.value)} placeholder="0.00"
               className="w-full px-4 py-2.5 rounded-xl border border-outline-variant/60 bg-surface-container-lowest text-sm text-charcoal-ink placeholder:text-outline focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all duration-200"
             />
           </div>
           <div>
-            <label className="block text-label-sm text-muted-steel mb-1.5 uppercase tracking-wider">Sell Price</label>
+            <label className="block text-label-sm text-muted-steel mb-1.5 uppercase tracking-wider">{t('products.sellPrice')}</label>
             <input type="number" step="any" value={sellPrice} onChange={(e) => setSellPrice(e.target.value)} placeholder="0.00"
               className="w-full px-4 py-2.5 rounded-xl border border-outline-variant/60 bg-surface-container-lowest text-sm text-charcoal-ink placeholder:text-outline focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all duration-200"
             />
           </div>
           <div className="flex items-center justify-end gap-2 pt-4">
-            <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-label-md text-muted-steel hover:bg-surface-container-low transition-colors cursor-pointer btn-tactile">Cancel</button>
+            <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-label-md text-muted-steel hover:bg-surface-container-low transition-colors cursor-pointer btn-tactile">{t('common.cancel')}</button>
             <button type="submit" disabled={submitting || !name.trim()}
               className="flex items-center gap-1.5 px-5 py-2 rounded-xl text-label-md bg-accent text-on-primary hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm cursor-pointer btn-tactile">
               {submitting && <Loader2 size={16} className="animate-spin" />}
-              Create Product
+              {t('products.createProduct')}
             </button>
           </div>
         </form>
@@ -71,6 +73,7 @@ function AddProductModal({ isOpen, onClose, onCreated }) {
 }
 
 function EditProductModal({ isOpen, onClose, product, onUpdated }) {
+  const { t } = useTranslation();
   const [name, setName] = useState('');
   const [purchasePrice, setPurchasePrice] = useState('');
   const [sellPrice, setSellPrice] = useState('');
@@ -98,7 +101,7 @@ function EditProductModal({ isOpen, onClose, product, onUpdated }) {
       });
       onUpdated();
       onClose();
-    } catch (err) { notifications.show({ title: 'Error', message: err?.message || 'Error', color: 'red' }); }
+    } catch (err) { notifications.show({ title: t('common.error'), message: err?.message || t('products.failedUpdate'), color: 'red' }); }
     finally { setSubmitting(false); }
   }
 
@@ -107,34 +110,34 @@ function EditProductModal({ isOpen, onClose, product, onUpdated }) {
       <div className="absolute inset-0 bg-charcoal-ink/15 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-surface-container-lowest rounded-2xl border border-outline-variant/60 shadow-whisper-lg w-full max-w-md animate-scale-in">
         <div className="flex items-center justify-between p-6 border-b border-outline-variant/40">
-          <h3 className="text-h3 text-charcoal-ink tracking-tight">Edit Product</h3>
+          <h3 className="text-h3 text-charcoal-ink tracking-tight">{t('products.editProduct')}</h3>
           <button onClick={onClose} className="p-1.5 rounded-xl text-muted-steel hover:bg-surface-container-low transition-colors cursor-pointer btn-tactile"><X size={18} /></button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
-            <label className="block text-label-sm text-muted-steel mb-1.5 uppercase tracking-wider">Product Name</label>
-            <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter product name" autoFocus
+            <label className="block text-label-sm text-muted-steel mb-1.5 uppercase tracking-wider">{t('products.productName')}</label>
+            <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder={t('products.enterProductName')} autoFocus
               className="w-full px-4 py-2.5 rounded-xl border border-outline-variant/60 bg-surface-container-lowest text-sm text-charcoal-ink placeholder:text-outline focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all duration-200"
             />
           </div>
           <div>
-            <label className="block text-label-sm text-muted-steel mb-1.5 uppercase tracking-wider">Purchase Price</label>
+            <label className="block text-label-sm text-muted-steel mb-1.5 uppercase tracking-wider">{t('products.purchasePrice')}</label>
             <input type="number" step="any" value={purchasePrice} onChange={(e) => setPurchasePrice(e.target.value)} placeholder="0.00"
               className="w-full px-4 py-2.5 rounded-xl border border-outline-variant/60 bg-surface-container-lowest text-sm text-charcoal-ink placeholder:text-outline focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all duration-200"
             />
           </div>
           <div>
-            <label className="block text-label-sm text-muted-steel mb-1.5 uppercase tracking-wider">Sell Price</label>
+            <label className="block text-label-sm text-muted-steel mb-1.5 uppercase tracking-wider">{t('products.sellPrice')}</label>
             <input type="number" step="any" value={sellPrice} onChange={(e) => setSellPrice(e.target.value)} placeholder="0.00"
               className="w-full px-4 py-2.5 rounded-xl border border-outline-variant/60 bg-surface-container-lowest text-sm text-charcoal-ink placeholder:text-outline focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all duration-200"
             />
           </div>
           <div className="flex items-center justify-end gap-2 pt-4">
-            <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-label-md text-muted-steel hover:bg-surface-container-low transition-colors cursor-pointer btn-tactile">Cancel</button>
+            <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-label-md text-muted-steel hover:bg-surface-container-low transition-colors cursor-pointer btn-tactile">{t('common.cancel')}</button>
             <button type="submit" disabled={submitting || !name.trim()}
               className="flex items-center gap-1.5 px-5 py-2 rounded-xl text-label-md bg-accent text-on-primary hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm cursor-pointer btn-tactile">
               {submitting && <Loader2 size={16} className="animate-spin" />}
-              Save Changes
+              {t('products.saveChanges')}
             </button>
           </div>
         </form>
@@ -156,6 +159,7 @@ function BatchRow({ batch }) {
 }
 
 function ProductRow({ product, inventoryProduct, onDelete, onEdit }) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const [batches, setBatches] = useState([]);
   const [loadingBatches, setLoadingBatches] = useState(false);
@@ -190,7 +194,7 @@ function ProductRow({ product, inventoryProduct, onDelete, onEdit }) {
         <div className="col-span-2 font-mono-tabular text-body-sm text-muted-steel text-right">{totalQty.toLocaleString()}</div>
         <div className="col-span-2 flex items-center justify-end gap-2">
           <span className={`text-label-sm px-2 py-0.5 rounded-lg ${totalQty > 0 ? 'bg-accent-surface text-accent' : 'bg-error-container/30 text-error'}`}>
-            {totalQty > 0 ? 'In Stock' : 'Out'}
+            {totalQty > 0 ? t('products.inStock') : t('products.outOfStock')}
           </span>
           <button
             onClick={(e) => { e.stopPropagation(); onEdit(product); }}
@@ -212,14 +216,14 @@ function ProductRow({ product, inventoryProduct, onDelete, onEdit }) {
       {expanded && (
         <div className="bg-surface-container-low/20 border-t border-outline-variant/20 animate-fade-in-up">
           <div className="grid grid-cols-5 gap-2 py-2.5 px-6 text-label-sm uppercase tracking-wider text-muted-steel/70">
-            <span>Batch ID</span><span>Supplier</span><span>In Price</span><span>Selling Price</span><span>Remaining</span>
+            <span>{t('partyDashboard.invoiceId', 'Batch ID')}</span><span>{t('invoices.supplierName', 'Supplier')}</span><span>{t('products.purchasePrice')}</span><span>{t('products.sellPrice')}</span><span>{t('partyDashboard.remainingQuantity', 'Remaining')}</span>
           </div>
           {loadingBatches ? (
             <div className="py-3 px-6 space-y-1.5">{[1,2].map(i => <div key={i} className="h-8 rounded-lg animate-shimmer" />)}</div>
           ) : batches.length > 0 ? (
             batches.map((b) => <BatchRow key={b.id} batch={b} />)
           ) : (
-            <div className="text-center py-4 text-body-sm text-muted-steel">No batches found</div>
+            <div className="text-center py-4 text-body-sm text-muted-steel">{t('common.noData')}</div>
           )}
         </div>
       )}
@@ -228,6 +232,7 @@ function ProductRow({ product, inventoryProduct, onDelete, onEdit }) {
 }
 
 export default function ProductsView() {
+  const { t } = useTranslation();
   const [products, setProducts] = useState([]);
   const [inventory, setInventory] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -259,7 +264,7 @@ export default function ProductsView() {
       setProductToDelete(null);
       fetchProducts();
     } catch (err) {
-      notifications.show({ title: 'Error', message: err?.message || 'Error', color: 'red' });
+      notifications.show({ title: t('common.error'), message: err?.message || t('products.failedDelete'), color: 'red' });
     } finally {
       setDeletingProduct(false);
     }
@@ -296,44 +301,44 @@ export default function ProductsView() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4 animate-fade-in-up">
         <div>
-          <h2 className="text-h1 text-charcoal-ink">Product Inventory</h2>
-          <p className="text-body-base text-muted-steel mt-1">Manage your product catalog and track stock levels.</p>
+          <h2 className="text-h1 text-charcoal-ink">{t('products.title')}</h2>
+          <p className="text-body-base text-muted-steel mt-1">{t('products.subtitle')}</p>
         </div>
         <button onClick={() => setShowModal(true)}
           className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-label-md bg-accent text-on-primary hover:bg-accent-hover transition-all duration-200 shadow-sm cursor-pointer btn-tactile">
-          <Plus size={18} strokeWidth={2.5} /> Add Product
+          <Plus size={18} strokeWidth={2.5} /> {t('products.addProduct')}
         </button>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3 animate-fade-in-up stagger-1">
         <div className="flex-1 relative">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-steel" />
-          <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search products..."
+          <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('products.searchProducts')}
             className="w-full pl-9 pr-4 py-2 rounded-xl border border-outline-variant/60 bg-surface-container-lowest text-sm text-charcoal-ink placeholder:text-outline focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all duration-200"
           />
         </div>
         <div className="flex gap-2">
           <select value={stockFilter} onChange={(e) => setStockFilter(e.target.value)} className={selectClass}>
-            <option value="all">All Status</option>
-            <option value="in_stock">In Stock</option>
-            <option value="out_of_stock">Out of Stock</option>
+            <option value="all">{t('common.all')}</option>
+            <option value="in_stock">{t('products.inStock')}</option>
+            <option value="out_of_stock">{t('products.outOfStock')}</option>
           </select>
           <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className={selectClass}>
-            <option value="name_asc">Name (A-Z)</option>
-            <option value="name_desc">Name (Z-A)</option>
+            <option value="name_asc">{t('customers.sortAZ')}</option>
+            <option value="name_desc">{t('customers.sortZA')}</option>
           </select>
         </div>
       </div>
 
       <div className="animate-fade-in-up stagger-2 bg-surface-container-lowest rounded-2xl shadow-whisper border border-outline-variant/60 overflow-hidden">
         <div className="grid grid-cols-12 gap-2 items-center py-3 px-6 border-b border-outline-variant/40 bg-surface-container-low/30">
-          <span className="col-span-1 text-label-sm uppercase tracking-wider text-muted-steel/70">ID</span>
-          <span className="col-span-2 text-label-sm uppercase tracking-wider text-muted-steel/70">Product Name</span>
-          <span className="col-span-2 text-label-sm uppercase tracking-wider text-muted-steel/70">Supplier</span>
-          <span className="col-span-2 text-label-sm uppercase tracking-wider text-muted-steel/70 text-right">In Price</span>
-          <span className="col-span-1 text-label-sm uppercase tracking-wider text-muted-steel/70 text-right">Sell</span>
-          <span className="col-span-2 text-label-sm uppercase tracking-wider text-muted-steel/70 text-right">Quantity</span>
-          <span className="col-span-2 text-label-sm uppercase tracking-wider text-muted-steel/70 text-right">Status</span>
+          <span className="col-span-1 text-label-sm uppercase tracking-wider text-muted-steel/70">{t('common.id')}</span>
+          <span className="col-span-2 text-label-sm uppercase tracking-wider text-muted-steel/70">{t('products.productName')}</span>
+          <span className="col-span-2 text-label-sm uppercase tracking-wider text-muted-steel/70">{t('invoices.supplierName')}</span>
+          <span className="col-span-2 text-label-sm uppercase tracking-wider text-muted-steel/70 text-right">{t('products.purchasePrice')}</span>
+          <span className="col-span-1 text-label-sm uppercase tracking-wider text-muted-steel/70 text-right">{t('products.sellPrice')}</span>
+          <span className="col-span-2 text-label-sm uppercase tracking-wider text-muted-steel/70 text-right">{t('common.quantity')}</span>
+          <span className="col-span-2 text-label-sm uppercase tracking-wider text-muted-steel/70 text-right">{t('common.status')}</span>
         </div>
         {loading ? (
           <div>{[1,2,3,4,5].map((i) => (
@@ -360,8 +365,8 @@ export default function ProductsView() {
         ) : (
           <div className="flex flex-col items-center justify-center py-16 text-muted-steel">
             <Package size={40} strokeWidth={1.2} className="mb-4 opacity-30" />
-            <p className="text-body-base text-charcoal-ink">No products found</p>
-            <p className="text-body-sm text-muted-steel mt-1">Add your first product to get started</p>
+            <p className="text-body-base text-charcoal-ink">{t('products.noProducts')}</p>
+            <p className="text-body-sm text-muted-steel mt-1">{t('products.noProductsHint')}</p>
           </div>
         )}
       </div>
@@ -376,23 +381,22 @@ export default function ProductsView() {
               <div className="w-12 h-12 rounded-xl bg-error-container/30 text-error flex items-center justify-center mb-4">
                 <Trash2 size={24} />
               </div>
-              <h3 className="text-h3 text-charcoal-ink mb-2">Delete Product</h3>
-              <p className="text-muted-steel text-sm leading-relaxed mb-6" dir="auto">
-                Are you sure you want to delete {productToDelete.name}? This action cannot be undone.
+              <h3 className="text-h3 text-charcoal-ink mb-2">{t('products.deleteProduct')}</h3>
+              <p className="text-muted-steel text-sm leading-relaxed mb-6" dir="auto" dangerouslySetInnerHTML={{ __html: t('products.confirmDeleteMessage', { name: productToDelete.name }) }}>
               </p>
               <div className="flex items-center gap-3 justify-end">
                 <button
                   onClick={() => setProductToDelete(null)}
                   className="px-5 py-2.5 rounded-xl text-label-md text-muted-steel hover:bg-surface-container-low transition-all cursor-pointer btn-tactile"
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </button>
                 <button
                   onClick={handleDeleteProduct}
                   disabled={deletingProduct}
                   className="px-5 py-2.5 rounded-xl text-label-md bg-error text-white hover:bg-error/90 shadow-sm transition-all cursor-pointer btn-tactile disabled:opacity-50"
                 >
-                  {deletingProduct ? <Loader2 size={16} className="animate-spin" /> : 'Confirm Delete'}
+                  {deletingProduct ? <Loader2 size={16} className="animate-spin" /> : t('products.confirmDelete')}
                 </button>
               </div>
             </div>
