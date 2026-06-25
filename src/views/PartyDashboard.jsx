@@ -190,6 +190,10 @@ export default function PartyDashboard() {
     }, 100);
   }, []);
 
+  const fmt = useCallback((n) => `EGP ${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`, []);
+  const balance = useMemo(() => Number(summary?.financials?.balance || 0), [summary?.financials?.balance]);
+  const totalBeforePayments = useMemo(() => Number(summary?.financials?.initial_balance || 0) + Number(summary?.financials?.total_purchases || 0) - Number(summary?.financials?.total_returns || 0), [summary?.financials?.initial_balance, summary?.financials?.total_purchases, summary?.financials?.total_returns]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -214,10 +218,6 @@ export default function PartyDashboard() {
   }
 
   const { party, financials, invoices, products } = summary;
-
-  const fmt = useCallback((n) => `EGP ${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`, []);
-  const balance = useMemo(() => Number(financials.balance || 0), [financials.balance]);
-  const totalBeforePayments = useMemo(() => Number(financials.initial_balance || 0) + Number(financials.total_purchases || 0) - Number(financials.total_returns || 0), [financials.initial_balance, financials.total_purchases, financials.total_returns]);
 
   return (
     <>
