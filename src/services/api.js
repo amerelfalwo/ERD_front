@@ -137,11 +137,34 @@ export const api = {
   getProfitReport: () => request('/reports/profit'),
   getInventoryReport: () => request('/reports/inventory'),
   getStatement: (partyId) => request(`/reports/statement/${partyId}`),
-  getDashboardAnalytics: () => request('/reports/dashboard'),
+  getDashboardAnalytics: (startDate, endDate) => {
+    const params = new URLSearchParams();
+    if (startDate) params.append('start_date', startDate);
+    if (endDate) params.append('end_date', endDate);
+    const qs = params.toString();
+    return request(`/reports/dashboard${qs ? `?${qs}` : ''}`);
+  },
   getPartyProfits: () => request('/reports/party-profits'),
 
   getSettings: () => request('/tenants/me'),
   updateSettings: (data) => request('/tenants/me', { method: 'PATCH', body: JSON.stringify(data) }),
+
+  // Admin Panel
+  getAdminStats: () => request('/admin/stats'),
+  getAdminTenants: (statusFilter = null) => {
+    const params = new URLSearchParams();
+    if (statusFilter) params.append('status_filter', statusFilter);
+    return request(`/admin/tenants?${params.toString()}`);
+  },
+  approveTenant: (tenantId) => request(`/admin/tenants/${tenantId}/approve`, { method: 'PATCH' }),
+  rejectTenant: (tenantId) => request(`/admin/tenants/${tenantId}/reject`, { method: 'PATCH' }),
+  toggleTenantActive: (tenantId) => request(`/admin/tenants/${tenantId}/toggle-active`, { method: 'PATCH' }),
+  deleteTenant: (tenantId) => request(`/admin/tenants/${tenantId}`, { method: 'DELETE' }),
+  diagnoseTenant: (tenantId) => request(`/admin/tenants/${tenantId}/diagnose`),
+  fixTenantStock: (tenantId) => request(`/admin/tenants/${tenantId}/fix-stock`, { method: 'POST' }),
+  getAdminUsers: (skip = 0, limit = 100) => request(`/admin/users?skip=${skip}&limit=${limit}`),
+  getAdminUserDetails: (userId) => request(`/admin/users/${userId}`),
+  deleteAdminUser: (userId) => request(`/admin/users/${userId}`, { method: 'DELETE' }),
 };
 
 export default api;

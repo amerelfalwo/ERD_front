@@ -73,25 +73,52 @@ export default function DashboardView() {
   const [profitData, setProfitData] = useState(null);
   const [analyticsData, setAnalyticsData] = useState(null);
 
-  useEffect(() => {
-    async function fetchData() {
-      await Promise.resolve();
-      try {
-        setError(null);
-        const [profit, analytics] = await Promise.all([
-          api.getProfitReport(),
-          api.getDashboardAnalytics(),
-        ]);
-        setProfitData(profit);
-        setAnalyticsData(analytics);
-      } catch (err) {
-        setError(t('dashboard.error'));
-      } finally {
-        setLoading(false);
-      }
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [showFilter, setShowFilter] = useState(false);
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      setError(null);
+      const [profit, analytics] = await Promise.all([
+        api.getProfitReport(),
+        api.getDashboardAnalytics(startDate || null, endDate || null),
+      ]);
+      setProfitData(profit);
+      setAnalyticsData(analytics);
+    } catch (err) {
+      setError(t('dashboard.error'));
+    } finally {
+      setLoading(false);
     }
+  };
+
+  useEffect(() => {
     fetchData();
   }, []);
+
+  const handleExport = () => {
+    if (!analyticsData) return;
+    let csvContent = "data:text/csv;charset=utf-8,";
+    csvContent += "Metric,Value\n";
+    csvContent += `Total Profits,${analyticsData.total_profit}\n`;
+    csvContent += `Customer Receivables,${analyticsData.customer_receivables}\n`;
+    csvContent += `Supplier Payables,${analyticsData.supplier_payables}\n`;
+    csvContent += `Total Inventory Value,${analyticsData.stock_valuation}\n\n`;
+    csvContent += "Recent Transactions\n";
+    csvContent += "Date,Description,Value,Status\n";
+    analyticsData.recent_transactions.forEach(row => {
+      csvContent += `${row.date},${row.description},${row.value},${row.status}\n`;
+    });
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `dashboard_export_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   if (error) {
     return (
@@ -127,11 +154,20 @@ export default function DashboardView() {
           </p>
         </div>
         <div className="flex gap-2">
-          <button className="flex items-center gap-1.5 px-4 py-2 bg-surface-container-lowest text-on-surface border border-outline-variant/60 rounded-xl text-label-md hover:bg-surface-container-low transition-all duration-200 shadow-whisper cursor-pointer btn-tactile">
+          {showFilter && (
+            <div className="flex items-center gap-2 mr-4 animate-fade-in-right">
+              <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="bg-surface-container-lowest border border-outline-variant/60 rounded-xl px-3 py-1.5 text-label-md text-charcoal-ink" />
+              <span className="text-muted-steel">-</span>
+              <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="bg-surface-container-lowest border border-outline-variant/60 rounded-xl px-3 py-1.5 text-label-md text-charcoal-ink" />
+              <button onClick={() => { setStartDate(''); setEndDate(''); setShowFilter(false); setTimeout(() => fetchData(), 0); }} className="px-3 py-1.5 text-label-md text-error hover:bg-error/10 rounded-xl cursor-pointer">Clear</button>
+              <button onClick={() => fetchData()} className="px-3 py-1.5 bg-accent/10 text-accent hover:bg-accent/20 rounded-xl text-label-md cursor-pointer">Apply</button>
+            </div>
+          )}
+          <button onClick={handleExport} className="flex items-center gap-1.5 px-4 py-2 bg-surface-container-lowest text-on-surface border border-outline-variant/60 rounded-xl text-label-md hover:bg-surface-container-low transition-all duration-200 shadow-whisper cursor-pointer btn-tactile">
             <Download size={16} />
             {t('dashboard.export')}
           </button>
-          <button className="flex items-center gap-1.5 px-4 py-2 bg-accent text-on-primary rounded-xl text-label-md hover:bg-accent-hover transition-all duration-200 shadow-sm cursor-pointer btn-tactile">
+          <button onClick={() => setShowFilter(!showFilter)} className="flex items-center gap-1.5 px-4 py-2 bg-accent text-on-primary rounded-xl text-label-md hover:bg-accent-hover transition-all duration-200 shadow-sm cursor-pointer btn-tactile">
             <Filter size={16} />
             {t('dashboard.filters')}
           </button>

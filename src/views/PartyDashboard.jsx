@@ -497,9 +497,18 @@ export default function PartyDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {summary.payments.map((payment) => (
+                  {summary.payments.map((payment) => {
+                    const isReturnOffset = Number(payment.amount) < 0;
+                    return (
                     <tr key={payment.id} className="border-b border-outline-variant/20 hover:bg-surface-container-low/40 transition-colors group">
-                      <td className="py-3 px-6 text-muted-steel">{payment.invoice_id ? `#${String(payment.invoice_id).padStart(5, '0')}` : '—'}</td>
+                      <td className="py-3 px-6 text-muted-steel">
+                        {payment.invoice_id ? `#${String(payment.invoice_id).padStart(5, '0')}` : '—'}
+                        {isReturnOffset && (
+                          <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-600">
+                            {t('partyDashboard.returnOffset', 'مرتجع')}
+                          </span>
+                        )}
+                      </td>
                       <td className="py-3 px-6 text-right">
                         {editingPaymentId === payment.id ? (
                           <div className="flex items-center justify-end gap-2">
@@ -533,11 +542,14 @@ export default function PartyDashboard() {
                             </button>
                           </div>
                         ) : (
-                          <span className="font-mono-tabular font-medium text-emerald-600">EGP {Number(payment.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                          <span className={`font-mono-tabular font-medium ${isReturnOffset ? 'text-indigo-500' : 'text-emerald-600'}`}>
+                            {isReturnOffset ? '−' : ''}EGP {Math.abs(Number(payment.amount)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </span>
                         )}
                       </td>
                       <td className="py-3 px-6 font-mono-tabular text-muted-steel text-xs">{payment.created_at ? new Date(payment.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : (payment.payment_date ? new Date(payment.payment_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '-')}</td>
                       <td className="py-3 px-6 text-right">
+                        {!isReturnOffset && (
                         <div className="flex items-center justify-end gap-1">
                           <button
                             onClick={() => { setEditingPaymentId(payment.id); setEditPaymentAmount(String(payment.amount)); }}
@@ -554,9 +566,11 @@ export default function PartyDashboard() {
                             <Trash2 size={16} />
                           </button>
                         </div>
+                        )}
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

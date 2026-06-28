@@ -15,6 +15,8 @@ const SuppliersView = lazy(() => import('./views/SuppliersView'));
 const PartyDashboard = lazy(() => import('./views/PartyDashboard'));
 const InvoicesView = lazy(() => import('./views/InvoicesView'));
 const SettingsView = lazy(() => import('./views/SettingsView'));
+const AdminView = lazy(() => import('./views/AdminView'));
+const AdminUserDashboard = lazy(() => import('./views/AdminUserDashboard'));
 
 function RouteSpinner() {
   return (
@@ -65,6 +67,9 @@ export default function App() {
             <Route path="/invoices" element={<Suspense fallback={<RouteSpinner />}><InvoicesView /></Suspense>} />
             <Route path="/settings" element={<Suspense fallback={<RouteSpinner />}><SettingsView /></Suspense>} />
           </Route>
+          
+          <Route path="/admin" element={<PrivateRoute><Suspense fallback={<RouteSpinner />}><AdminView /></Suspense></PrivateRoute>} />
+          <Route path="/admin/users/:userId" element={<PrivateRoute><Suspense fallback={<RouteSpinner />}><AdminUserDashboard /></Suspense></PrivateRoute>} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

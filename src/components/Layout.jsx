@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Package, Users, Truck, FileText, Settings,
-  Bell, Menu, X, LogOut, Building2, ChevronDown, Globe,
+  Bell, Menu, X, LogOut, Building2, ChevronDown, Globe, Shield,
 } from 'lucide-react';
 import myLogo from '../assets/my.png';
 import { useAuth } from '../context/AuthContext';
@@ -114,6 +114,23 @@ export default function Layout() {
 
         <div className="mt-auto px-3 pb-6 space-y-1">
           <div className="border-t border-outline-variant/50 pt-4 mb-1" />
+          {user?.role === 'super_admin' && (
+            <NavLink
+              to="/admin"
+              onClick={() => setMobileOpen(false)}
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-4 py-2.5 rounded-xl text-label-md
+                 transition-all duration-200 cursor-pointer btn-tactile
+                 ${isActive
+                  ? 'bg-accent text-on-primary shadow-sm'
+                  : 'text-on-surface-variant hover:bg-surface-container-high'
+                }`
+              }
+            >
+              <Shield size={18} strokeWidth={1.8} />
+              <span>{t('nav.admin')}</span>
+            </NavLink>
+          )}
           <NavLink
             to="/settings"
             onClick={() => setMobileOpen(false)}
