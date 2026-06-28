@@ -14,6 +14,7 @@ import ReturnInvoiceModal from '../components/ReturnInvoiceModal';
 import SupplierReturnProductModal from '../components/SupplierReturnProductModal';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
+import html2pdf from 'html2pdf.js';
 
 
 
@@ -627,31 +628,56 @@ export default function PartyDashboard() {
             <div className="flex items-center justify-between px-6 py-4 bg-surface-container-lowest border-b border-outline-variant/60 flex-shrink-0">
               <h3 className="text-label-md text-charcoal-ink font-semibold">{t('partyDashboard.printPreview')} — #{String(invoiceToPrint.id).padStart(5, '0')}</h3>
               <div className="flex items-center gap-2">
-                <button onClick={handleClosePrint} className="flex items-center gap-2 px-4 py-2 rounded-xl text-label-md text-muted-steel border border-outline-variant/60 hover:bg-surface-container-low transition-all cursor-pointer btn-tactile"><X size={16} /> Cancel</button>
+                <select
+                  value={paperSize}
+                  onChange={(e) => setPaperSize(e.target.value)}
+                  className="px-3 py-2 rounded-xl text-label-md border border-outline-variant/60 bg-surface-container-lowest text-muted-steel focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all text-sm cursor-pointer"
+                >
+                  <option value="a4">{t('invoices.a4Paper', 'A4 Paper')}</option>
+                  <option value="a5">{t('invoices.a5Paper', 'A5 Paper')}</option>
+                  <option value="receipt">{t('invoices.receipt', 'Receipt')}</option>
+                </select>
+                <button onClick={handleClosePrint} className="flex items-center gap-2 px-4 py-2 rounded-xl text-label-md text-muted-steel border border-outline-variant/60 hover:bg-surface-container-low transition-all cursor-pointer btn-tactile"><X size={16} /> {t('common.cancel', 'Cancel')}</button>
                 <button
                   onClick={async () => {
                     const el = invoicePrintRef.current?.querySelector('.invoice-print-area');
                     if (!el) return;
                     setDownloadingPdf(true);
+                    let clonedContainer;
                     try {
-                      if (!window.html2pdf) {
-                        await new Promise((resolve, reject) => {
-                          const s = document.createElement('script');
-                          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js';
-                          s.onload = resolve; s.onerror = reject;
-                          document.head.appendChild(s);
-                        });
-                      }
-                      await window.html2pdf().set({
+                      clonedContainer = document.createElement('div');
+                      clonedContainer.innerHTML = el.outerHTML;
+                      const clone = clonedContainer.firstElementChild;
+                      document.body.appendChild(clonedContainer);
+                      
+                      clonedContainer.style.position = 'absolute';
+                      clonedContainer.style.left = '0';
+                      clonedContainer.style.top = '0';
+                      clonedContainer.style.width = el.offsetWidth + 'px';
+                      clonedContainer.style.zIndex = '-9999';
+                      clonedContainer.style.opacity = '0';
+                      clonedContainer.style.pointerEvents = 'none';
+
+                      await html2pdf().set({
                         margin: 0,
                         filename: `invoice-${String(invoiceToPrint.id).padStart(5, '0')}.pdf`,
                         image: { type: 'jpeg', quality: 0.98 },
                         html2canvas: { scale: 2, useCORS: true },
                         jsPDF: { unit: 'mm', format: paperSize === 'a5' ? 'a5' : 'a4', orientation: 'portrait' },
-                      }).from(el).save();
+                      }).from(clone).save();
+
+                      document.body.removeChild(clonedContainer);
                     } catch (err) {
                       console.error('PDF error:', err);
-                      notifications.show({ title: 'Error', message: 'Error downloading PDF. Use Print → Save as PDF instead.', color: 'red' });
+                      notifications.show({ title: 'Error', message: 'Error downloading PDF. Falling back to print dialog.', color: 'red' });
+                      if (clonedContainer && document.body.contains(clonedContainer)) {
+                        document.body.removeChild(clonedContainer);
+                      }
+                      try {
+                        window.print();
+                      } catch (e) {
+                        console.error('Print fallback failed', e);
+                      }
                     } finally {
                       setDownloadingPdf(false);
                     }
@@ -667,13 +693,13 @@ export default function PartyDashboard() {
             </div>
             <div className="flex-1 overflow-y-auto py-8 flex justify-center">
               <div ref={invoicePrintRef} className="shadow-2xl rounded-xl overflow-hidden border border-outline-variant/30 self-start">
-                <InvoicePrintTemplate invoice={invoiceToPrint} tenantName={tenantName} partyName={party.name} partyPhone={party.phone} partyAddress={party.address} logoUrl={logoUrl} defaultFooterText={defaultFooterText} taxNumber={taxNumber} paperSize={paperSize} />
+                <InvoicePrintTemplate key={`${invoiceToPrint?.id || 'preview'}-${paperSize}`} invoice={invoiceToPrint} tenantName={tenantName} partyName={party.name} partyPhone={party.phone} partyAddress={party.address} logoUrl={logoUrl} defaultFooterText={defaultFooterText} taxNumber={taxNumber} paperSize={paperSize} />
               </div>
             </div>
           </div>
           {createPortal(
             <div id="print-only-container" className="print-portal" style={{ display: 'none' }}>
-              <InvoicePrintTemplate invoice={invoiceToPrint} tenantName={tenantName} partyName={party.name} partyPhone={party.phone} partyAddress={party.address} logoUrl={logoUrl} defaultFooterText={defaultFooterText} taxNumber={taxNumber} paperSize={paperSize} />
+              <InvoicePrintTemplate key={`print-${invoiceToPrint?.id || 'preview'}-${paperSize}`} invoice={invoiceToPrint} tenantName={tenantName} partyName={party.name} partyPhone={party.phone} partyAddress={party.address} logoUrl={logoUrl} defaultFooterText={defaultFooterText} taxNumber={taxNumber} paperSize={paperSize} />
             </div>,
             document.body
           )}
@@ -686,13 +712,22 @@ export default function PartyDashboard() {
             <div className="flex items-center justify-between px-6 py-4 bg-surface-container-lowest border-b border-outline-variant/60 flex-shrink-0">
               <h3 className="text-label-md text-charcoal-ink font-semibold">{t('partyDashboard.bulkPrint')} — {bulkInvoicesToPrint.length} {t('partyDashboard.invoices').toLowerCase()}</h3>
               <div className="flex items-center gap-2">
+                <select
+                  value={paperSize}
+                  onChange={(e) => setPaperSize(e.target.value)}
+                  className="px-3 py-2 rounded-xl text-label-md border border-outline-variant/60 bg-surface-container-lowest text-muted-steel focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all text-sm cursor-pointer"
+                >
+                  <option value="a4">{t('invoices.a4Paper', 'A4 Paper')}</option>
+                  <option value="a5">{t('invoices.a5Paper', 'A5 Paper')}</option>
+                  <option value="receipt">{t('invoices.receipt', 'Receipt')}</option>
+                </select>
                 <button onClick={handleClosePrint} className="flex items-center gap-2 px-4 py-2 rounded-xl text-label-md text-muted-steel border border-outline-variant/60 hover:bg-surface-container-low transition-all cursor-pointer btn-tactile"><X size={16} /> {t('partyDashboard.cancel')}</button>
                 <button onClick={handleConfirmPrint} className="flex items-center gap-2 px-5 py-2 rounded-xl text-label-md bg-accent text-on-primary hover:bg-accent-hover shadow-sm transition-all cursor-pointer btn-tactile"><Printer size={16} /> {t('partyDashboard.printAll')}</button>
               </div>
             </div>
             <div className="flex-1 overflow-y-auto py-8 flex flex-col items-center gap-8">
               {bulkInvoicesToPrint.map((inv) => (
-                <div key={inv.id} className="shadow-2xl rounded-xl overflow-hidden border border-outline-variant/30">
+                <div key={`${inv.id}-${paperSize}`} className="shadow-2xl rounded-xl overflow-hidden border border-outline-variant/30">
                   <InvoicePrintTemplate invoice={inv} tenantName={tenantName} partyName={party.name} partyPhone={party.phone} partyAddress={party.address} logoUrl={logoUrl} defaultFooterText={defaultFooterText} taxNumber={taxNumber} paperSize={paperSize} />
                 </div>
               ))}
@@ -701,7 +736,7 @@ export default function PartyDashboard() {
           {createPortal(
             <div id="print-only-container" className="print-portal" style={{ display: 'none' }}>
               {bulkInvoicesToPrint.map((inv) => (
-                <InvoicePrintTemplate key={inv.id} invoice={inv} tenantName={tenantName} partyName={party.name} partyPhone={party.phone} partyAddress={party.address} logoUrl={logoUrl} defaultFooterText={defaultFooterText} taxNumber={taxNumber} paperSize={paperSize} />
+                <InvoicePrintTemplate key={`print-${inv.id}-${paperSize}`} invoice={inv} tenantName={tenantName} partyName={party.name} partyPhone={party.phone} partyAddress={party.address} logoUrl={logoUrl} defaultFooterText={defaultFooterText} taxNumber={taxNumber} paperSize={paperSize} />
               ))}
             </div>,
             document.body

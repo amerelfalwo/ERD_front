@@ -1222,6 +1222,19 @@ export default function InvoicesView() {
                     if (!el) return;
                     setDownloadingPdf(true);
                     try {
+                      const clonedContainer = document.createElement('div');
+                      clonedContainer.innerHTML = el.outerHTML;
+                      const clone = clonedContainer.firstElementChild;
+                      document.body.appendChild(clonedContainer);
+                      
+                      clonedContainer.style.position = 'absolute';
+                      clonedContainer.style.left = '0';
+                      clonedContainer.style.top = '0';
+                      clonedContainer.style.width = el.offsetWidth + 'px';
+                      clonedContainer.style.zIndex = '-9999';
+                      clonedContainer.style.opacity = '0';
+                      clonedContainer.style.pointerEvents = 'none';
+
                       await html2pdf()
                         .set({
                           margin: 0,
@@ -1230,8 +1243,10 @@ export default function InvoicesView() {
                           html2canvas: { scale: 2, useCORS: true },
                           jsPDF: { unit: 'mm', format: paperSize === 'a5' ? 'a5' : 'a4', orientation: 'portrait' },
                         })
-                        .from(el)
+                        .from(clone)
                         .save();
+
+                      document.body.removeChild(clonedContainer);
                     } catch (err) {
                       console.error('PDF generation failed:', err);
                       notifications.show({ title: t('common.error'), message: t('invoices.pdfFailed'), color: 'red' });
