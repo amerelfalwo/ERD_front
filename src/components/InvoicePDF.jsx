@@ -225,6 +225,30 @@ export default function InvoicePDF({
     }
   };
 
+  const isSale = ['sale', 'SALE'].includes(invoice?.invoice_type);
+  let displayItems = invoice?.items || [];
+  if (isSale) {
+    const grouped = {};
+    displayItems.forEach(item => {
+      const name = item.product_name || item.batch?.product?.name || 'منتج';
+      const price = Number(item.sell_price || item.unit_price || item.purchase_price || 0);
+      const key = `${name}_${price}`;
+      
+      if (!grouped[key]) {
+        grouped[key] = {
+          ...item,
+          product_name: name,
+          quantity: Number(item.quantity) || 0,
+          unit_price: price,
+          sell_price: price
+        };
+      } else {
+        grouped[key].quantity += (Number(item.quantity) || 0);
+      }
+    });
+    displayItems = Object.values(grouped);
+  }
+
   const formatDate = (dateString) => {
     if (!dateString) return '';
     try {
@@ -299,7 +323,7 @@ export default function InvoicePDF({
             <Text style={[styles.tableHeaderCell, styles.col3]}>السعر</Text>
             <Text style={[styles.tableHeaderCell, styles.col4]}>الإجمالي</Text>
           </View>
-          {invoice?.items?.map((item, index) => {
+          {displayItems?.map((item, index) => {
             const itemName = item.product_name || item.batch?.product?.name || 'منتج';
             const price = item.sell_price || item.unit_price || item.purchase_price || 0;
             const total = Number(item.quantity) * Number(price);

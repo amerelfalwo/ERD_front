@@ -22,6 +22,28 @@ export default function InvoicePrintTemplate({
   const isSale     = ['sale', 'SALE'].includes(invoice.invoice_type);
   const isReturn   = ['sale_return', 'purchase_return', 'SALE_RETURN', 'PURCHASE_RETURN'].includes(invoice.invoice_type);
 
+  let displayItems = invoice.items || [];
+  if (isSale) {
+    const grouped = {};
+    displayItems.forEach(item => {
+      const name = item.product_name || item.name || `#${item.batch_id}`;
+      const price = Number(item.unit_price || 0);
+      const key = `${name}_${price}`;
+      
+      if (!grouped[key]) {
+        grouped[key] = {
+          ...item,
+          product_name: name,
+          quantity: Number(item.quantity) || 0,
+          unit_price: price
+        };
+      } else {
+        grouped[key].quantity += (Number(item.quantity) || 0);
+      }
+    });
+    displayItems = Object.values(grouped);
+  }
+
   const invoiceDate   = new Date(invoice.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
   const invoiceTime   = new Date(invoice.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
   const invoiceNumber = String(invoice.id).padStart(5, '0');
@@ -105,7 +127,7 @@ export default function InvoicePrintTemplate({
               </tr>
             </thead>
             <tbody>
-              {invoice.items.map((item, idx) => {
+              {displayItems.map((item, idx) => {
                 const qty       = Number(item.quantity);
                 const unitPrice = Number(item.unit_price);
                 const lineTotal = qty * unitPrice;
@@ -254,7 +276,7 @@ export default function InvoicePrintTemplate({
               </tr>
             </thead>
             <tbody>
-              {invoice.items.map((item, idx) => {
+              {displayItems.map((item, idx) => {
                 const qty       = Number(item.quantity);
                 const unitPrice = Number(item.unit_price);
                 const lineTotal = qty * unitPrice;
