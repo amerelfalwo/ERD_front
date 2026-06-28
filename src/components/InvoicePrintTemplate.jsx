@@ -140,15 +140,28 @@ export default function InvoicePrintTemplate({
               <span className="font-mono font-bold text-sm" dir="ltr">EGP {fmt(total)}</span>
             </div>
 
-
             <div className="flex justify-between items-center py-1 mt-1 border-t border-gray-300">
-              <span className="font-bold text-[11px] text-gray-700">{t('printTemplate.previousBalance')}:</span>
-              <span className="font-mono font-bold text-[11px] text-gray-700" dir="ltr">EGP {fmt(previousBalance)}</span>
+              <span className="font-bold text-[11px] text-gray-700">{t('printTemplate.paidAmount')}:</span>
+              <span className="font-mono font-bold text-[11px] text-gray-700" dir="ltr">EGP {fmt(paid)}</span>
             </div>
-            <div className="flex justify-between items-center py-1.5 mt-1 border-t border-gray-400 bg-gray-100 rounded px-1.5">
-              <span className="font-bold text-sm">{t('printTemplate.totalAccount')}:</span>
-              <span className="font-mono font-bold text-sm" dir="ltr">EGP {fmt(totalBalanceAfter)}</span>
+
+            <div className="flex justify-between items-center py-1">
+              <span className="font-bold text-[11px] text-gray-700">{t('printTemplate.remainingAmount')}:</span>
+              <span className="font-mono font-bold text-[11px] text-gray-700" dir="ltr">EGP {fmt(balance)}</span>
             </div>
+
+            {previousBalance !== 0 && (
+              <>
+                <div className="flex justify-between items-center py-1 mt-1 border-t border-gray-300">
+                  <span className="font-bold text-[11px] text-gray-700">{t('printTemplate.previousBalance')}:</span>
+                  <span className="font-mono font-bold text-[11px] text-gray-700" dir="ltr">EGP {fmt(previousBalance)}</span>
+                </div>
+                <div className="flex justify-between items-center py-1.5 mt-1 border-t border-gray-400 bg-gray-100 rounded px-1.5">
+                  <span className="font-bold text-sm">{t('printTemplate.totalAccount')}:</span>
+                  <span className="font-mono font-bold text-sm" dir="ltr">EGP {fmt(totalBalanceAfter)}</span>
+                </div>
+              </>
+            )}
           </div>
 
           <hr className="border-t-[1.5px] border-dashed border-gray-400 my-3" />
@@ -278,15 +291,29 @@ export default function InvoicePrintTemplate({
                 <span className={`font-mono font-black ${isA5 ? 'text-lg' : 'text-xl'} text-gray-900`} dir="ltr">EGP {fmt(total)}</span>
               </div>
 
-              {/* Previous Balance Logic */}
               <div className="flex justify-between items-center py-2 border-b border-gray-200">
-                <span className="font-bold text-gray-600">{t('printTemplate.previousBalance')}:</span>
-                <span className="font-mono font-bold text-gray-700" dir="ltr">EGP {fmt(previousBalance)}</span>
+                <span className="font-bold text-gray-700">{t('printTemplate.paidAmount')}:</span>
+                <span className="font-mono font-bold text-gray-800" dir="ltr">EGP {fmt(paid)}</span>
               </div>
-              <div className="flex justify-between items-center py-3 mt-2 bg-gray-800 text-white rounded-lg px-4 shadow-inner">
-                <span className={`font-black ${isA5 ? 'text-lg' : 'text-xl'}`}>{t('printTemplate.totalAccount')}:</span>
-                <span className={`font-mono font-black ${isA5 ? 'text-lg' : 'text-xl'}`} dir="ltr">EGP {fmt(totalBalanceAfter)}</span>
+
+              <div className="flex justify-between items-center py-2 border-b border-gray-200 mb-2">
+                <span className="font-bold text-gray-700">{t('printTemplate.remainingAmount')}:</span>
+                <span className="font-mono font-bold text-gray-800" dir="ltr">EGP {fmt(balance)}</span>
               </div>
+
+              {/* Previous Balance Logic */}
+              {previousBalance !== 0 && (
+                <>
+                  <div className="flex justify-between items-center py-2 border-b border-gray-200">
+                    <span className="font-bold text-gray-600">{t('printTemplate.previousBalance')}:</span>
+                    <span className="font-mono font-bold text-gray-700" dir="ltr">EGP {fmt(previousBalance)}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-3 mt-2 bg-gray-800 text-white rounded-lg px-4 shadow-inner">
+                    <span className={`font-black ${isA5 ? 'text-lg' : 'text-xl'}`}>{t('printTemplate.totalAccount')}:</span>
+                    <span className={`font-mono font-black ${isA5 ? 'text-lg' : 'text-xl'}`} dir="ltr">EGP {fmt(totalBalanceAfter)}</span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 

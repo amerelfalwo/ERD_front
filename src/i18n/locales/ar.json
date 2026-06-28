@@ -450,6 +450,8 @@
     "itemsTotal": "إجمالي الأصناف",
     "deliveryFee": "رسوم التوصيل",
     "grandTotal": "الإجمالي الكلي",
+    "paidAmount": "المدفوع",
+    "remainingAmount": "المتبقي",
     "previousBalance": "الحساب السابق",
     "totalAccount": "إجمالي الحساب",
     "taxNumber": "الرقم الضريبي",

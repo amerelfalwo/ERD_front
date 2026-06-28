@@ -249,14 +249,24 @@ const InvoiceDocument = ({
               <Text>المدفوع:</Text>
               <Text>{formatCurrency(invoice?.paid_amount)}</Text>
             </View>
+
             <View style={styles.totalsRow}>
-              <Text>الرصيد السابق:</Text>
-              <Text>{formatCurrency(invoice?.previous_balance)}</Text>
+              <Text>المتبقي:</Text>
+              <Text>{formatCurrency(((invoice?.total_amount || 0) + (invoice?.delivery_fee || 0)) - (invoice?.paid_amount || 0))}</Text>
             </View>
-            <View style={styles.totalsRowBold}>
-              <Text>إجمالي الرصيد المستحق:</Text>
-              <Text>{formatCurrency(invoice?.total_balance_after)}</Text>
-            </View>
+
+            {invoice?.previous_balance !== 0 && (
+              <>
+                <View style={styles.totalsRow}>
+                  <Text>الرصيد السابق:</Text>
+                  <Text>{formatCurrency(invoice?.previous_balance)}</Text>
+                </View>
+                <View style={styles.totalsRowBold}>
+                  <Text>إجمالي الرصيد المستحق:</Text>
+                  <Text>{formatCurrency(invoice?.total_balance_after)}</Text>
+                </View>
+              </>
+            )}
           </View>
         </View>
 

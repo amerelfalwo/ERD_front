@@ -449,6 +449,8 @@
     "itemsTotal": "Items Total",
     "deliveryFee": "Delivery Fee",
     "grandTotal": "Grand Total",
+    "paidAmount": "Paid",
+    "remainingAmount": "Remaining",
     "previousBalance": "Previous Balance",
     "totalAccount": "Total Account",
     "taxNumber": "Tax Number",
