@@ -19,8 +19,8 @@ export default function InvoicePrintTemplate({
   const { t } = useTranslation();
   if (!invoice) return null;
 
-  const isSale     = ['sale', 'SALE'].includes(invoice.invoice_type);
-  const isReturn   = ['sale_return', 'purchase_return', 'SALE_RETURN', 'PURCHASE_RETURN'].includes(invoice.invoice_type);
+  const isSale     = ['sell', 'SELL', 'sale', 'SALE'].includes(invoice.invoice_type);
+  const isReturn   = ['sell_return', 'sale_return', 'purchase_return', 'SALE_RETURN', 'PURCHASE_RETURN'].includes(invoice.invoice_type);
 
   let displayItems = invoice.items || [];
   if (isSale) {
@@ -147,15 +147,17 @@ export default function InvoicePrintTemplate({
 
           {/* Totals Section */}
           <div className="flex flex-col space-y-1.5 mb-4 text-[12px]">
-            <div className="flex justify-between">
-              <span className="text-gray-600">{t('printTemplate.itemsTotal')}:</span>
-              <span className="font-mono font-bold" dir="ltr">{fmt(subtotal)}</span>
-            </div>
             {deliveryFee > 0 && (
-              <div className="flex justify-between">
-                <span className="text-gray-600">{t('printTemplate.deliveryFee')}:</span>
-                <span className="font-mono" dir="ltr">{fmt(deliveryFee)}</span>
-              </div>
+              <>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">{t('printTemplate.itemsTotal')}:</span>
+                  <span className="font-mono font-bold" dir="ltr">{fmt(subtotal)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">{t('printTemplate.deliveryFee')}:</span>
+                  <span className="font-mono" dir="ltr">{fmt(deliveryFee)}</span>
+                </div>
+              </>
             )}
             <div className="flex justify-between items-center py-1.5 mt-1 border-t-[1.5px] border-dashed border-gray-400">
               <span className="font-bold text-sm">{t('printTemplate.grandTotal')}:</span>
@@ -298,15 +300,17 @@ export default function InvoicePrintTemplate({
           <div className="flex w-full">
             {/* The totals box, pushed to the left using margin-right auto since direction is RTL */}
             <div className="w-1/2 mr-auto bg-gray-50 rounded-xl p-5 border-2 border-gray-800 shadow-sm">
-              <div className="flex justify-between mb-3 border-b border-gray-200 pb-2">
-                <span className="text-gray-700 font-bold">{t('printTemplate.itemsTotal')}:</span>
-                <span className="font-mono font-bold text-gray-900" dir="ltr">{fmt(subtotal)}</span>
-              </div>
               {deliveryFee > 0 && (
-                <div className="flex justify-between mb-3 border-b border-gray-200 pb-2">
-                  <span className="text-gray-700 font-bold">{t('printTemplate.deliveryFee')}:</span>
-                  <span className="font-mono font-bold text-gray-900" dir="ltr">{fmt(deliveryFee)}</span>
-                </div>
+                <>
+                  <div className="flex justify-between mb-3 border-b border-gray-200 pb-2">
+                    <span className="text-gray-700 font-bold">{t('printTemplate.itemsTotal')}:</span>
+                    <span className="font-mono font-bold text-gray-900" dir="ltr">{fmt(subtotal)}</span>
+                  </div>
+                  <div className="flex justify-between mb-3 border-b border-gray-200 pb-2">
+                    <span className="text-gray-700 font-bold">{t('printTemplate.deliveryFee')}:</span>
+                    <span className="font-mono font-bold text-gray-900" dir="ltr">{fmt(deliveryFee)}</span>
+                  </div>
+                </>
               )}
               <div className="flex justify-between items-center py-2 border-b-2 border-gray-800 mb-2">
                 <span className={`font-black ${isA5 ? 'text-lg' : 'text-xl'} text-gray-900`}>{t('printTemplate.grandTotal')}:</span>

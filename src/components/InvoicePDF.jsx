@@ -225,7 +225,7 @@ export default function InvoicePDF({
     }
   };
 
-  const isSale = ['sale', 'SALE'].includes(invoice?.invoice_type);
+  const isSale = ['sell', 'SELL', 'sale', 'SALE'].includes(invoice?.invoice_type);
   let displayItems = invoice?.items || [];
   if (isSale) {
     const grouped = {};
@@ -342,15 +342,17 @@ export default function InvoicePDF({
         {/* Totals Section */}
         <View style={styles.totalsSection}>
           <View style={styles.totalsBox}>
-            <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>المجموع:</Text>
-              <Text style={styles.totalValue}>{formatCurrency(invoice?.total_amount - (invoice?.delivery_fee || 0))}</Text>
-            </View>
             {invoice?.delivery_fee > 0 && (
-              <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>خدمة التوصيل:</Text>
-                <Text style={styles.totalValue}>{formatCurrency(invoice?.delivery_fee)}</Text>
-              </View>
+              <>
+                <View style={styles.totalRow}>
+                  <Text style={styles.totalLabel}>المجموع:</Text>
+                  <Text style={styles.totalValue}>{formatCurrency(invoice?.total_amount - (invoice?.delivery_fee || 0))}</Text>
+                </View>
+                <View style={styles.totalRow}>
+                  <Text style={styles.totalLabel}>خدمة التوصيل:</Text>
+                  <Text style={styles.totalValue}>{formatCurrency(invoice?.delivery_fee)}</Text>
+                </View>
+              </>
             )}
             <View style={styles.grandTotalRow}>
               <Text style={styles.grandTotalLabel}>الإجمالي الكلي:</Text>
