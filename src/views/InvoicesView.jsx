@@ -684,10 +684,11 @@ export default function InvoicesView() {
                       type="text" 
                       value={productSearch}
                       onChange={(e) => {
-                        setProductSearch(e.target.value);
+                        const val = e.target.value;
+                        setProductSearch(val);
                         setShowProductDropdown(true);
                         const pool = invoiceType === 'supplier_return' ? supplierProducts : products;
-                        const exact = pool.find(p => p.name.toLowerCase() === e.target.value.toLowerCase());
+                        const exact = pool.find(p => p.name.trim().toLowerCase() === val.trim().toLowerCase());
                         setSelectedProduct(exact ? exact.id : '');
                       }}
                       onFocus={() => setShowProductDropdown(true)}
@@ -698,7 +699,7 @@ export default function InvoicesView() {
                     {showProductDropdown && (
                       <div className="absolute top-full mt-1 left-0 w-full bg-surface-container-lowest border border-outline-variant/60 rounded-xl shadow-lg z-50 max-h-48 overflow-y-auto">
                         {(invoiceType === 'supplier_return' ? supplierProducts : products)
-                          .filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase()))
+                          .filter(p => p.name.trim().toLowerCase().includes(productSearch.trim().toLowerCase()))
                           .filter(p => editingItemId === p.id || !items.some(i => i.product_id === p.id))
                           .map(p => {
                             const stock = inventoryProductsMap?.[String(p.id)];
