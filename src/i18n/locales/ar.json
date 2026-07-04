@@ -434,7 +434,7 @@
     "genericError": "حدث خطأ"
   },
   "printTemplate": {
-    "saleInvoice": "فاتورة مبيعات",
+    "saleInvoice": "فاتورة بيع",
     "purchaseInvoice": "فاتورة مشتريات",
     "returnNotice": "إشعار مرتجع",
     "invoiceNumber": "رقم الفاتورة",

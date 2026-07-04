@@ -248,8 +248,8 @@ export default function PartyDashboard() {
           </div>
         </div>
 
-        {/* ── 3-Card Financial Summary ── */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-in-up">
+        {/* ── Financial Summary ── */}
+        <div className={`grid grid-cols-1 md:grid-cols-2 ${isCustomer ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-6 animate-fade-in-up`}>
           
           {/* Card 1: Total Before Payments */}
           <div className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl shadow-whisper p-6 flex flex-col justify-start">
@@ -328,6 +328,19 @@ export default function PartyDashboard() {
             )}
           </div>
           
+          {/* Card 4: Total Profit (Customers Only) */}
+          {isCustomer && financials.total_profit != null && (
+            <div className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl shadow-whisper p-6 flex flex-col justify-start">
+              <div className="flex items-center gap-2 mb-2">
+                <TrendingUp size={20} className="text-indigo-500" />
+                <span className="text-sm font-medium text-charcoal-ink/70">{t('customers.profit') || 'Total Profit'}</span>
+              </div>
+              <p className={`text-3xl font-bold font-mono-tabular tracking-tight ${Number(financials.total_profit) >= 0 ? 'text-indigo-600' : 'text-red-500'}`}>
+                {fmt(financials.total_profit)}
+              </p>
+            </div>
+          )}
+          
         </div>
 
         <div className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl shadow-whisper animate-fade-in-up">
@@ -351,7 +364,8 @@ export default function PartyDashboard() {
                     <th className="py-3 px-4 text-left">{t('partyDashboard.id')}</th>
                     <th className="py-3 px-4 text-left">{t('partyDashboard.type')}</th>
                     <th className="py-3 px-4 text-right">{t('partyDashboard.total')}</th>
-                    <th className="py-3 px-4 text-right">{t('partyDashboard.profit')}</th>
+                    {isCustomer && <th className="py-3 px-4 text-center">{t('partyDashboard.status')}</th>}
+                    {isCustomer && <th className="py-3 px-4 text-right">{t('partyDashboard.profit')}</th>}
                     <th className="py-3 px-4 text-left">{t('partyDashboard.date')}</th>
                     <th className="py-3 px-4 text-right">{t('partyDashboard.actions')}</th>
                   </tr>
@@ -363,6 +377,7 @@ export default function PartyDashboard() {
                         <tr key={`edit-${inv.id}`} className="border-b border-outline-variant/20">
                           <InlineInvoiceEditor
                             invoice={editingInvoice}
+                            colSpan={isCustomer ? 8 : 6}
                             onCancel={() => setEditingInvoice(null)}
                             onSaved={() => {
                               setEditingInvoice(null);
@@ -409,15 +424,28 @@ export default function PartyDashboard() {
                             </span>
                           </td>
                           <td className="py-3 px-4 text-right font-mono-tabular font-medium text-charcoal-ink">EGP {Number(inv.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                          <td className="py-3 px-4 text-right font-mono-tabular font-medium">
-                            {inv.invoice_profit != null && inv.invoice_type?.toLowerCase() === 'sale' ? (
-                              <span className={Number(inv.invoice_profit) >= 0 ? 'text-emerald-600' : 'text-red-500'}>
-                                {Number(inv.invoice_profit) > 0 ? '+' : ''}EGP {Number(inv.invoice_profit).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          {isCustomer && (
+                            <td className="py-3 px-4 text-center">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
+                                inv.status === 'paid' ? 'bg-emerald-50 text-emerald-600' :
+                                inv.status === 'partial' ? 'bg-amber-50 text-amber-600' :
+                                'bg-red-50 text-red-600'
+                              }`}>
+                                {t(`partyDashboard.status_${inv.status || 'unpaid'}`, inv.status || 'Unpaid')}
                               </span>
-                            ) : (
-                              <span className="text-muted-steel">—</span>
-                            )}
-                          </td>
+                            </td>
+                          )}
+                          {isCustomer && (
+                            <td className="py-3 px-4 text-right font-mono-tabular font-medium">
+                              {inv.invoice_profit != null && inv.invoice_type?.toLowerCase() === 'sell' ? (
+                                <span className={Number(inv.invoice_profit) >= 0 ? 'text-emerald-600' : 'text-red-500'}>
+                                  {Number(inv.invoice_profit) > 0 ? '+' : ''}EGP {Number(inv.invoice_profit).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </span>
+                              ) : (
+                                <span className="text-muted-steel">—</span>
+                              )}
+                            </td>
+                          )}
                           <td className="py-3 px-4 font-mono-tabular text-muted-steel text-xs">{inv.created_at ? new Date(inv.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '-'}</td>
                           <td className="py-3 px-4 text-right">
                             <div className="flex items-center justify-end gap-1">
@@ -448,7 +476,7 @@ export default function PartyDashboard() {
                         </tr>
                         {isExpanded && hasItems && (
                           <tr key={`${inv.id}-items`} className="bg-surface-container-low/60">
-                            <td colSpan={7} className="px-10 py-3">
+                            <td colSpan={isCustomer ? 8 : 6} className="px-10 py-3">
                               <table className="w-full text-xs border border-outline-variant/20 rounded-xl overflow-hidden">
                                 <thead>
                                   <tr className="bg-surface-container border-b border-outline-variant/20 text-muted-steel uppercase tracking-wider">
@@ -467,6 +495,16 @@ export default function PartyDashboard() {
                                       <td className="py-2 px-3 text-right font-mono-tabular font-semibold">EGP {Number(item.total_price ?? item.unit_price * item.quantity).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                                     </tr>
                                   ))}
+                                  {Number(inv.delivery_fee) > 0 && (
+                                    <tr className="border-t border-outline-variant/20 bg-surface-container-low">
+                                      <td colSpan={3} className="py-2 px-3 text-right font-medium text-charcoal-ink">{t('invoices.deliveryFee')}</td>
+                                      <td className="py-2 px-3 text-right font-mono-tabular font-semibold">EGP {Number(inv.delivery_fee).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                    </tr>
+                                  )}
+                                  <tr className="border-t border-outline-variant/20 bg-surface-container-high">
+                                    <td colSpan={3} className="py-2 px-3 text-right font-bold text-charcoal-ink">{t('partyDashboard.totalAmount')}</td>
+                                    <td className="py-2 px-3 text-right font-mono-tabular font-bold text-primary">EGP {Number(inv.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                  </tr>
                                 </tbody>
                               </table>
                             </td>

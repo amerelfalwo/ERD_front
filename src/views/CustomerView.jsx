@@ -175,9 +175,22 @@ function CustomerCard({ customer, onEdit, onDelete }) {
           </span>
         </div>
 
-        <div className="flex items-center gap-2 text-muted-steel mb-6 mt-2">
+        <div className="flex items-center gap-2 text-muted-steel mb-3 mt-2">
           <IconPhone size={14} />
           <span className="text-sm">{customer.phone || 'N/A'}</span>
+        </div>
+
+        <div className="flex items-center gap-2 mb-4">
+           {customer.total_profit != null && (
+            <span className="px-2 py-1 bg-indigo-50 text-indigo-600 rounded text-xs font-medium border border-indigo-100">
+              {t('customers.profit') || 'الربح'}: {Number(customer.total_profit).toLocaleString()} {t('common.currency')}
+            </span>
+          )}
+          {customer.payment_status && (
+            <span className={`px-2 py-1 rounded text-xs font-medium border ${customer.payment_status === 'paid' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
+              {customer.payment_status === 'paid' ? 'خالص' : 'عليه مبلغ'}
+            </span>
+          )}
         </div>
 
         <div className="mt-auto flex items-center justify-between pt-4 border-t border-outline-variant/30">

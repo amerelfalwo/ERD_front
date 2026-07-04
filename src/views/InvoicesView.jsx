@@ -509,11 +509,12 @@ export default function InvoicesView() {
 
   const totalAmount = useMemo(() => subtotal + (parseFloat(deliveryFee) || 0), [subtotal, deliveryFee]);
 
-  useEffect(() => {
-    if (!isAmountPaidDirty) {
-      setAmountPaid(totalAmount > 0 ? String(totalAmount) : '');
-    }
-  }, [totalAmount, isAmountPaidDirty]);
+  // Removed auto-filling of amountPaid to let the user explicitly decide the payment price.
+  // useEffect(() => {
+  //   if (!isAmountPaidDirty) {
+  //     setAmountPaid(totalAmount > 0 ? String(totalAmount) : '');
+  //   }
+  // }, [totalAmount, isAmountPaidDirty]);
 
   const remainingBalance = useMemo(() => Math.max(0, totalAmount - (parseFloat(amountPaid) || 0)), [totalAmount, amountPaid]);
 
@@ -924,14 +925,18 @@ export default function InvoicesView() {
                           </span>
                         </div>
                       )}
-                      <div className="flex justify-between items-center text-body-sm text-muted-steel pt-1">
-                        <span>{t('invoices.amountPaid')}</span>
-                        <input type="number" value={amountPaid} onChange={(e) => { setIsAmountPaidDirty(true); setAmountPaid(e.target.value); }} placeholder="0.00" className="w-24 bg-surface-container-low border border-outline-variant/60 rounded-lg px-2 py-1 text-sm text-right text-charcoal-ink focus:border-accent outline-none" />
-                      </div>
-                      <div className="flex justify-between items-center text-label-md text-charcoal-ink border-t border-outline-variant/30 pt-2">
-                        <span>{t('invoices.remainingBalance')}</span>
-                        <span className="font-mono-tabular font-medium text-error">{t('common.currency')} {remainingBalance.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                      </div>
+                      {invoiceType === 'sale' && (
+                        <>
+                          <div className="flex justify-between items-center text-body-sm text-muted-steel pt-1">
+                            <span>{t('invoices.amountPaid')}</span>
+                            <input type="number" value={amountPaid} onChange={(e) => { setIsAmountPaidDirty(true); setAmountPaid(e.target.value); }} placeholder="0.00" className="w-24 bg-surface-container-low border border-outline-variant/60 rounded-lg px-2 py-1 text-sm text-right text-charcoal-ink focus:border-accent outline-none" />
+                          </div>
+                          <div className="flex justify-between items-center text-label-md text-charcoal-ink border-t border-outline-variant/30 pt-2">
+                            <span>{t('invoices.remainingBalance')}</span>
+                            <span className="font-mono-tabular font-medium text-error">{t('common.currency')} {remainingBalance.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                          </div>
+                        </>
+                      )}
                     </>
                   )}
                 </div>
@@ -950,10 +955,12 @@ export default function InvoicesView() {
                       <span>{t('invoices.invoiceId')}</span>
                       <span className="font-mono-tabular text-charcoal-ink">#{lastInvoice.id}</span>
                     </div>
-                    <div className="flex justify-between items-center text-body-sm text-muted-steel border-b border-outline-variant/20 pb-2">
-                      <span>{t('common.status')}</span>
-                      <span className={`text-label-sm px-2 py-0.5 rounded-lg ${lastInvoice.status === 'paid' ? 'bg-accent-surface text-accent' : 'bg-error-container/30 text-error'}`}>{t(`invoices.status.${lastInvoice.status}`, { defaultValue: lastInvoice.status })}</span>
-                    </div>
+                    {lastInvoice.invoice_type === 'SALE' && (
+                      <div className="flex justify-between items-center text-body-sm text-muted-steel border-b border-outline-variant/20 pb-2">
+                        <span>{t('common.status')}</span>
+                        <span className={`text-label-sm px-2 py-0.5 rounded-lg ${lastInvoice.status === 'paid' ? 'bg-accent-surface text-accent' : 'bg-error-container/30 text-error'}`}>{t(`invoices.status.${lastInvoice.status}`, { defaultValue: lastInvoice.status })}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between items-center pt-2 border-t border-outline-variant/30">
                       <span className="text-label-md text-charcoal-ink">{t('invoices.totalAmount')}</span>
                       <span className="text-h2 text-accent font-mono-tabular tracking-tight">{t('common.currency')} {Number(lastInvoice.total_amount).toLocaleString()}</span>
@@ -1090,13 +1097,17 @@ export default function InvoicesView() {
                     </td>
                     <td className="py-4 px-6 text-right font-mono-tabular text-charcoal-ink font-bold">{Number(inv.total_amount).toLocaleString()} {t('common.currencyEGP', { defaultValue: 'EGP' })}</td>
                     <td className="py-4 px-6 text-center">
-                      <span className={`inline-flex items-center justify-center px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider shadow-sm ${
-                        inv.status === 'paid' ? 'bg-emerald-100/80 text-emerald-800 border border-emerald-200/50' : 
-                        inv.status === 'partial' ? 'bg-amber-100/80 text-amber-800 border border-amber-200/50' : 
-                        'bg-red-100/80 text-red-800 border border-red-200/50'
-                      }`}>
-                        {t(`invoices.status.${inv.status}`, { defaultValue: inv.status })}
-                      </span>
+                      {inv.invoice_type === 'SALE' ? (
+                        <span className={`inline-flex items-center justify-center px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider shadow-sm ${
+                          inv.status === 'paid' ? 'bg-emerald-100/80 text-emerald-800 border border-emerald-200/50' : 
+                          inv.status === 'partial' ? 'bg-amber-100/80 text-amber-800 border border-amber-200/50' : 
+                          'bg-red-100/80 text-red-800 border border-red-200/50'
+                        }`}>
+                          {t(`invoices.status.${inv.status}`, { defaultValue: inv.status })}
+                        </span>
+                      ) : (
+                        <span className="text-muted-steel">—</span>
+                      )}
                     </td>
                     <td className="py-4 px-6 font-mono-tabular text-muted-steel text-xs">{inv.created_at ? new Date(inv.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '-'}</td>
                     <td className="py-4 px-6 text-right">

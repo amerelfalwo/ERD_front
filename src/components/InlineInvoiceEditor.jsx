@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { X, Plus, Trash2, Save, Loader2, CreditCard, AlertCircle, CheckCircle, Package, Printer } from 'lucide-react';
 import api from '../services/api';
 
-export default function InlineInvoiceEditor({ invoice, onCancel, onSaved, onPrint }) {
+export default function InlineInvoiceEditor({ invoice, onCancel, onSaved, onPrint, colSpan = 8 }) {
   const { t } = useTranslation();
   const [items, setItems] = useState([]);
   const [products, setProducts] = useState([]);
@@ -167,7 +167,7 @@ export default function InlineInvoiceEditor({ invoice, onCancel, onSaved, onPrin
   const inputCls = 'w-full px-3 py-2 rounded-lg border border-outline-variant/60 bg-surface-container-lowest text-sm text-charcoal-ink focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/20 transition-all';
 
   return (
-    <td colSpan={7} className="p-0 border-b border-outline-variant/30">
+    <td colSpan={colSpan} className="p-0 border-b border-outline-variant/30">
       <div className="bg-surface-container-lowest border-y-4 border-accent animate-fade-in">
         <div className="flex items-center justify-between px-6 py-4 border-b border-outline-variant/30 bg-surface-container-low/30">
           <div>

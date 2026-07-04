@@ -206,7 +206,7 @@
     "customerSupplier": "Customer/Supplier",
     "unitPrice": "Unit Price",
     "purchasePrice": "Purchase Price",
-    "salePrice": "Sale Price",
+    "salePrice": "Sell Price",
     "quantity": "Quantity",
     "product": "Product",
     "phone": "Phone",
@@ -398,7 +398,7 @@
   },
   "editInvoice": {
     "editTitle": "Edit Invoice #{{id}}",
-    "saleInvoice": "Sale Invoice",
+    "saleInvoice": "Sell Invoice",
     "purchaseInvoice": "Purchase Invoice",
     "itemsTab": "Items",
     "paymentsTab": "Payments",
@@ -433,7 +433,7 @@
     "genericError": "An error occurred"
   },
   "printTemplate": {
-    "saleInvoice": "Sale Invoice",
+    "saleInvoice": "Sell Invoice",
     "purchaseInvoice": "Purchase Invoice",
     "returnNotice": "Return Notice",
     "invoiceNumber": "Invoice Number",
@@ -568,7 +568,7 @@
     "editInvoiceRemaining": "Remaining: ",
     "editInvoicePrint": "Print",
     "editInvoiceSaveChanges": "Save changes",
-    "saleInvoice": "Sale Invoice",
+    "saleInvoice": "Sell Invoice",
     "purchaseInvoice": "Purchase Invoice",
     "recordPayment": "Record Payment",
     "cancel": "Cancel",
