@@ -410,7 +410,7 @@ export default function InvoicesView() {
         result = await api.createSupplierStockReturn(partyId, { items: payload.items });
         notifications.show({ title: t('common.success', { defaultValue: 'Success' }), message: t('invoices.supplierReturnSuccess'), color: 'green' });
       } else {
-        result = invoiceType === 'sale' ? await api.createSaleInvoice(payload) : await api.createPurchaseInvoice(payload);
+        result = invoiceType === 'sale' ? await api.createSellInvoice(payload) : await api.createPurchaseInvoice(payload);
         setLastInvoice(result);
       }
       clearCart();

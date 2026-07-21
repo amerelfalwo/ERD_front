@@ -92,8 +92,11 @@ export default function InvoicePrintTemplate({
         <div className="p-4 text-[12px] leading-relaxed flex flex-col min-h-full">
           <div className="grid grid-cols-3 items-start gap-2 mb-3">
             <div className="text-right text-[12px] flex flex-col">
-              <p className="text-[10px] text-gray-600 font-mono mb-2">#{invoiceNumber}</p>
-              <p className="font-bold text-gray-900">{formattedPartyName || t('printTemplate.cashCustomer')}</p>
+              <p className="text-[10px] text-gray-600 font-mono mb-1">#{invoiceNumber}</p>
+              <p className="font-bold text-gray-900 flex items-center gap-1">
+                <span className="text-gray-500 font-normal">{t('printTemplate.billedTo', { defaultValue: 'فاتورة إلى' })}:</span>
+                <span>{formattedPartyName || t('printTemplate.cashCustomer')}</span>
+              </p>
               {partyPhone && <p className="font-mono text-[11px] text-gray-600 mt-0.5" style={{ direction: 'ltr', unicodeBidi: 'embed', textAlign: 'right' }}>{partyPhone}</p>}
             </div>
             <div className="text-center">
@@ -118,7 +121,6 @@ export default function InvoicePrintTemplate({
             <thead>
               <tr className="border-y-[1.5px] border-dashed border-gray-800">
                 <th className="py-1.5 px-1 font-bold text-right">{t('printTemplate.item')}</th>
-                <th className="py-1.5 px-1 text-center font-bold">{t('printTemplate.price') || 'السعر'}</th>
                 <th className="py-1.5 px-1 text-center font-bold">{t('printTemplate.qty')}</th>
                 <th className="py-1.5 px-1 text-left font-bold">{t('printTemplate.total')}</th>
               </tr>
@@ -127,7 +129,6 @@ export default function InvoicePrintTemplate({
               {displayItems.map((item, idx) => (
                 <tr key={idx} className="break-inside-avoid">
                   <td className="py-1.5 px-1 font-semibold text-right">{item.product_name}</td>
-                  <td className="py-1.5 px-1 text-center font-mono" dir="ltr">{fmt(item.unit_price)}</td>
                   <td className="py-1.5 px-1 text-center font-mono" dir="ltr">{item.quantity}</td>
                   <td className="py-1.5 px-1 text-left font-mono font-bold" dir="ltr">{fmt(item._lineTotal)}</td>
                 </tr>
@@ -152,10 +153,6 @@ export default function InvoicePrintTemplate({
             <div className="flex justify-between items-center py-1.5 border-t-[1.5px] border-dashed border-gray-400">
               <span className="font-bold text-sm">{t('printTemplate.grandTotal')}:</span>
               <span className="font-mono font-bold text-sm" dir="ltr">EGP {fmt(total)}</span>
-            </div>
-            <div className="flex justify-between items-center py-0.5">
-              <span className="text-gray-700 text-[11px]">{t('printTemplate.paidAmount')}:</span>
-              <span className="font-mono text-[11px] text-gray-700" dir="ltr">EGP {fmt(paid)}</span>
             </div>
             <div className="flex justify-between items-center py-0.5">
               <span className="text-gray-700 text-[11px]">{t('printTemplate.remainingAmount')}:</span>
@@ -209,102 +206,118 @@ export default function InvoicePrintTemplate({
       style={{ direction: 'rtl', printColorAdjust: 'exact', WebkitPrintColorAdjust: 'exact', fontFamily: '"Readex Pro", sans-serif' }}
     >
       <div className={`${paddingClass} ${baseTextSize} leading-relaxed flex flex-col h-full`}>
-        <div className="grid grid-cols-3 items-start mb-6 pb-5 border-b-2 border-gray-800 gap-4">
-          <div className="text-right flex flex-col pt-1">
-            <p className="font-mono font-semibold text-gray-600 text-sm mb-6">#{invoiceNumber}</p>
-            <p className={`font-bold text-gray-900 ${isA5 ? 'text-base' : 'text-lg'}`}>
-              {formattedPartyName || t('printTemplate.cashCustomer')}
-            </p>
-            {partyPhone && (
-              <p className="font-mono text-gray-600 text-sm mt-1" dir="ltr" style={{ textAlign: 'right' }}>{partyPhone}</p>
-            )}
-            {partyAddress && (
-              <p className="text-gray-600 text-sm mt-0.5">{partyAddress}</p>
-            )}
-          </div>
-
-          <div className="flex flex-col items-center justify-start text-center">
-            <h2 className={`${titleTextSize} font-black text-gray-900 uppercase tracking-wide`}>{badgeLabel}</h2>
-          </div>
-
-          <div className="flex flex-col items-end gap-1">
+        {/* Header */}
+        <div className="flex justify-between items-start mb-6">
+          <div className="flex flex-col gap-3">
             {resolvedLogo ? (
               <img src={resolvedLogo} alt="Logo" className={`${logoSizeClass} object-contain`} />
             ) : (
-              <div className={`${logoSizeClass} rounded-xl bg-gray-800 flex items-center justify-center shadow-sm`}>
-                <Building2 size={iconSize} className="text-white" />
+              <div className={`${logoSizeClass} rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-center shadow-sm`}>
+                <Building2 size={iconSize} className="text-gray-400" />
               </div>
             )}
-            {tenantName && <p className="font-bold text-gray-800 mt-1 w-full text-left" dir="ltr">{tenantName}</p>}
-            <p className="font-mono text-gray-500 text-sm w-full text-left" dir="ltr">{invoiceDate} · {invoiceTime}</p>
+            <div>
+              {tenantName && <h2 className="font-bold text-xl text-gray-800">{tenantName}</h2>}
+              {taxNumber && <p className="text-gray-500 text-sm mt-1">{t('printTemplate.taxNumber')}: {taxNumber}</p>}
+            </div>
+          </div>
+
+          <div className="text-left flex flex-col items-end">
+            <h1 className={`${titleTextSize} font-black text-gray-900 uppercase tracking-widest mb-3`}>{badgeLabel}</h1>
+            <div className="flex flex-col items-end gap-1 text-sm">
+              <div className="flex justify-between w-48">
+                <span className="text-gray-500 font-medium">{t('printTemplate.invoiceNumber', { defaultValue: 'رقم الفاتورة' })}:</span>
+                <span className="font-mono text-gray-900 font-semibold">#{invoiceNumber}</span>
+              </div>
+              <div className="flex justify-between w-48">
+                <span className="text-gray-500 font-medium">{t('printTemplate.date', { defaultValue: 'التاريخ' })}:</span>
+                <span className="font-mono text-gray-900">{invoiceDate}</span>
+              </div>
+              <div className="flex justify-between w-48">
+                <span className="text-gray-500 font-medium">{t('printTemplate.time', { defaultValue: 'الوقت' })}:</span>
+                <span className="font-mono text-gray-900">{invoiceTime}</span>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="mb-6">
+        {/* Billed To */}
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-bold text-gray-500">{t('printTemplate.billedTo', { defaultValue: 'فاتورة إلى' })}:</span>
+            <span className="font-bold text-gray-900 text-base">
+              {formattedPartyName || t('printTemplate.cashCustomer')}
+            </span>
+          </div>
+          {partyPhone && (
+            <div className="flex items-center gap-1 font-mono text-sm text-gray-600" dir="ltr">
+              <span>{partyPhone}</span>
+            </div>
+          )}
+          {partyAddress && (
+            <div className="text-sm text-gray-600">
+              {partyAddress}
+            </div>
+          )}
+        </div>
+
+        {/* Table */}
+        <div className="mb-6 flex-1">
           <table className="w-full text-right border-collapse">
             <thead>
-              <tr className="border-y-2 border-gray-800">
-                <th className={`py-3 px-3 font-bold text-gray-900 text-right ${tableTextSize}`}>{t('printTemplate.item')}</th>
-                <th className={`py-3 px-3 text-center font-bold text-gray-900 ${tableTextSize}`}>{t('printTemplate.price') || 'السعر'}</th>
-                <th className={`py-3 px-3 text-center font-bold text-gray-900 ${tableTextSize}`}>{t('printTemplate.qty')}</th>
-                <th className={`py-3 px-3 text-left font-bold text-gray-900 ${tableTextSize}`}>{t('printTemplate.total')}</th>
+              <tr className="border-b-2 border-gray-300">
+                <th className={`py-3 px-2 font-bold text-gray-700 text-right ${tableTextSize} uppercase tracking-wider`}>{t('printTemplate.item')}</th>
+                <th className={`py-3 px-2 text-center font-bold text-gray-700 ${tableTextSize} uppercase tracking-wider`}>{t('printTemplate.qty')}</th>
+                <th className={`py-3 px-2 text-left font-bold text-gray-700 ${tableTextSize} uppercase tracking-wider`}>{t('printTemplate.total')}</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-gray-100">
               {displayItems.map((item, idx) => (
-                <tr key={idx}>
-                  <td className={`py-3 px-3 font-semibold text-gray-900 text-right ${tableTextSize}`}>{item.product_name}</td>
-                  <td className={`py-3 px-3 text-center font-mono text-gray-700 ${tableTextSize}`} dir="ltr">{fmt(item.unit_price)}</td>
-                  <td className={`py-3 px-3 text-center font-mono text-gray-700 ${tableTextSize}`} dir="ltr">{item.quantity}</td>
-                  <td className={`py-3 px-3 text-left font-mono font-bold text-gray-900 ${tableTextSize}`} dir="ltr">{fmt(item._lineTotal)}</td>
+                <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                  <td className={`py-3.5 px-2 font-medium text-gray-900 text-right ${tableTextSize}`}>{item.product_name}</td>
+                  <td className={`py-3.5 px-2 text-center font-mono text-gray-600 ${tableTextSize}`} dir="ltr">{item.quantity}</td>
+                  <td className={`py-3.5 px-2 text-left font-mono font-bold text-gray-900 ${tableTextSize}`} dir="ltr">{fmt(item._lineTotal)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
 
-        <div className="flex flex-col mt-auto w-full pt-8">
-          <div className="flex w-full">
-            <div className="w-1/2 mr-auto">
+        {/* Totals & Footer anchored to bottom */}
+        <div className="flex flex-col mt-auto w-full pt-4">
+          <div className="flex w-full justify-end">
+            <div className="w-1/2">
               <table className="w-full text-sm border-collapse">
-                <tbody>
+                <tbody className="divide-y divide-gray-100">
                   {deliveryFee > 0 && (
                     <>
                       <tr>
-                        <td className="py-1.5 font-semibold text-gray-600">{t('printTemplate.itemsTotal')}</td>
-                        <td className="py-1.5 text-left font-mono text-gray-800" dir="ltr">{fmt(subtotal)}</td>
+                        <td className="py-2 px-2 font-medium text-gray-600">{t('printTemplate.itemsTotal')}</td>
+                        <td className="py-2 px-2 text-left font-mono text-gray-800" dir="ltr">{fmt(subtotal)}</td>
                       </tr>
-                      <tr className="border-b border-gray-200">
-                        <td className="py-1.5 pb-2 font-semibold text-gray-600">{t('printTemplate.deliveryFee')}</td>
-                        <td className="py-1.5 pb-2 text-left font-mono text-gray-800" dir="ltr">{fmt(deliveryFee)}</td>
+                      <tr>
+                        <td className="py-2 px-2 font-medium text-gray-600">{t('printTemplate.deliveryFee')}</td>
+                        <td className="py-2 px-2 text-left font-mono text-gray-800" dir="ltr">{fmt(deliveryFee)}</td>
                       </tr>
                     </>
                   )}
-                  <tr className="border-b-2 border-gray-800">
-                    <td className={`py-2.5 font-black text-gray-900 ${isA5 ? 'text-base' : 'text-lg'}`}>{t('printTemplate.grandTotal')}</td>
-                    <td className={`py-2.5 text-left font-mono font-black text-gray-900 ${isA5 ? 'text-base' : 'text-lg'}`} dir="ltr">EGP {fmt(total)}</td>
+                  <tr className="bg-gray-50">
+                    <td className={`py-3 px-2 font-bold text-gray-900 ${isA5 ? 'text-base' : 'text-lg'}`}>{t('printTemplate.grandTotal')}</td>
+                    <td className={`py-3 px-2 text-left font-mono font-bold text-gray-900 ${isA5 ? 'text-base' : 'text-lg'}`} dir="ltr">EGP {fmt(total)}</td>
                   </tr>
                   <tr>
-                    <td className="py-1.5 pt-2 font-semibold text-gray-600">{t('printTemplate.paidAmount')}</td>
-                    <td className="py-1.5 pt-2 text-left font-mono text-gray-700" dir="ltr">EGP {fmt(paid)}</td>
-                  </tr>
-                  <tr className={previousBalance !== 0 ? 'border-b border-gray-200' : ''}>
-                    <td className="py-1.5 font-semibold text-gray-600">{t('printTemplate.remainingAmount')}</td>
-                    <td className="py-1.5 text-left font-mono text-gray-700" dir="ltr">EGP {fmt(balance)}</td>
+                    <td className="py-2 px-2 font-medium text-gray-600">{t('printTemplate.remainingAmount')}</td>
+                    <td className="py-2 px-2 text-left font-mono text-gray-700" dir="ltr">EGP {fmt(balance)}</td>
                   </tr>
                   {previousBalance !== 0 && (
                     <>
                       <tr>
-                        <td className="py-1.5 pt-2 font-semibold text-gray-500">{t('printTemplate.previousBalance')}</td>
-                        <td className="py-1.5 pt-2 text-left font-mono text-gray-500" dir="ltr">EGP {fmt(previousBalance)}</td>
+                        <td className="py-2 px-2 font-medium text-gray-500">{t('printTemplate.previousBalance')}</td>
+                        <td className="py-2 px-2 text-left font-mono text-gray-500" dir="ltr">EGP {fmt(previousBalance)}</td>
                       </tr>
-                      <tr>
-                        <td colSpan={2} className="pt-2">
-                          <div className="flex justify-between items-center py-2.5 bg-gray-800 text-white rounded-lg px-4">
-                            <span className={`font-black ${isA5 ? 'text-base' : 'text-lg'}`}>{t('printTemplate.totalAccount')}</span>
-                            <span className={`font-mono font-black ${isA5 ? 'text-base' : 'text-lg'}`} dir="ltr">EGP {fmt(totalBalanceAfter)}</span>
-                          </div>
-                        </td>
+                      <tr className="bg-gray-900 text-white">
+                        <td className={`py-3 px-3 font-bold rounded-r-lg ${isA5 ? 'text-base' : 'text-lg'}`}>{t('printTemplate.totalAccount')}</td>
+                        <td className={`py-3 px-3 text-left font-mono font-bold rounded-l-lg ${isA5 ? 'text-base' : 'text-lg'}`} dir="ltr">EGP {fmt(totalBalanceAfter)}</td>
                       </tr>
                     </>
                   )}
@@ -313,19 +326,13 @@ export default function InvoicePrintTemplate({
             </div>
           </div>
 
-          <div className="text-center w-full border-t-2 border-gray-800 mt-6 pt-4">
-            {taxNumber && (
-              <p className="text-gray-500 text-sm mb-2">
-                {t('printTemplate.taxNumber')}: <span className="font-mono font-bold">{taxNumber}</span>
-              </p>
-            )}
+          <div className="w-full border-t border-gray-200 mt-8 pt-6 flex justify-between items-center text-sm text-gray-500">
             {footerText ? (
-              <p className="font-semibold text-gray-700 whitespace-pre-wrap">{footerText}</p>
+              <p className="whitespace-pre-wrap">{footerText}</p>
             ) : (
-              <p className="font-semibold text-gray-500">
-                {t('printTemplate.thankYou')}
-              </p>
+              <p>{t('printTemplate.thankYou')}</p>
             )}
+            <div className="font-mono">{invoiceDate}</div>
           </div>
         </div>
       </div>
