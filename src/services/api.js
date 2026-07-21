@@ -165,6 +165,20 @@ export const api = {
   getAdminUsers: (skip = 0, limit = 100) => request(`/admin/users?skip=${skip}&limit=${limit}`),
   getAdminUserDetails: (userId) => request(`/admin/users/${userId}`),
   deleteAdminUser: (userId) => request(`/admin/users/${userId}`, { method: 'DELETE' }),
+
+  getAdminParties: (tenantId) => request(`/admin/tenants/${tenantId}/parties`),
+  getAdminPartySummary: (tenantId, partyId) => request(`/admin/tenants/${tenantId}/parties/${partyId}/summary`),
+  updateAdminParty: (tenantId, partyId, data) => request(`/admin/tenants/${tenantId}/parties/${partyId}`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  getAdminInvoices: (tenantId, options = {}) => {
+    const params = new URLSearchParams();
+    if (options.partyId) params.append('party_id', options.partyId);
+    if (options.invoiceType) params.append('invoice_type', options.invoiceType);
+    return request(`/admin/tenants/${tenantId}/invoices?${params.toString()}`);
+  },
+  getAdminInvoice: (tenantId, invoiceId) => request(`/admin/tenants/${tenantId}/invoices/${invoiceId}`),
+  updateAdminInvoice: (tenantId, invoiceId, data) => request(`/admin/tenants/${tenantId}/invoices/${invoiceId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteAdminInvoice: (tenantId, invoiceId) => request(`/admin/tenants/${tenantId}/invoices/${invoiceId}`, { method: 'DELETE' }),
 };
 
 export default api;
