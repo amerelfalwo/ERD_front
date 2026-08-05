@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, RotateCcw, Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import api from '../services/api';
+import api from '../../../services/api';
 import { notifications } from '@mantine/notifications';
 
 export default function SupplierReturnProductModal({ supplierId, product, onClose, onSaved }) {

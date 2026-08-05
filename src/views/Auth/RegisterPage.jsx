@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Loader2, ArrowRight } from 'lucide-react';
-import api from '../services/api';
-import myLogo from '../assets/my.png';
+import api from '../../services/api';
+import myLogo from '../../assets/my.png';
 
 export default function RegisterView() {
   const navigate = useNavigate();

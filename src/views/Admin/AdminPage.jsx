@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import api from '../services/api';
+import api from '../../services/api';
 
 // ── Stat Card ───────────────────────────────────────────────────────────────
 function StatCard({ icon: Icon, label, value, color, delay = 0 }) {

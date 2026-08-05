@@ -59,8 +59,8 @@
     "next": "التالي"
   },
   "dashboard": {
-    "title": "التقارير والتحليلات",
-    "subtitle": "رؤى المخزون والمقاييس التشغيلية في الوقت الفعلي.",
+    "title": "لوحة التحكم والتحليلات",
+    "subtitle": "رؤى المخزون والمقاييس التشغيلية في الوقت الفعلي",
     "export": "تصدير",
     "filters": "تصفية",
     "totalProfits": "إجمالي الأرباح",
@@ -76,7 +76,32 @@
     "pending": "قيد الانتظار",
     "completed": "مكتمل",
     "noTransactions": "لا توجد معاملات مؤخراً",
-    "error": "فشل تحميل بيانات لوحة التحكم. يرجى المحاولة مرة أخرى."
+    "error": "فشل تحميل بيانات لوحة التحكم. يرجى المحاولة مرة أخرى.",
+    "totalSales": "إجمالي المبيعات",
+    "totalPurchases": "إجمالي المشتريات",
+    "grossProfit": "إجمالي الأرباح",
+    "totalExpenses": "إجمالي المصروفات",
+    "netProfit": "صافي الربح",
+    "totalInvoices": "عدد الفواتير",
+    "outstandingBalance": "مستحقات العملاء",
+    "salesVsPurchases": "اتجاه المبيعات مقابل المشتريات",
+    "profitTrend": "اتجاه الأرباح",
+    "topProducts": "المنتجات الأكثر مبيعاً",
+    "lowStockAlerts": "تنبيهات المخزون المنخفض",
+    "topParties": "أكبر المتعاملين",
+    "qtySold": "الكمية المباعة",
+    "revenue": "الإيراد",
+    "remainingQty": "المتبقي",
+    "minStock": "الحد الأدنى",
+    "client": "عميل",
+    "supplier": "مورد",
+    "today": "اليوم",
+    "week": "هذا الأسبوع",
+    "month": "هذا الشهر",
+    "year": "هذه السنة",
+    "custom": "فترة مخصصة",
+    "noData": "لا تتوفر بيانات للفترة المحددة",
+    "restockWarning": "يحتاج إعادة تزويد"
   },
   "products": {
     "title": "مخزون المنتجات",
@@ -148,10 +173,10 @@
     "subtotal": "المجموع الفرعي",
     "addDelivery": "إضافة توصيل",
     "hasDelivery": "يوجد توصيل ✓",
-    "deliveryFee": "رسوم التوصيل",
+    "deliveryFee": "سعر التوصيل",
     "deliveryPrice": "سعر التوصيل",
     "totalAmount": "المبلغ الإجمالي",
-    "estProfit": "الربح المتوقع",
+    "estProfit": "الربح المقدر",
     "amountPaid": "المبلغ المدفوع",
     "remainingBalance": "الرصيد المتبقي",
     "generateInvoice": "إنشاء فاتورة",
@@ -208,17 +233,10 @@
     "purchasePrice": "سعر الشراء",
     "salePrice": "سعر البيع",
     "quantity": "الكمية",
-    "product": "المنتج",
     "phone": "رقم الهاتف",
     "address": "العنوان",
     "newCustomer": "عميل جديد",
-    "newSupplier": "مورد جديد",
-    "selectExisting": "اختيار موجود",
     "supplierReturnSuccess": "تم إنشاء فاتورة استرجاع المورد بنجاح",
-    "hasDelivery": "يوجد توصيل ✓",
-    "addDelivery": "إضافة توصيل",
-    "deliveryFee": "سعر التوصيل",
-    "estProfit": "الربح المقدر",
     "price": "السعر",
     "fetchHistoryError": "فشل تحميل سجل الفواتير",
     "deleteInvoiceError": "فشل حذف الفاتورة",
@@ -226,7 +244,10 @@
     "loadSupplierDataError": "فشل تحميل بيانات المورد",
     "createProductError": "خطأ في إنشاء المنتج",
     "createPartyError": "خطأ في إنشاء الطرف",
-    "returnInvoice": "استرجاع الفاتورة"
+    "returnInvoice": "استرجاع الفاتورة",
+    "discount": "الخصم",
+    "addDiscount": "+ خصم مالي",
+    "hasDiscount": "خصم مالي"
   },
   "customers": {
     "title": "العملاء",
@@ -359,7 +380,6 @@
     "errorUpdating": "خطأ في تحديث الطرف",
     "errorDeleting": "خطأ في حذف الطرف"
   },
-
   "settings": {
     "title": "الإعدادات",
     "subtitle": "تكوين معلومات المتجر والتفضيلات.",
@@ -612,5 +632,39 @@
     "showingCount": "عرض {{count}} من {{total}}",
     "loadError": "فشل تحميل بيانات الإدارة",
     "accessDenied": "غير مصرح بالوصول"
+  },
+  "expenses": {
+    "title": "مصروفات البراند",
+    "add_expense": "إضافة مصروف",
+    "date": "التاريخ",
+    "description": "الوصف",
+    "amount": "المبلغ",
+    "category": "التصنيف",
+    "net_profit": "صافي الربح",
+    "total_expenses": "إجمالي المصروفات",
+    "gross_profit": "إجمالي الربح",
+    "no_expenses": "لا توجد مصروفات مسجلة في هذه الفترة",
+    "delete_confirm": "هل أنت متأكد من حذف هذا المصروف؟",
+    "actions": "الإجراءات",
+    "expenses_count": "عدد المصروفات المسجلة",
+    "top_category": "أكبر تصنيف مصروفات",
+    "no_expenses_sub": "ابدأ بتسجيل مصروف جديد باستخدام الزر أعلاه.",
+    "delete_confirm_title": "تأكيد حذف المصروف",
+    "delete_confirm_msg": "هل أنت متأكد من رغبتك في حذف هذا المصروف؟ لا يمكن التراجع عن هذه الخطوة.",
+    "cancel": "إلغاء",
+    "delete": "حذف المصروف",
+    "uncategorized": "بدون تصنيف",
+    "categories": {
+      "marketing": "تسويق",
+      "rent": "إيجار",
+      "salaries": "رواتب",
+      "maintenance": "صيانة",
+      "others": "أخرى"
+    }
+  },
+  "invoice": {
+    "discount": "الخصم",
+    "addDiscount": "+ خصم مالي",
+    "hasDiscount": "خصم مالي"
   }
 }

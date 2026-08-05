@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Plus, Search, Package, ChevronDown, ChevronUp, X, Loader2, Trash2, Pencil } from 'lucide-react';
-import api from '../services/api';
+import api from '../../services/api';
 import { notifications } from '@mantine/notifications';
 import { useTranslation } from 'react-i18next';
 

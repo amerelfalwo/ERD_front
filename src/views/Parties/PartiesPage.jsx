@@ -2,9 +2,9 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Search, Users, X, Loader2, Eye, DollarSign, User, Building2, BarChart2, Phone, MapPin, Trash2, TrendingUp, Printer } from 'lucide-react';
-import api from '../services/api';
+import api from '../../services/api';
 import { notifications } from '@mantine/notifications';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../../context/AuthContext';
 
 const AddPartyModal = React.memo(function AddPartyModal({ isOpen, onClose, onCreated }) {
   const [name, setName] = useState('');

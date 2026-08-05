@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, Plus, Trash2, Save, Loader2, CreditCard, AlertCircle, CheckCircle, Package, Printer } from 'lucide-react';
-import api from '../services/api';
+import api from '../../../services/api';
 
 export default function InlineInvoiceEditor({ invoice, onCancel, onSaved, onPrint, colSpan = 8 }) {
   const { t } = useTranslation();

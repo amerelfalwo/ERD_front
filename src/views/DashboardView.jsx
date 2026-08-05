@@ -3,11 +3,13 @@ import { useTranslation } from 'react-i18next';
 import {
   TrendingUp, Wallet, AlertTriangle, CreditCard,
   Download, Filter, Package, ArrowUpRight, ArrowDownRight,
+  ChevronDown, ChevronUp, DollarSign, TrendingDown, Activity
 } from 'lucide-react';
 import {
   ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
 import api from '../services/api';
+import { getNetProfitReport } from '../services/expenseService';
 import { SkeletonCard } from '../components/Skeleton';
 
 /* ── KPI Card ── */
@@ -49,6 +51,82 @@ function KPICard({ title, value, icon: Icon, trend, trendValue, accent = false, 
   );
 }
 
+/* ── Expandable Profit KPI Card ── */
+function ExpandableProfitCard({ title, grossProfit, totalExpenses, netProfit, accent = true, className = '' }) {
+  const [expanded, setExpanded] = useState(false);
+  const { t } = useTranslation();
+
+  const formattedGross = `$${Number(grossProfit || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const formattedExpenses = `$${Number(totalExpenses || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const formattedNet = `$${Number(netProfit || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  return (
+    <div className={`bg-surface-container-lowest border border-outline-variant/60 rounded-2xl p-6 flex flex-col justify-between transition-all duration-300 shadow-whisper ${className} ${expanded ? 'col-span-1 sm:col-span-2 lg:col-span-2 ring-2 ring-accent/30' : ''}`}>
+      <div className="flex justify-between items-start">
+        <span className="text-label-sm text-muted-steel uppercase tracking-wider">{title}</span>
+        <div className="flex items-center gap-2">
+          <div className="p-2 rounded-xl bg-accent text-on-primary">
+            <TrendingUp size={18} strokeWidth={1.8} />
+          </div>
+          <button
+            onClick={() => setExpanded(!expanded)}
+            title={expanded ? 'تصغير' : 'توسيع للتفاصيل'}
+            className="p-1.5 rounded-xl bg-surface-container-high text-on-surface-variant hover:bg-accent/10 hover:text-accent transition-colors cursor-pointer"
+          >
+            {expanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-4 flex items-end justify-between">
+        <div>
+          <div className="text-h2 text-charcoal-ink font-mono-tabular tracking-tight">{formattedNet}</div>
+          <div className="flex items-center gap-1 mt-1 text-accent">
+            <ArrowUpRight size={14} strokeWidth={2.2} />
+            <span className="text-label-sm font-medium">{t('expenses.net_profit', 'صافي الربح')}</span>
+          </div>
+        </div>
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="flex items-center gap-1 text-label-sm text-accent hover:underline cursor-pointer font-medium"
+        >
+          {expanded ? 'إخفاء التفاصيل' : 'عرض تفاصيل المصروفات'}
+          {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        </button>
+      </div>
+
+      {/* Expandable Details Section */}
+      {expanded && (
+        <div className="mt-6 pt-4 border-t border-outline-variant/50 space-y-3 animate-fade-in">
+          <div className="flex justify-between items-center bg-surface-container-low p-3 rounded-xl">
+            <span className="text-body-sm font-medium text-muted-steel flex items-center gap-2">
+              <TrendingUp size={16} className="text-accent" />
+              إجمالي ربح المبيعات (Gross Profit)
+            </span>
+            <span className="text-body-sm font-mono-tabular font-bold text-charcoal-ink">{formattedGross}</span>
+          </div>
+
+          <div className="flex justify-between items-center bg-error/5 p-3 rounded-xl border border-error/10">
+            <span className="text-body-sm font-medium text-error flex items-center gap-2">
+              <TrendingDown size={16} />
+              مصروفات البراند (Brand Expenses)
+            </span>
+            <span className="text-body-sm font-mono-tabular font-bold text-error">-{formattedExpenses}</span>
+          </div>
+
+          <div className="flex justify-between items-center bg-accent/10 p-3 rounded-xl border border-accent/20">
+            <span className="text-body-sm font-bold text-accent flex items-center gap-2">
+              <Activity size={16} />
+              صافي الربح النهائى (Net Profit)
+            </span>
+            <span className="text-body-sm font-mono-tabular font-bold text-accent text-lg">{formattedNet}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Chart Tooltip ── */
 function CustomTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
@@ -72,6 +150,7 @@ export default function DashboardView() {
   const [error, setError] = useState(null);
   const [profitData, setProfitData] = useState(null);
   const [analyticsData, setAnalyticsData] = useState(null);
+  const [netProfitReport, setNetProfitReport] = useState(null);
 
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -81,12 +160,14 @@ export default function DashboardView() {
     setLoading(true);
     try {
       setError(null);
-      const [profit, analytics] = await Promise.all([
+      const [profit, analytics, netProfit] = await Promise.all([
         api.getProfitReport(),
         api.getDashboardAnalytics(startDate || null, endDate || null),
+        getNetProfitReport(startDate || null, endDate || null),
       ]);
       setProfitData(profit);
       setAnalyticsData(analytics);
+      setNetProfitReport(netProfit);
     } catch (err) {
       setError(t('dashboard.error'));
     } finally {
@@ -176,10 +257,12 @@ export default function DashboardView() {
 
       {/* KPI Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 animate-fade-in-up stagger-1">
-        <KPICard
+        <ExpandableProfitCard
           title={t('dashboard.totalProfits')}
-          value={`$${Number(analyticsData?.total_profit || 0).toLocaleString()}`}
-          icon={TrendingUp} trend={1} trendValue="+12%" accent
+          grossProfit={netProfitReport?.gross_profit}
+          totalExpenses={netProfitReport?.total_expenses}
+          netProfit={netProfitReport?.net_profit}
+          accent
         />
         <KPICard
           title={t('dashboard.customerReceivables')}

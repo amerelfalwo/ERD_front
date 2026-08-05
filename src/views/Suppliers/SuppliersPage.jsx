@@ -5,7 +5,7 @@ import { ActionIcon, Flex, Tooltip, SimpleGrid, Card, Pagination, Select } from 
 import { notifications } from '@mantine/notifications';
 import { IconSearch, IconPencil, IconTrash, IconPhone, IconArrowRight } from '@tabler/icons-react';
 import { useNavigate } from 'react-router-dom';
-import api from '../services/api';
+import api from '../../services/api';
 
 /* ─── Add / Edit Modal ─── */
 function SupplierModal({ isOpen, onClose, supplier, onSaved }) {

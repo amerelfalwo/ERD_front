@@ -1,0 +1,435 @@
+/* ================================================================
+   InvoiceDocument.module.css
+   Professional Doctor M Invoice — A4 / A5 / 80mm Thermal Receipt
+   ================================================================ */
+
+/* ── Base Container ─────────────────────────────────────────────── */
+.invoiceContainer {
+  background-color: #ffffff;
+  color: #1a1a1a;
+  font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+  margin: 0 auto;
+  box-sizing: border-box;
+  width: 100%;
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Paper Size Modifiers ───────────────────────────────────────── */
+
+/* A4 — Full-width professional layout */
+.sizeA4 {
+  max-width: 794px; /* ~210mm at 96dpi */
+  min-height: 1122px; /* ~297mm at 96dpi */
+  padding: 2.5rem 2.25rem;
+  font-size: 1rem;
+}
+
+/* A5 — Compact professional layout */
+.sizeA5 {
+  max-width: 559px; /* ~148mm at 96dpi */
+  min-height: 793px; /* ~210mm at 96dpi */
+  padding: 1.5rem 1.25rem;
+  font-size: 0.875rem;
+}
+
+/* 80mm Thermal Receipt — Narrow stacked layout */
+.sizeReceipt {
+  max-width: 302px; /* 80mm at 96dpi */
+  padding: 0.75rem 0.5rem;
+  font-size: 0.75rem;
+}
+
+/* ── Header — Horizontal (A4 / A5) ──────────────────────────────── */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.headerLeft {
+  flex: 1.2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.tenantLogo {
+  max-height: 50px;
+  max-width: 120px;
+  object-fit: contain;
+  margin-bottom: 0.4rem;
+}
+
+.tenantName {
+  font-size: 1.1em;
+  font-weight: 800;
+  color: #000000;
+  margin: 0 0 0.15rem 0;
+  word-break: break-word;
+  letter-spacing: -0.01em;
+}
+
+.headerDate {
+  font-size: 0.8em;
+  color: #555555;
+  margin: 0;
+}
+
+.headerCenter {
+  flex: 1;
+  text-align: center;
+  min-width: 0;
+}
+
+.titleType {
+  font-size: 1.5em;
+  font-weight: 800;
+  color: #000000;
+  margin: 0;
+  line-height: 1.15;
+}
+
+.titleInvoice {
+  font-size: 1.45em;
+  font-weight: 800;
+  color: #000000;
+  margin: 0;
+  letter-spacing: 0.06em;
+  line-height: 1.15;
+}
+
+.headerRight {
+  flex: 1;
+  text-align: right;
+  min-width: 0;
+}
+
+.invoiceNumber {
+  font-size: 1em;
+  font-weight: 700;
+  color: #000000;
+  margin: 0 0 0.2rem 0;
+}
+
+.partyName {
+  font-size: 1em;
+  font-weight: 700;
+  color: #000000;
+  margin: 0;
+  word-break: break-word;
+}
+
+/* ── Header — Receipt (Stacked, no overlap) ─────────────────────── */
+.headerReceipt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.headerReceipt .headerLeft,
+.headerReceipt .headerCenter,
+.headerReceipt .headerRight {
+  width: 100%;
+  text-align: center;
+  align-items: center;
+}
+
+.headerReceipt .tenantLogo {
+  max-height: 36px;
+  max-width: 80px;
+  margin-bottom: 0.25rem;
+}
+
+.headerReceipt .tenantName {
+  font-size: 0.95em;
+}
+
+.headerReceipt .titleType {
+  font-size: 1.15em;
+}
+
+.headerReceipt .titleInvoice {
+  font-size: 1.1em;
+}
+
+/* ── A5 Header Tweaks ───────────────────────────────────────────── */
+.sizeA5 .header {
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.sizeA5 .tenantLogo {
+  max-height: 40px;
+  max-width: 100px;
+}
+
+.sizeA5 .titleType,
+.sizeA5 .titleInvoice {
+  font-size: 1.3em;
+}
+
+/* ── Items Table ────────────────────────────────────────────────── */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: auto;
+}
+
+/* Table Header — bordered top & bottom */
+.table thead th {
+  border-top: 1.5px solid #1a1a1a;
+  border-bottom: 1.5px solid #1a1a1a;
+}
+
+.table th {
+  padding: 0.4rem 0.4rem 0.7rem; /* top horizontal bottom */
+  font-size: 0.95em;
+  font-weight: 800;
+  color: #000000;
+  white-space: nowrap;
+  line-height: 1.5;
+}
+
+/* Column widths & alignment */
+.colTotal {
+  text-align: left;
+  width: 22%;
+}
+
+.colQty {
+  text-align: center;
+  width: 10%;
+}
+
+.colPrice {
+  text-align: center;
+  width: 22%;
+}
+
+.colItem {
+  text-align: right;
+  width: 46%;
+}
+
+/* Table Body Cells */
+.table td {
+  padding: 0.4rem 0.4rem 0.9rem; /* top horizontal bottom */
+  vertical-align: middle;
+  font-size: 0.9em;
+  color: #1a1a1a;
+  line-height: 1.5;
+}
+
+.tdTotal {
+  text-align: left;
+  font-weight: 700;
+}
+
+.tdQty {
+  text-align: center;
+}
+
+.tdPrice {
+  text-align: center;
+}
+
+.tdItem {
+  text-align: right;
+  font-weight: 700;
+}
+
+/* Dotted separator between item rows */
+.itemRow td {
+  border-bottom: 1px dotted #b0b0b0;
+}
+
+.itemRow:last-child td {
+  border-bottom: none;
+}
+
+/* ── A5 Table Tweaks ────────────────────────────────────────────── */
+.sizeA5 .table th {
+  padding: 0.4rem 0.3rem;
+  font-size: 0.85em;
+}
+
+.sizeA5 .table td {
+  padding: 0.4rem 0.3rem;
+  font-size: 0.82em;
+}
+
+/* ── Receipt Table Tweaks ───────────────────────────────────────── */
+.sizeReceipt .table th {
+  padding: 0.3rem 0.2rem;
+  font-size: 0.78em;
+}
+
+.sizeReceipt .table td {
+  padding: 0.3rem 0.2rem;
+  font-size: 0.75em;
+}
+
+.sizeReceipt .colTotal { width: 24%; }
+.sizeReceipt .colQty   { width: 12%; }
+.sizeReceipt .colPrice { width: 24%; }
+.sizeReceipt .colItem  { width: 40%; }
+
+/* ── Totals Section ─────────────────────────────────────────────── */
+.totalsSection {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+.totalsTable {
+  width: 100%;
+  max-width: 320px;
+  border-collapse: collapse;
+}
+
+.totalsTable td {
+  padding: 0.3rem 0.4rem;
+  font-size: 0.9em;
+  color: #1a1a1a;
+}
+
+.amountCol {
+  text-align: left;
+  width: 55%;
+}
+
+.labelCol {
+  text-align: right;
+  font-weight: 700;
+  width: 45%;
+}
+
+.grandTotalRow td {
+  font-size: 1.1em;
+  font-weight: 800;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  border-top: 1.5px solid #1a1a1a;
+}
+
+/* A5 Totals */
+.sizeA5 .totalsTable {
+  max-width: 260px;
+}
+
+.sizeA5 .totalsTable td {
+  font-size: 0.82em;
+  padding: 0.25rem 0.3rem;
+}
+
+.sizeA5 .grandTotalRow td {
+  font-size: 0.95em;
+}
+
+/* Receipt Totals — full width */
+.sizeReceipt .totalsTable {
+  max-width: 100%;
+}
+
+.sizeReceipt .totalsTable td {
+  font-size: 0.75em;
+  padding: 0.2rem 0.2rem;
+}
+
+.sizeReceipt .grandTotalRow td {
+  font-size: 0.85em;
+}
+
+/* ── Bottom Divider ─────────────────────────────────────────────── */
+.dividerBottom {
+  border: none;
+  border-top: 1.5px solid #1a1a1a;
+  margin: 1.25rem 0 1rem 0;
+}
+
+.sizeA5 .dividerBottom {
+  margin: 0.75rem 0 0.75rem 0;
+}
+
+.sizeReceipt .dividerBottom {
+  margin: 0.5rem 0 0.5rem 0;
+  border-top-width: 1px;
+}
+
+/* ── Footer ─────────────────────────────────────────────────────── */
+.footerBox {
+  text-align: center;
+  margin-top: 0.75rem;
+}
+
+.thankYouText {
+  font-size: 1em;
+  font-weight: 800;
+  color: #000000;
+  margin: 0 0 0.25rem 0;
+}
+
+.websiteLink {
+  display: inline-block;
+  font-size: 0.85em;
+  font-weight: 700;
+  color: #1e3a8a;
+  text-decoration: underline;
+  margin: 0;
+  cursor: pointer;
+}
+
+/* A5 Footer */
+.sizeA5 .thankYouText {
+  font-size: 0.88em;
+}
+
+.sizeA5 .websiteLink {
+  font-size: 0.78em;
+}
+
+/* Receipt Footer */
+.sizeReceipt .footerBox {
+  margin-top: 0.5rem;
+}
+
+.sizeReceipt .thankYouText {
+  font-size: 0.78em;
+}
+
+.sizeReceipt .websiteLink {
+  font-size: 0.7em;
+}
+
+/* ── Print Styles ───────────────────────────────────────────────── */
+@media print {
+  @page {
+    size: auto;
+    margin: 8mm;
+  }
+
+  body {
+    background: #ffffff !important;
+  }
+
+  .invoiceContainer {
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .noPrint {
+    display: none !important;
+  }
+}

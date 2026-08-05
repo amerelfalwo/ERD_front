@@ -6,13 +6,13 @@ import {
   Package, Printer, X, Loader2, Edit, Trash2, Undo2, TrendingUp, Download, Plus,
   ChevronDown, ChevronRight, RotateCcw
 } from 'lucide-react';
-import api from '../services/api';
+import api from '../../services/api';
 import { notifications } from '@mantine/notifications';
-import InvoicePrintTemplate from '../components/InvoicePrintTemplate';
-import InlineInvoiceEditor from '../components/InlineInvoiceEditor';
-import ReturnInvoiceModal from '../components/ReturnInvoiceModal';
-import SupplierReturnProductModal from '../components/SupplierReturnProductModal';
-import { useAuth } from '../context/AuthContext';
+import InvoiceDocument from '../../components/invoice/InvoiceDocument';
+import InlineInvoiceEditor from '../Invoices/components/InlineInvoiceEditor';
+import ReturnInvoiceModal from '../Invoices/components/ReturnInvoiceModal';
+import SupplierReturnProductModal from '../Suppliers/components/SupplierReturnProductModal';
+import { useAuth } from '../../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import html2pdf from 'html2pdf.js';
 
@@ -692,7 +692,7 @@ export default function PartyDashboard() {
                 <button onClick={handleClosePrint} className="flex items-center gap-2 px-4 py-2 rounded-xl text-label-md text-muted-steel border border-outline-variant/60 hover:bg-surface-container-low transition-all cursor-pointer btn-tactile"><X size={16} /> {t('common.cancel', 'Cancel')}</button>
                 <button
                   onClick={async () => {
-                    const el = invoicePrintRef.current?.querySelector('.invoice-print-area');
+                    const el = invoicePrintRef.current?.querySelector('.invoice-print-area') || invoicePrintRef.current;
                     if (!el) return;
                     setDownloadingPdf(true);
                     let clonedContainer;
@@ -710,12 +710,19 @@ export default function PartyDashboard() {
                       clonedContainer.style.opacity = '0';
                       clonedContainer.style.pointerEvents = 'none';
 
+                      const partyNameClean = (party?.name || invoiceToPrint?.party_name || 'Customer')
+                        .toString().trim().replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, '_');
+                      const rawDate = invoiceToPrint?.created_at || invoiceToPrint?.issue_date || invoiceToPrint?.date;
+                      const dateObj = rawDate ? new Date(rawDate) : new Date();
+                      const dateClean = !isNaN(dateObj.getTime()) ? dateObj.toISOString().split('T')[0] : 'Date';
+                      const pdfFileName = `${partyNameClean}_${dateClean}.pdf`;
+
                       await html2pdf().set({
                         margin: 0,
-                        filename: `invoice-${String(invoiceToPrint.id).padStart(5, '0')}.pdf`,
+                        filename: pdfFileName,
                         image: { type: 'jpeg', quality: 0.98 },
                         html2canvas: { scale: 2, useCORS: true },
-                        jsPDF: { unit: 'mm', format: paperSize === 'a5' ? 'a5' : 'a4', orientation: 'portrait' },
+                        jsPDF: { unit: 'mm', format: paperSize === 'a5' ? 'a5' : (paperSize === 'receipt' || paperSize === '80mm') ? [80, 297] : 'a4', orientation: 'portrait' },
                       }).from(clone).save();
 
                       document.body.removeChild(clonedContainer);
@@ -744,14 +751,14 @@ export default function PartyDashboard() {
               </div>
             </div>
             <div className="flex-1 overflow-y-auto py-8 flex justify-center">
-              <div ref={invoicePrintRef} className="shadow-2xl rounded-xl overflow-hidden border border-outline-variant/30 self-start">
-                <InvoicePrintTemplate key={`${invoiceToPrint?.id || 'preview'}-${paperSize}`} invoice={invoiceToPrint} tenantName={tenantName} partyName={party.name} partyPhone={party.phone} partyAddress={party.address} logoUrl={logoUrl} defaultFooterText={defaultFooterText} taxNumber={taxNumber} paperSize={paperSize} />
+              <div ref={invoicePrintRef} className="shadow-2xl rounded-xl overflow-hidden border border-outline-variant/30 self-start" style={{ width: paperSize === 'a5' ? '559px' : paperSize === '80mm' || paperSize === 'receipt' ? '302px' : '794px' }}>
+                <InvoiceDocument key={`${invoiceToPrint?.id || 'preview'}-${paperSize}`} invoice={invoiceToPrint} tenantName={tenantName} partyName={party.name} partyPhone={party.phone} partyAddress={party.address} logoUrl={logoUrl} defaultFooterText={defaultFooterText} taxNumber={taxNumber} paperSize={paperSize} />
               </div>
             </div>
           </div>
           {createPortal(
             <div id="print-only-container" className="print-portal" style={{ display: 'none' }}>
-              <InvoicePrintTemplate key={`print-${invoiceToPrint?.id || 'preview'}-${paperSize}`} invoice={invoiceToPrint} tenantName={tenantName} partyName={party.name} partyPhone={party.phone} partyAddress={party.address} logoUrl={logoUrl} defaultFooterText={defaultFooterText} taxNumber={taxNumber} paperSize={paperSize} />
+              <InvoiceDocument key={`print-${invoiceToPrint?.id || 'preview'}-${paperSize}`} invoice={invoiceToPrint} tenantName={tenantName} partyName={party.name} partyPhone={party.phone} partyAddress={party.address} logoUrl={logoUrl} defaultFooterText={defaultFooterText} taxNumber={taxNumber} paperSize={paperSize} />
             </div>,
             document.body
           )}
@@ -780,7 +787,7 @@ export default function PartyDashboard() {
             <div className="flex-1 overflow-y-auto py-8 flex flex-col items-center gap-8">
               {bulkInvoicesToPrint.map((inv) => (
                 <div key={`${inv.id}-${paperSize}`} className="shadow-2xl rounded-xl overflow-hidden border border-outline-variant/30">
-                  <InvoicePrintTemplate invoice={inv} tenantName={tenantName} partyName={party.name} partyPhone={party.phone} partyAddress={party.address} logoUrl={logoUrl} defaultFooterText={defaultFooterText} taxNumber={taxNumber} paperSize={paperSize} />
+                  <InvoiceDocument invoice={inv} tenantName={tenantName} partyName={party.name} partyPhone={party.phone} partyAddress={party.address} logoUrl={logoUrl} defaultFooterText={defaultFooterText} taxNumber={taxNumber} paperSize={paperSize} />
                 </div>
               ))}
             </div>
@@ -788,7 +795,7 @@ export default function PartyDashboard() {
           {createPortal(
             <div id="print-only-container" className="print-portal" style={{ display: 'none' }}>
               {bulkInvoicesToPrint.map((inv) => (
-                <InvoicePrintTemplate key={`print-${inv.id}-${paperSize}`} invoice={inv} tenantName={tenantName} partyName={party.name} partyPhone={party.phone} partyAddress={party.address} logoUrl={logoUrl} defaultFooterText={defaultFooterText} taxNumber={taxNumber} paperSize={paperSize} />
+                <InvoiceDocument key={`print-${inv.id}-${paperSize}`} invoice={inv} tenantName={tenantName} partyName={party.name} partyPhone={party.phone} partyAddress={party.address} logoUrl={logoUrl} defaultFooterText={defaultFooterText} taxNumber={taxNumber} paperSize={paperSize} />
               ))}
             </div>,
             document.body

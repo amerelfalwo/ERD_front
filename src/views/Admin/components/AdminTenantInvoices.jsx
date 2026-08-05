@@ -3,8 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { 
   FileText, Search, Filter, Edit, Trash2, ArrowUpRight, ArrowDownRight, Eye 
 } from 'lucide-react';
-import api from '../../services/api';
-import EditInvoiceModal from './EditInvoiceModal';
+// Shared with Invoices feature — imports EditInvoiceModal from views/Invoices/components
+import api from '../../../services/api';
+import EditInvoiceModal from '../../Invoices/components/EditInvoiceModal';
 
 export default function AdminTenantInvoices({ tenantId }) {
   const { t, i18n } = useTranslation();

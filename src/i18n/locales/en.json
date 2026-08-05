@@ -59,8 +59,8 @@
     "next": "Next"
   },
   "dashboard": {
-    "title": "Reports & Analytics",
-    "subtitle": "Real-time inventory insights and operational metrics.",
+    "title": "Analytics Dashboard",
+    "subtitle": "Real-time operational metrics & inventory insights",
     "export": "Export",
     "filters": "Filters",
     "totalProfits": "Total Profits",
@@ -76,7 +76,32 @@
     "pending": "Pending",
     "completed": "Completed",
     "noTransactions": "No recent transactions",
-    "error": "Failed to load dashboard data. Please try again."
+    "error": "Failed to load dashboard data. Please try again.",
+    "totalSales": "Total Sales",
+    "totalPurchases": "Total Purchases",
+    "grossProfit": "Gross Profit",
+    "totalExpenses": "Total Expenses",
+    "netProfit": "Net Profit",
+    "totalInvoices": "Total Invoices",
+    "outstandingBalance": "Outstanding Balance",
+    "salesVsPurchases": "Sales vs Purchases Trend",
+    "profitTrend": "Profit Trend",
+    "topProducts": "Top Products",
+    "lowStockAlerts": "Low Stock Alerts",
+    "topParties": "Top Parties",
+    "qtySold": "Qty Sold",
+    "revenue": "Revenue",
+    "remainingQty": "Remaining",
+    "minStock": "Min Limit",
+    "client": "Client",
+    "supplier": "Supplier",
+    "today": "Today",
+    "week": "This Week",
+    "month": "This Month",
+    "year": "This Year",
+    "custom": "Custom Range",
+    "noData": "No data available for selected period",
+    "restockWarning": "Restock needed"
   },
   "products": {
     "title": "Product Inventory",
@@ -147,7 +172,7 @@
     "itemsCount": "Items Count",
     "subtotal": "Subtotal",
     "addDelivery": "Add Delivery",
-    "hasDelivery": "Delivery ✓",
+    "hasDelivery": "Has Delivery ✓",
     "deliveryFee": "Delivery Fee",
     "deliveryPrice": "Delivery price",
     "totalAmount": "Total Amount",
@@ -208,17 +233,10 @@
     "purchasePrice": "Purchase Price",
     "salePrice": "Sell Price",
     "quantity": "Quantity",
-    "product": "Product",
     "phone": "Phone",
     "address": "Address",
     "newCustomer": "New Customer",
-    "newSupplier": "New Supplier",
-    "selectExisting": "Select Existing",
     "supplierReturnSuccess": "Supplier return invoice created successfully",
-    "hasDelivery": "Has Delivery ✓",
-    "addDelivery": "Add Delivery",
-    "deliveryFee": "Delivery Fee",
-    "estProfit": "Est. Profit",
     "price": "Price",
     "fetchHistoryError": "Failed to load invoice history",
     "deleteInvoiceError": "Failed to delete invoice",
@@ -226,7 +244,10 @@
     "loadSupplierDataError": "Failed to load supplier data",
     "createProductError": "Error creating product",
     "createPartyError": "Error creating party",
-    "returnInvoice": "Return Invoice"
+    "returnInvoice": "Return Invoice",
+    "discount": "Discount",
+    "addDiscount": "+ Discount",
+    "hasDiscount": "Discount"
   },
   "customers": {
     "title": "Customers",
@@ -358,7 +379,6 @@
     "errorUpdating": "Error updating party",
     "errorDeleting": "Error deleting party"
   },
-
   "settings": {
     "title": "Settings",
     "subtitle": "Configure your store information and preferences.",
@@ -611,5 +631,39 @@
     "showingCount": "Showing {{count}} of {{total}}",
     "loadError": "Failed to load admin data",
     "accessDenied": "Access Denied"
+  },
+  "expenses": {
+    "title": "Brand Expenses",
+    "add_expense": "Add Expense",
+    "date": "Date",
+    "description": "Description",
+    "amount": "Amount",
+    "category": "Category",
+    "net_profit": "Net Profit",
+    "total_expenses": "Total Expenses",
+    "gross_profit": "Gross Profit",
+    "no_expenses": "No expenses recorded in this period",
+    "delete_confirm": "Are you sure you want to delete this expense?",
+    "actions": "Actions",
+    "expenses_count": "Recorded Expenses",
+    "top_category": "Top Category",
+    "no_expenses_sub": "Start by recording a new expense using the button above.",
+    "delete_confirm_title": "Confirm Expense Deletion",
+    "delete_confirm_msg": "Are you sure you want to delete this expense? This action cannot be undone.",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "uncategorized": "Uncategorized",
+    "categories": {
+      "marketing": "Marketing",
+      "rent": "Rent",
+      "salaries": "Salaries",
+      "maintenance": "Maintenance",
+      "others": "Others"
+    }
+  },
+  "invoice": {
+    "discount": "Discount",
+    "addDiscount": "+ Discount",
+    "hasDiscount": "Discount"
   }
 }

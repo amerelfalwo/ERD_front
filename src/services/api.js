@@ -179,6 +179,13 @@ export const api = {
   getAdminInvoice: (tenantId, invoiceId) => request(`/admin/tenants/${tenantId}/invoices/${invoiceId}`),
   updateAdminInvoice: (tenantId, invoiceId, data) => request(`/admin/tenants/${tenantId}/invoices/${invoiceId}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteAdminInvoice: (tenantId, invoiceId) => request(`/admin/tenants/${tenantId}/invoices/${invoiceId}`, { method: 'DELETE' }),
+
+  // Generic HTTP helpers
+  get: (endpoint) => request(endpoint),
+  post: (endpoint, data) => request(endpoint, { method: 'POST', body: data ? JSON.stringify(data) : undefined }),
+  put: (endpoint, data) => request(endpoint, { method: 'PUT', body: data ? JSON.stringify(data) : undefined }),
+  patch: (endpoint, data) => request(endpoint, { method: 'PATCH', body: data ? JSON.stringify(data) : undefined }),
+  delete: (endpoint) => request(endpoint, { method: 'DELETE' }),
 };
 
 export default api;

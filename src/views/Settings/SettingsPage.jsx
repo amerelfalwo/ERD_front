@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Settings as SettingsIcon, Save, Loader2, CheckCircle, FileText, Server, ImageIcon, Upload, Image as ImageIconDefault } from 'lucide-react';
-import api from '../services/api';
-import { useAuth } from '../context/AuthContext';
+import api from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 import { useTranslation } from 'react-i18next';
-import { notifyError, notifySuccess } from '../utils/notify';
-import { getLogoUrl } from '../utils/url';
+import { notifyError, notifySuccess } from '../../utils/notify';
+import { getLogoUrl } from '../../utils/url';
 
 const RAW_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 const API_BASE_URL = RAW_BASE_URL.replace(/\/+$/, '');
@@ -20,6 +20,7 @@ export default function SettingsView() {
     phone: tnt.phone || '', 
     address: tnt.address || '', 
     tax_number: tnt.tax_number || '', 
+    website: tnt.website || '',
     default_invoice_footer: tnt.default_footer_text || tnt.print_notes || '' 
   });
   
@@ -43,6 +44,7 @@ export default function SettingsView() {
           phone: t.phone || '',
           address: t.address || '',
           tax_number: t.tax_number || '',
+          website: t.website || 'https://doctormstore.com',
           default_invoice_footer: t.default_footer_text || t.print_notes || ''
         });
         setLogoUrl(t.logo_url || ''); 
@@ -68,6 +70,7 @@ export default function SettingsView() {
           phone: t.phone || '',
           address: t.address || '',
           tax_number: t.tax_number || '',
+          website: t.website || 'https://doctormstore.com',
           default_invoice_footer: t.default_footer_text || t.print_notes || ''
         });
         setLogoUrl(t.logo_url || ''); 
@@ -96,6 +99,7 @@ export default function SettingsView() {
         phone: formData.phone,
         address: formData.address,
         tax_number: formData.tax_number,
+        website: formData.website,
         default_footer_text: formData.default_invoice_footer
       };
       
@@ -106,6 +110,7 @@ export default function SettingsView() {
         phone: updated.phone || '',
         address: updated.address || '',
         tax_number: updated.tax_number || '',
+        website: updated.website || 'https://doctormstore.com',
         default_invoice_footer: updated.default_footer_text || updated.print_notes || ''
       });
       updateTenantContext({
@@ -113,6 +118,7 @@ export default function SettingsView() {
         phone: updated.phone || '',
         address: updated.address || '',
         tax_number: updated.tax_number || '',
+        website: updated.website || 'https://doctormstore.com',
         default_footer_text: updated.default_footer_text || updated.print_notes || null,
       });
       setShowSaved(true);
@@ -211,6 +217,10 @@ export default function SettingsView() {
           <div>
             <label className="block text-label-sm text-charcoal-ink mb-2 font-medium">{t('settings.taxNumber')}</label>
             <input value={formData.tax_number} onChange={(e) => setFormData({ ...formData, tax_number: e.target.value })} placeholder={t('settings.taxNumberPlaceholder')} className={`${inputClass} font-mono-tabular`} dir="ltr" />
+          </div>
+          <div>
+            <label className="block text-label-sm text-charcoal-ink mb-2 font-medium">{t('settings.website', { defaultValue: 'الموقع الإلكتروني (Website)' })}</label>
+            <input value={formData.website} onChange={(e) => setFormData({ ...formData, website: e.target.value })} placeholder="https://doctormstore.com" className={`${inputClass} font-mono-tabular`} dir="ltr" />
           </div>
         </div>
       </section>

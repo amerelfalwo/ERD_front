@@ -6,9 +6,9 @@ import {
   CheckCircle2, XCircle, Mail, Phone, Calendar,
   AlertTriangle, Key, Clock, FileText, Users
 } from 'lucide-react';
-import api from '../services/api';
-import AdminTenantInvoices from '../components/AdminTenantInvoices';
-import AdminTenantParties from '../components/AdminTenantParties';
+import api from '../../services/api';
+import AdminTenantInvoices from './components/AdminTenantInvoices';
+import AdminTenantParties from './components/AdminTenantParties';
 
 export default function AdminUserDashboard() {
   const { t, i18n } = useTranslation();

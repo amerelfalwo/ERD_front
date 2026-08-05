@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Package, Users, Truck, FileText, Settings,
-  Bell, Menu, X, LogOut, Building2, ChevronDown, Globe, Shield,
+  Bell, Menu, X, LogOut, Building2, ChevronDown, Globe, Shield, DollarSign, PieChart
 } from 'lucide-react';
 import myLogo from '../assets/my.png';
 import { useAuth } from '../context/AuthContext';
@@ -28,6 +28,7 @@ export default function Layout() {
     { path: '/customers', label: t('nav.customers'), icon: Users },
     { path: '/suppliers', label: t('nav.suppliers'), icon: Truck },
     { path: '/invoices', label: t('nav.invoices'), icon: FileText },
+    { path: '/expenses', label: t('expenses.title'), icon: DollarSign },
   ], [t]);
 
   const companyName = user?.tenant?.company_name || 'ERP Dashboard';

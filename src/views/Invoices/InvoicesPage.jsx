@@ -3,17 +3,18 @@ import { createPortal } from 'react-dom';
 import {
   ShoppingCart, Plus, Minus, Trash2, Printer, Loader2,
   CheckCircle2, Package, UserSquare2, X, Edit, Undo2, Search,
-  Truck, UserPlus, Phone, MapPin, Download, RotateCcw
+  Truck, UserPlus, Phone, MapPin, Download, RotateCcw, Tag
 } from 'lucide-react';
 import { notifications } from '@mantine/notifications';
-import api from '../services/api';
-import { useInvoiceStore } from '../store/useInvoiceStore';
-import InvoicePrintTemplate from '../components/InvoicePrintTemplate';
-import EditInvoiceModal from '../components/EditInvoiceModal';
-import ReturnInvoiceModal from '../components/ReturnInvoiceModal';
-import { useAuth } from '../context/AuthContext';
+import api from '../../services/api';
+import { useInvoiceStore } from '../../store/useInvoiceStore';
+import InvoiceDocument from '../../components/invoice/InvoiceDocument';
+import EditInvoiceModal from './components/EditInvoiceModal';
+import ReturnInvoiceModal from './components/ReturnInvoiceModal';
+import { useAuth } from '../../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import html2pdf from 'html2pdf.js';
+import { calculateInvoiceTotals } from '../../utils/calculateInvoiceTotals';
 
 
 const InvoiceItemRow = memo(function InvoiceItemRow({ item, products, invoiceType, onQuantityChange, onRemove, onEdit, maxStock, inventoryProductsMap }) {
@@ -124,6 +125,9 @@ export default function InvoicesView() {
   const [amountPaid, setAmountPaid] = useState('');
   const [isAmountPaidDirty, setIsAmountPaidDirty] = useState(false);
   const [deliveryFee, setDeliveryFee] = useState('');
+  const [hasDelivery, setHasDelivery] = useState(false);
+  const [discountAmount, setDiscountAmount] = useState('');
+  const [hasDiscount, setHasDiscount] = useState(false);
   const [invoiceHistory, setInvoiceHistory] = useState([]);
   const [historyTotal, setHistoryTotal] = useState(0);
   const [historyPage, setHistoryPage] = useState(1);
@@ -142,7 +146,6 @@ export default function InvoicesView() {
   const [newPartyName, setNewPartyName] = useState('');
   const [newPartyPhone, setNewPartyPhone] = useState('');
   const [newPartyAddress, setNewPartyAddress] = useState('');
-  const [hasDelivery, setHasDelivery] = useState(false);
   const [supplierProducts, setSupplierProducts] = useState([]);
   const [supplierStockMap, setSupplierStockMap] = useState({});
 
@@ -390,6 +393,7 @@ export default function InvoicesView() {
         party_id: partyId,
         amount_paid: parseFloat(amountPaid) || 0,
         delivery_fee: hasDelivery ? (parseFloat(deliveryFee) || 0) : 0,
+        discount_amount: (invoiceType === 'sale' && hasDiscount) ? (parseFloat(discountAmount) || 0) : 0,
         items: items.map((i) => {
           if (invoiceType === 'purchase') {
             return { product_id: i.product_id, quantity: i.quantity, purchase_price: i.purchase_price, selling_price: i.selling_price };
@@ -418,13 +422,15 @@ export default function InvoicesView() {
       setIsAmountPaidDirty(false);
       setDeliveryFee('');
       setHasDelivery(false);
+      setDiscountAmount('');
+      setHasDiscount(false);
       setSalePrice('');
       setAutoFetchedCost(null);
       loadHistory(historyPage, historyPageSize);
       api.getInventoryReport().then(setInventory);
     } catch (err) { notifications.show({ title: t('common.error', { defaultValue: 'Error' }), message: err?.message || t('common.error', { defaultValue: 'Error' }), color: 'red' }); }
     finally { setSubmitting(false); }
-  }, [items, selectedParty, isNewParty, newPartyName, newPartyPhone, newPartyAddress, invoiceType, t, amountPaid, hasDelivery, deliveryFee, clearCart, loadHistory, historyPage, historyPageSize]);
+  }, [items, selectedParty, isNewParty, newPartyName, newPartyPhone, newPartyAddress, invoiceType, t, amountPaid, hasDelivery, deliveryFee, hasDiscount, discountAmount, clearCart, loadHistory, historyPage, historyPageSize]);
 
   const handleOpenPrintPreview = useCallback((invoiceData) => {
     setInvoiceToPrint(invoiceData);
@@ -497,17 +503,43 @@ export default function InvoicesView() {
     }
   }, 0), [items, invoiceType, inventoryProductsMap]);
 
+  const preparedItemsForTotals = useMemo(() => {
+    return items.map((item) => {
+      if (invoiceType === 'purchase' || invoiceType === 'supplier_return') {
+        return { ...item, price: item.purchase_price || 0 };
+      }
+      const sp = item.sale_price != null ? item.sale_price : (() => {
+        const invProd = inventoryProductsMap?.[String(item.product_id)];
+        const best = invProd?.batches?.filter(b => Number(b.remaining_quantity) > 0)
+          .reduce((acc, b) => (!acc || Number(b.selling_price) > Number(acc.selling_price) ? b : acc), null)
+          ?? invProd?.batches?.reduce((acc, b) => (!acc || Number(b.selling_price) > Number(acc.selling_price) ? b : acc), null);
+        return best?.selling_price || 0;
+      })();
+      return { ...item, price: sp };
+    });
+  }, [items, invoiceType, inventoryProductsMap]);
+
+  const totals = useMemo(() => {
+    return calculateInvoiceTotals(
+      preparedItemsForTotals,
+      hasDelivery ? deliveryFee : 0,
+      (invoiceType === 'sale' && hasDiscount) ? discountAmount : 0
+    );
+  }, [preparedItemsForTotals, hasDelivery, deliveryFee, invoiceType, hasDiscount, discountAmount]);
+
+  const totalAmount = totals.grandTotal;
+
   const totalProfit = useMemo(() => {
     if (invoiceType !== 'sale') return 0;
-    return items.reduce((sum, item) => {
+    const baseProfit = items.reduce((sum, item) => {
       if (item.sale_price != null && item.purchase_price != null) {
         return sum + (Number(item.sale_price) - Number(item.purchase_price)) * Number(item.quantity);
       }
       return sum;
     }, 0);
-  }, [invoiceType, items]);
-
-  const totalAmount = useMemo(() => subtotal + (parseFloat(deliveryFee) || 0), [subtotal, deliveryFee]);
+    const parsedDiscount = hasDiscount ? (parseFloat(discountAmount) || 0) : 0;
+    return baseProfit - parsedDiscount;
+  }, [invoiceType, items, hasDiscount, discountAmount]);
 
   // Removed auto-filling of amountPaid to let the user explicitly decide the payment price.
   // useEffect(() => {
@@ -910,6 +942,41 @@ export default function InvoicesView() {
                           </div>
                         )}
                       </div>
+
+                      {/* Discount Toggle (Only for SALE invoices) */}
+                      {invoiceType === 'sale' && (
+                        <div className="border-t border-outline-variant/30 pt-2 space-y-2">
+                          <div className="flex justify-between items-center">
+                            <button
+                              onClick={() => { setHasDiscount(!hasDiscount); if (hasDiscount) setDiscountAmount(''); }}
+                              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-label-sm transition-all cursor-pointer btn-tactile ${
+                                hasDiscount
+                                  ? 'bg-rose-600 text-white shadow-sm'
+                                  : 'text-muted-steel border border-outline-variant/60 hover:bg-surface-container-low'
+                              }`}
+                            >
+                              <Tag size={14} />
+                              {hasDiscount ? t('invoice.hasDiscount', 'خصم مالي') : t('invoice.addDiscount', '+ خصم مالي')}
+                            </button>
+                            {hasDiscount && (
+                              <input
+                                type="number"
+                                value={discountAmount}
+                                onChange={(e) => setDiscountAmount(e.target.value)}
+                                placeholder="0.00"
+                                className="w-28 bg-surface-container-low border border-outline-variant/60 rounded-lg px-2 py-1.5 text-sm text-right text-charcoal-ink focus:border-rose-500 outline-none font-mono-tabular"
+                                autoFocus
+                              />
+                            )}
+                          </div>
+                          {hasDiscount && discountAmount && (
+                            <div className="flex justify-between items-center text-body-sm text-rose-600 dark:text-rose-400 font-medium">
+                              <span>{t('invoice.discount', 'الخصم')}</span>
+                              <span className="font-mono-tabular font-bold">-{t('common.currency')} {Number(discountAmount || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
                       <div className="flex justify-between items-center border-t border-outline-variant/30 pt-4 mt-2">
                         <span className="text-sm font-semibold text-charcoal-ink">{t('invoices.totalAmount')}</span>
                         <span className="text-3xl font-black bg-clip-text text-transparent bg-gradient-to-r from-accent to-accent-muted drop-shadow-sm font-mono-tabular tracking-tight">
@@ -962,9 +1029,15 @@ export default function InvoicesView() {
                         <span className={`text-label-sm px-2 py-0.5 rounded-lg ${lastInvoice.status === 'paid' ? 'bg-accent-surface text-accent' : 'bg-error-container/30 text-error'}`}>{t(`invoices.status.${lastInvoice.status}`, { defaultValue: lastInvoice.status })}</span>
                       </div>
                     )}
+                    {Number(lastInvoice.discount_amount) > 0 && (
+                      <div className="flex justify-between items-center text-body-sm text-rose-600 dark:text-rose-400 border-b border-outline-variant/20 pb-2">
+                        <span>{t('invoice.discount', 'الخصم')}</span>
+                        <span className="font-mono-tabular font-bold">-{t('common.currency')} {Number(lastInvoice.discount_amount).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between items-center pt-2 border-t border-outline-variant/30">
                       <span className="text-label-md text-charcoal-ink">{t('invoices.totalAmount')}</span>
-                      <span className="text-h2 text-accent font-mono-tabular tracking-tight">{t('common.currency')} {Number(lastInvoice.total_amount).toLocaleString()}</span>
+                      <span className="text-h2 text-accent font-mono-tabular tracking-tight">{t('common.currency')} {Number(lastInvoice.total_amount).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                     </div>
                   </div>
                   <div className="mt-5 flex gap-2">
@@ -1230,7 +1303,7 @@ export default function InvoicesView() {
                 </button>
                 <button
                   onClick={async () => {
-                    const el = invoicePrintRef.current?.querySelector('.invoice-print-area');
+                    const el = invoicePrintRef.current?.querySelector('.invoice-print-area') || invoicePrintRef.current;
                     if (!el) return;
                     setDownloadingPdf(true);
                     try {
@@ -1247,13 +1320,20 @@ export default function InvoicesView() {
                       clonedContainer.style.opacity = '0';
                       clonedContainer.style.pointerEvents = 'none';
 
+                      const partyNameClean = (partyForPrint?.name || invoiceToPrint?.party_name || invoiceToPrint?.party?.name || 'Customer')
+                        .toString().trim().replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, '_');
+                      const rawDate = invoiceToPrint?.created_at || invoiceToPrint?.issue_date || invoiceToPrint?.date;
+                      const dateObj = rawDate ? new Date(rawDate) : new Date();
+                      const dateClean = !isNaN(dateObj.getTime()) ? dateObj.toISOString().split('T')[0] : 'Date';
+                      const pdfFileName = `${partyNameClean}_${dateClean}.pdf`;
+
                       await html2pdf()
                         .set({
                           margin: 0,
-                          filename: `Invoice_#${invoiceToPrint.id}.pdf`,
+                          filename: pdfFileName,
                           image: { type: 'jpeg', quality: 0.98 },
                           html2canvas: { scale: 2, useCORS: true },
-                          jsPDF: { unit: 'mm', format: paperSize === 'a5' ? 'a5' : 'a4', orientation: 'portrait' },
+                          jsPDF: { unit: 'mm', format: paperSize === 'a5' ? 'a5' : (paperSize === 'receipt' || paperSize === '80mm') ? [80, 297] : 'a4', orientation: 'portrait' },
                         })
                         .from(clone)
                         .save();
@@ -1286,8 +1366,8 @@ export default function InvoicesView() {
               </div>
             </div>
             <div className="flex-1 overflow-y-auto py-8 flex justify-center">
-              <div ref={invoicePrintRef} className="shadow-2xl rounded-xl overflow-hidden border border-outline-variant/30 self-start">
-                <InvoicePrintTemplate
+              <div ref={invoicePrintRef} className="shadow-2xl rounded-xl overflow-hidden border border-outline-variant/30 self-start" style={{ width: paperSize === 'a5' ? '559px' : paperSize === '80mm' || paperSize === 'receipt' ? '302px' : '794px' }}>
+                <InvoiceDocument
                   key={`${invoiceToPrint?.id || 'preview'}-${paperSize}`}
                   invoice={invoiceToPrint}
                   tenantName={tenantName}
@@ -1305,7 +1385,7 @@ export default function InvoicesView() {
 
           {createPortal(
             <div ref={printPortalRef} className="print-portal" style={{ display: 'none' }}>
-              <InvoicePrintTemplate
+              <InvoiceDocument
                 key={`print-${invoiceToPrint?.id || 'preview'}-${paperSize}`}
                 invoice={invoiceToPrint}
                 tenantName={tenantName}
@@ -1347,7 +1427,7 @@ export default function InvoicesView() {
             <div className="flex-1 overflow-y-auto py-8 flex flex-col items-center gap-8">
               {bulkInvoicesToPrint.map((inv) => (
                 <div key={inv.id} className="shadow-2xl rounded-xl overflow-hidden border border-outline-variant/30">
-                  <InvoicePrintTemplate
+                  <InvoiceDocument
                     invoice={inv}
                     tenantName={tenantName}
                     partyName={parties.find(p => p.id === inv.party_id)?.name || 'Unknown'}
@@ -1364,7 +1444,7 @@ export default function InvoicesView() {
           {createPortal(
             <div ref={printPortalRef} className="print-portal" style={{ display: 'none' }}>
               {bulkInvoicesToPrint.map((inv) => (
-                <InvoicePrintTemplate
+                <InvoiceDocument
                   key={inv.id}
                   invoice={inv}
                   tenantName={tenantName}

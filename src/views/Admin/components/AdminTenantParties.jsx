@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { 
   Users, Search, Edit, Trash2, TrendingUp, TrendingDown 
 } from 'lucide-react';
-import api from '../../services/api';
+import api from '../../../services/api';
 
 export default function AdminTenantParties({ tenantId }) {
   const { t, i18n } = useTranslation();
