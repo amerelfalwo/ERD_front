@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -10,11 +10,12 @@ import api from '../../services/api';
 import { notifications } from '@mantine/notifications';
 import InvoiceDocument from '../../components/invoice/InvoiceDocument';
 import InlineInvoiceEditor from '../Invoices/components/InlineInvoiceEditor';
-import ReturnInvoiceModal from '../Invoices/components/ReturnInvoiceModal';
-import SupplierReturnProductModal from '../Suppliers/components/SupplierReturnProductModal';
 import { useAuth } from '../../context/AuthContext';
 import { useTranslation } from 'react-i18next';
-import html2pdf from 'html2pdf.js';
+import { generatePdfFileName } from '../../services/invoiceService';
+
+const ReturnInvoiceModal = lazy(() => import('../Invoices/components/ReturnInvoiceModal'));
+const SupplierReturnProductModal = lazy(() => import('../Suppliers/components/SupplierReturnProductModal'));
 
 
 
@@ -710,13 +711,12 @@ export default function PartyDashboard() {
                       clonedContainer.style.opacity = '0';
                       clonedContainer.style.pointerEvents = 'none';
 
-                      const partyNameClean = (party?.name || invoiceToPrint?.party_name || 'Customer')
-                        .toString().trim().replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, '_');
+                      const partyNameForPdf = party?.name || invoiceToPrint?.party_name || 'Customer';
                       const rawDate = invoiceToPrint?.created_at || invoiceToPrint?.issue_date || invoiceToPrint?.date;
-                      const dateObj = rawDate ? new Date(rawDate) : new Date();
-                      const dateClean = !isNaN(dateObj.getTime()) ? dateObj.toISOString().split('T')[0] : 'Date';
-                      const pdfFileName = `${partyNameClean}_${dateClean}.pdf`;
+                      const pdfFileName = generatePdfFileName(partyNameForPdf, rawDate);
 
+                      const html2pdfModule = await import('html2pdf.js');
+                      const html2pdf = html2pdfModule.default || html2pdfModule;
                       await html2pdf().set({
                         margin: 0,
                         filename: pdfFileName,
@@ -804,26 +804,30 @@ export default function PartyDashboard() {
       )}
 
       {returnInvoice && (
-        <ReturnInvoiceModal
-          invoice={returnInvoice}
-          onClose={() => setReturnInvoice(null)}
-          onSaved={() => {
-            setReturnInvoice(null);
-            loadSummary();
-          }}
-        />
+        <Suspense fallback={null}>
+          <ReturnInvoiceModal
+            invoice={returnInvoice}
+            onClose={() => setReturnInvoice(null)}
+            onSaved={() => {
+              setReturnInvoice(null);
+              loadSummary();
+            }}
+          />
+        </Suspense>
       )}
 
       {productToReturn && (
-        <SupplierReturnProductModal
-          supplierId={partyId}
-          product={productToReturn}
-          onClose={() => setProductToReturn(null)}
-          onSaved={() => {
-            setProductToReturn(null);
-            loadSummary();
-          }}
-        />
+        <Suspense fallback={null}>
+          <SupplierReturnProductModal
+            supplierId={partyId}
+            product={productToReturn}
+            onClose={() => setProductToReturn(null)}
+            onSaved={() => {
+              setProductToReturn(null);
+              loadSummary();
+            }}
+          />
+        </Suspense>
       )}
 
       {invoiceToDelete && (

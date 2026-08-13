@@ -33,6 +33,30 @@ export function formatInvoiceDate(dateVal) {
 }
 
 /**
+ * Standardized PDF export filename generator: {partyName}-{date}.pdf (e.g. محمد-2026-08-08.pdf)
+ */
+export function generatePdfFileName(partyName, dateVal) {
+  const rawName = (partyName || 'Customer').toString().trim();
+  const cleanName = rawName
+    .replace(/^Dr\s*\/?\s*/i, '')
+    .trim()
+    .replace(/[\\/:*?"<>|]/g, '_')
+    .replace(/\s+/g, '_');
+
+  let dateClean = 'Date';
+  if (dateVal) {
+    const d = new Date(dateVal);
+    if (!isNaN(d.getTime())) {
+      dateClean = d.toISOString().split('T')[0];
+    }
+  } else {
+    dateClean = new Date().toISOString().split('T')[0];
+  }
+
+  return `${cleanName}-${dateClean}.pdf`;
+}
+
+/**
  * Transforms raw API invoice data into standard InvoiceDocument prop format.
  *
  * @param {Object} rawInvoice

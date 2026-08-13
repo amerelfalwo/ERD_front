@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo, memo, Suspense, lazy } from 'react';
 import { createPortal } from 'react-dom';
 import {
   ShoppingCart, Plus, Minus, Trash2, Printer, Loader2,
@@ -9,12 +9,13 @@ import { notifications } from '@mantine/notifications';
 import api from '../../services/api';
 import { useInvoiceStore } from '../../store/useInvoiceStore';
 import InvoiceDocument from '../../components/invoice/InvoiceDocument';
-import EditInvoiceModal from './components/EditInvoiceModal';
-import ReturnInvoiceModal from './components/ReturnInvoiceModal';
 import { useAuth } from '../../context/AuthContext';
 import { useTranslation } from 'react-i18next';
-import html2pdf from 'html2pdf.js';
 import { calculateInvoiceTotals } from '../../utils/calculateInvoiceTotals';
+import { generatePdfFileName } from '../../services/invoiceService';
+
+const EditInvoiceModal = lazy(() => import('./components/EditInvoiceModal'));
+const ReturnInvoiceModal = lazy(() => import('./components/ReturnInvoiceModal'));
 
 
 const InvoiceItemRow = memo(function InvoiceItemRow({ item, products, invoiceType, onQuantityChange, onRemove, onEdit, maxStock, inventoryProductsMap }) {
@@ -33,6 +34,8 @@ const InvoiceItemRow = memo(function InvoiceItemRow({ item, products, invoiceTyp
 
   const unitPrice = invoiceType === 'sale' ? Number(getSalePrice()) : Number(item.purchase_price || 0);
   const lineTotal = unitPrice * Number(item.quantity);
+  const costPrice = product?.purchase_price || product?.last_purchase_price || 0;
+  const margin = invoiceType === 'sale' && unitPrice > 0 && costPrice > 0 ? (unitPrice - costPrice) * Number(item.quantity) : null;
 
   const handleQtyInput = (e) => {
     const val = e.target.value.replace(/[^0-9]/g, '');
@@ -50,44 +53,60 @@ const InvoiceItemRow = memo(function InvoiceItemRow({ item, products, invoiceTyp
   };
 
   return (
-    <div className="grid grid-cols-12 gap-2 items-center px-5 py-3 mx-2 my-1 rounded-2xl border border-transparent hover:border-outline-variant/30 hover:bg-surface-container-low/50 hover:shadow-sm transition-all duration-300 group">
+    <div className="grid grid-cols-12 gap-2 items-center px-5 py-3 mx-2 my-1 rounded-2xl border border-outline-variant/20 hover:border-outline-variant/50 hover:bg-surface-container-low/60 hover:shadow-sm transition-all duration-300 group">
       <div className="col-span-4 flex flex-col">
-        <span className="text-label-md text-charcoal-ink truncate">{displayName}</span>
+        <span className="text-label-md font-bold text-charcoal-ink truncate">{displayName}</span>
         {invoiceType === 'purchase' && item.purchase_price !== undefined && (
           <span className="font-mono-tabular text-label-sm text-muted-steel mt-0.5">
-            {t('invoices.buy', { defaultValue: 'Buy' })}: {Number(item.purchase_price).toLocaleString()} | {t('invoices.sell', { defaultValue: 'Sell' })}: {Number(item.selling_price).toLocaleString()}
+            {t('invoices.buy', { defaultValue: 'شراء' })}: <strong className="text-charcoal-ink">{Number(item.purchase_price).toLocaleString()}</strong> | {t('invoices.sell', { defaultValue: 'بيع' })}: <strong className="text-charcoal-ink">{Number(item.selling_price).toLocaleString()}</strong>
           </span>
         )}
         {invoiceType === 'supplier_return' && item.purchase_price !== undefined && (
           <span className="font-mono-tabular text-label-sm text-error mt-0.5">
-            {t('invoices.unitPrice', { defaultValue: 'Unit Price' })}: {Number(item.purchase_price).toLocaleString()}
+            {t('invoices.unitPrice', { defaultValue: 'سعر الوحدة' })}: <strong className="font-bold">{Number(item.purchase_price).toLocaleString()}</strong>
           </span>
         )}
-        {invoiceType === 'sale' && item.sale_price != null && (
-          <span className="font-mono-tabular text-label-sm text-muted-steel mt-0.5">
-            {t('invoices.price', { defaultValue: 'Price' })}: {Number(item.sale_price).toLocaleString()}
+        {invoiceType === 'sale' && (
+          <span className="font-mono-tabular text-label-sm text-muted-steel mt-0.5 flex items-center gap-1.5 flex-wrap">
+            <span>{t('invoices.price', { defaultValue: 'السعر' })}: <strong className="text-charcoal-ink">{Number(unitPrice).toLocaleString()}</strong></span>
+            {costPrice > 0 && (
+              <span className="text-[11px] text-muted-steel/70">({t('invoices.cost', { defaultValue: 'التكلفة' })}: {Number(costPrice).toLocaleString()})</span>
+            )}
           </span>
         )}
       </div>
-      <div className="col-span-3 flex justify-center">
-        <div className="flex items-center gap-0 bg-surface-container-lowest border border-outline-variant/60 rounded-xl overflow-hidden">
+
+      <div className="col-span-3 flex flex-col items-center justify-center">
+        <div className="flex items-center gap-0 bg-surface-container-lowest border border-outline-variant/60 rounded-xl overflow-hidden shadow-2xs">
           <button onClick={() => onQuantityChange(item.product_id, Math.max(1, item.quantity - 1))} className="p-1.5 text-muted-steel hover:text-accent hover:bg-accent-surface transition-colors cursor-pointer"><Minus size={14} /></button>
           <input
             type="text"
             inputMode="numeric"
             value={item.quantity}
             onChange={handleQtyInput}
-            className="w-10 text-center font-mono-tabular text-label-md text-charcoal-ink border-x border-outline-variant/40 py-1 bg-transparent outline-none focus:bg-accent-surface/20 transition-colors"
+            className="w-11 text-center font-mono-tabular font-bold text-label-md text-charcoal-ink border-x border-outline-variant/40 py-1 bg-transparent outline-none focus:bg-accent-surface/20 transition-colors"
           />
           <button onClick={handleIncrement} className="p-1.5 text-muted-steel hover:text-accent hover:bg-accent-surface transition-colors cursor-pointer"><Plus size={14} /></button>
         </div>
+        {invoiceType === 'sale' && maxStock != null && (
+          <span className={`text-[10px] font-mono-tabular mt-1 px-1.5 py-0.5 rounded-md ${maxStock > 0 ? 'bg-emerald-50 text-emerald-600 font-semibold' : 'bg-red-50 text-red-500'}`}>
+            {t('invoices.available', { defaultValue: 'متاح' })}: {maxStock}
+          </span>
+        )}
       </div>
+
       <div className="col-span-3 text-right">
-        <span className="font-mono-tabular text-label-md text-charcoal-ink font-medium">{lineTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })} {t('common.currencyEGP', { defaultValue: 'EGP' })}</span>
+        <span className="font-mono-tabular text-label-md font-bold text-charcoal-ink block">{lineTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {t('common.currency', { defaultValue: 'ج.م' })}</span>
+        {margin != null && (
+          <span className={`text-[10px] font-mono-tabular font-medium ${margin >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+            {t('invoices.estProfit', { defaultValue: 'الربح' })}: {margin >= 0 ? '+' : ''}{margin.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+          </span>
+        )}
       </div>
+
       <div className="col-span-2 flex justify-end gap-1">
-        <button onClick={() => onEdit(item)} className="p-1.5 rounded-xl text-muted-steel/50 hover:bg-accent-surface hover:text-accent transition-all opacity-0 group-hover:opacity-100 cursor-pointer btn-tactile" title={t('common.edit', { defaultValue: 'Edit' })}><Edit size={14} /></button>
-        <button onClick={() => onRemove(item.product_id)} className="p-1.5 rounded-xl text-error/50 hover:bg-error-container/20 hover:text-error transition-all opacity-0 group-hover:opacity-100 cursor-pointer btn-tactile" title={t('common.delete', { defaultValue: 'Delete' })}><Trash2 size={14} /></button>
+        <button onClick={() => onEdit(item)} className="p-1.5 rounded-xl text-muted-steel/70 hover:bg-accent-surface hover:text-accent transition-all cursor-pointer btn-tactile" title={t('common.edit', { defaultValue: 'تعديل' })}><Edit size={14} /></button>
+        <button onClick={() => onRemove(item.product_id)} className="p-1.5 rounded-xl text-error/70 hover:bg-error-container/20 hover:text-error transition-all cursor-pointer btn-tactile" title={t('common.delete', { defaultValue: 'حذف' })}><Trash2 size={14} /></button>
       </div>
     </div>
   );
@@ -173,6 +192,8 @@ export default function InvoicesView() {
         skip,
         limit: pageSize,
         invoiceType: historyTypeFilter !== 'all' ? historyTypeFilter : undefined,
+        status: historyStatusFilter !== 'all' ? historyStatusFilter : undefined,
+        search: historySearch.trim() || undefined,
       });
       const list = Array.isArray(response) ? response : (response?.data || response?.items || []);
       const total = Array.isArray(response) ? list.length : Number(response?.total ?? list.length);
@@ -186,7 +207,7 @@ export default function InvoicesView() {
     } finally {
       setHistoryLoading(false);
     }
-  }, [historyPage, historyPageSize, historyTypeFilter]);
+  }, [historyPage, historyPageSize, historyTypeFilter, historyStatusFilter, historySearch]);
 
   const handleDeleteInvoice = useCallback(async (invoiceId) => {
     try {
@@ -200,12 +221,21 @@ export default function InvoicesView() {
   }, [historyPage, historyPageSize, loadHistory]);
 
   useEffect(() => {
-    Promise.all([api.getParties(), api.getProducts(), api.getInventoryReport(), api.getTemplates()])
-      .then(([p, pr, inv, tmpl]) => { setParties(p); setProducts(pr); setInventory(inv); setTemplates(tmpl); })
-      .catch((err) => {
-        console.error(err);
-        notifications.show({ title: t('common.error', { defaultValue: 'Error' }), message: t('invoices.loadInitialDataError', { defaultValue: 'Failed to load initial data.' }), color: 'red' });
-      });
+    api.getParties(0, 1000)
+      .then((res) => setParties(Array.isArray(res) ? res : (res?.data || res?.items || [])))
+      .catch((err) => console.error('Failed to load parties:', err));
+
+    api.getProducts(0, 1000)
+      .then((res) => setProducts(Array.isArray(res) ? res : (res?.data || res?.items || [])))
+      .catch((err) => console.error('Failed to load products:', err));
+
+    api.getInventoryReport()
+      .then((res) => setInventory(res || null))
+      .catch((err) => console.error('Failed to load inventory report:', err));
+
+    api.getTemplates()
+      .then((res) => setTemplates(Array.isArray(res) ? res : (res?.data || res?.items || [])))
+      .catch((err) => console.error('Failed to load templates:', err));
   }, []);
 
   useEffect(() => {
@@ -240,10 +270,16 @@ export default function InvoicesView() {
     if (activeTab === 'history') {
       loadHistory(historyPage, historyPageSize);
     }
-  }, [activeTab, historyPage, historyPageSize, loadHistory]);
+  }, [activeTab, historyPage, historyPageSize, historyTypeFilter, historyStatusFilter, historySearch, loadHistory]);
 
   const filteredParties = useMemo(() => {
-    return parties.filter((p) => invoiceType === 'sale' ? p.party_type === 'client' : p.party_type === 'supplier');
+    return parties.filter((p) => {
+      const pType = String(p.party_type?.value || p.party_type || p.type || '').toLowerCase();
+      if (invoiceType === 'sale') {
+        return pType === 'client' || pType === 'customer' || !pType;
+      }
+      return pType === 'supplier' || !pType;
+    });
   }, [parties, invoiceType]);
 
   useEffect(() => {
@@ -648,7 +684,11 @@ export default function InvoicesView() {
                     <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">{invoiceType === 'sale' ? t('invoices.selectClient') : t('invoices.selectSupplier')}</label>
                     <select value={selectedParty} onChange={(e) => setSelectedParty(e.target.value)} className={selectClass}>
                       <option value="">{invoiceType === 'sale' ? t('invoices.selectClientPlaceholder') : t('invoices.selectSupplierPlaceholder')}</option>
-                      {filteredParties.map((p) => <option key={p.id} value={p.id}>{p.name}{p.phone ? ` — ${p.phone}` : ''}</option>)}
+                      {filteredParties.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}{p.phone ? ` — ${p.phone}` : ''}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 ) : (
@@ -741,7 +781,8 @@ export default function InvoicesView() {
                               <div 
                                 key={p.id} 
                                 className="px-4 py-2 hover:bg-surface-container-low cursor-pointer text-charcoal-ink text-sm flex items-center justify-between"
-                                onClick={() => {
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
                                   setProductSearch(p.name);
                                   setSelectedProduct(p.id);
                                   setShowProductDropdown(false);
@@ -956,7 +997,7 @@ export default function InvoicesView() {
                               }`}
                             >
                               <Tag size={14} />
-                              {hasDiscount ? t('invoice.hasDiscount', 'خصم مالي') : t('invoice.addDiscount', '+ خصم مالي')}
+                              {hasDiscount ? t('invoices.hasDiscount', 'خصم مالي') : t('invoices.addDiscount', '+ خصم مالي')}
                             </button>
                             {hasDiscount && (
                               <input
@@ -971,7 +1012,7 @@ export default function InvoicesView() {
                           </div>
                           {hasDiscount && discountAmount && (
                             <div className="flex justify-between items-center text-body-sm text-rose-600 dark:text-rose-400 font-medium">
-                              <span>{t('invoice.discount', 'الخصم')}</span>
+                              <span>{t('invoices.discount', 'Discount')}</span>
                               <span className="font-mono-tabular font-bold">-{t('common.currency')} {Number(discountAmount || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                             </div>
                           )}
@@ -1031,7 +1072,7 @@ export default function InvoicesView() {
                     )}
                     {Number(lastInvoice.discount_amount) > 0 && (
                       <div className="flex justify-between items-center text-body-sm text-rose-600 dark:text-rose-400 border-b border-outline-variant/20 pb-2">
-                        <span>{t('invoice.discount', 'الخصم')}</span>
+                        <span>{t('invoices.discount', 'Discount')}</span>
                         <span className="font-mono-tabular font-bold">-{t('common.currency')} {Number(lastInvoice.discount_amount).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                       </div>
                     )}
@@ -1320,13 +1361,11 @@ export default function InvoicesView() {
                       clonedContainer.style.opacity = '0';
                       clonedContainer.style.pointerEvents = 'none';
 
-                      const partyNameClean = (partyForPrint?.name || invoiceToPrint?.party_name || invoiceToPrint?.party?.name || 'Customer')
-                        .toString().trim().replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, '_');
+                      const partyNameForPdf = partyForPrint?.name || invoiceToPrint?.party_name || invoiceToPrint?.party?.name || 'Customer';
                       const rawDate = invoiceToPrint?.created_at || invoiceToPrint?.issue_date || invoiceToPrint?.date;
-                      const dateObj = rawDate ? new Date(rawDate) : new Date();
-                      const dateClean = !isNaN(dateObj.getTime()) ? dateObj.toISOString().split('T')[0] : 'Date';
-                      const pdfFileName = `${partyNameClean}_${dateClean}.pdf`;
+                      const pdfFileName = generatePdfFileName(partyNameForPdf, rawDate);
 
+                      const { default: html2pdf } = await import('html2pdf.js');
                       await html2pdf()
                         .set({
                           margin: 0,
@@ -1462,18 +1501,20 @@ export default function InvoicesView() {
       )}
 
       {editingInvoice && (
-        <EditInvoiceModal
-          invoice={editingInvoice}
-          paperSize={paperSize}
-          onPaperSizeChange={setPaperSize}
-          onPrint={(printInvoice) => handleOpenPrintPreview(printInvoice)}
-          onClose={() => setEditingInvoice(null)}
-          onSaved={() => {
-            setEditingInvoice(null);
-            loadHistory();
-            api.getInventoryReport().then(setInventory);
-          }}
-        />
+        <Suspense fallback={null}>
+          <EditInvoiceModal
+            invoice={editingInvoice}
+            paperSize={paperSize}
+            onPaperSizeChange={setPaperSize}
+            onPrint={(printInvoice) => handleOpenPrintPreview(printInvoice)}
+            onClose={() => setEditingInvoice(null)}
+            onSaved={() => {
+              setEditingInvoice(null);
+              loadHistory();
+              api.getInventoryReport().then(setInventory);
+            }}
+          />
+        </Suspense>
       )}
 
 
@@ -1508,15 +1549,17 @@ export default function InvoicesView() {
       )}
 
       {invoiceToReturn && (
-        <ReturnInvoiceModal
-          invoice={invoiceToReturn}
-          onClose={() => setInvoiceToReturn(null)}
-          onSaved={() => {
-            setInvoiceToReturn(null);
-            loadHistory(historyPage, historyPageSize);
-            api.getInventoryReport().then(setInventory);
-          }}
-        />
+        <Suspense fallback={null}>
+          <ReturnInvoiceModal
+            invoice={invoiceToReturn}
+            onClose={() => setInvoiceToReturn(null)}
+            onSaved={() => {
+              setInvoiceToReturn(null);
+              loadHistory(historyPage, historyPageSize);
+              api.getInventoryReport().then(setInventory);
+            }}
+          />
+        </Suspense>
       )}
     </>
   );

@@ -92,7 +92,7 @@ export const api = {
   deleteSupplierPayment: (supplierId, paymentId) => request(`/suppliers/${supplierId}/payments/${paymentId}`, { method: 'DELETE' }),
   createSupplierStockReturn: (supplierId, data) => request(`/suppliers/${supplierId}/stock-return`, { method: 'POST', body: JSON.stringify(data) }),
 
-  getProducts: (skip = 0, limit = 100) => request(`/products?skip=${skip}&limit=${limit}`),
+  getProducts: (skip = 0, limit = 100, search = '') => request(`/products?skip=${skip}&limit=${limit}${search ? `&search=${encodeURIComponent(search)}` : ''}`),
   getProductsSelect: () => request('/products/select'),
   createProduct: (data) => request('/products', { method: 'POST', body: JSON.stringify(data) }),
   updateProduct: (productId, data) => request(`/products/${productId}`, { method: 'PUT', body: JSON.stringify(data) }),
@@ -110,6 +110,8 @@ export const api = {
     const params = new URLSearchParams({ skip, limit });
     if (options.partyId) params.append('party_id', options.partyId);
     if (options.invoiceType) params.append('invoice_type', options.invoiceType);
+    if (options.search) params.append('search', options.search);
+    if (options.status) params.append('status', options.status);
     return request(`/invoices?${params.toString()}`);
   },
   createPurchaseInvoice: (data) => request('/invoices/purchase', { method: 'POST', body: JSON.stringify(data) }),

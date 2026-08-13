@@ -1,9 +1,8 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Loader2, Plus } from 'lucide-react';
+import { X, Loader2, Plus, Search, Pencil, Trash2, Phone, ArrowRight } from 'lucide-react';
 import { ActionIcon, Flex, Tooltip, SimpleGrid, Card, Pagination, Select } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { IconSearch, IconPencil, IconTrash, IconPhone, IconArrowRight } from '@tabler/icons-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 
@@ -155,7 +154,7 @@ function CustomerDetailPanel({ customer }) {
 }
 
 /* ─── Customer Card ─── */
-function CustomerCard({ customer, onEdit, onDelete }) {
+const CustomerCard = memo(function CustomerCard({ customer, onEdit, onDelete }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   
@@ -176,7 +175,7 @@ function CustomerCard({ customer, onEdit, onDelete }) {
         </div>
 
         <div className="flex items-center gap-2 text-muted-steel mb-3 mt-2">
-          <IconPhone size={14} />
+          <Phone size={14} />
           <span className="text-sm">{customer.phone || 'N/A'}</span>
         </div>
 
@@ -197,12 +196,12 @@ function CustomerCard({ customer, onEdit, onDelete }) {
           <Flex gap="sm">
             <Tooltip label={t('common.edit')}>
               <ActionIcon variant="subtle" color="violet" onClick={(e) => { e.stopPropagation(); onEdit(customer); }} radius="md">
-                <IconPencil size={18} />
+                <Pencil size={18} />
               </ActionIcon>
             </Tooltip>
             <Tooltip label={t('common.delete')}>
               <ActionIcon variant="subtle" color="red" onClick={(e) => { e.stopPropagation(); onDelete(customer); }} radius="md">
-                <IconTrash size={18} />
+                <Trash2 size={18} />
               </ActionIcon>
             </Tooltip>
           </Flex>
@@ -212,13 +211,13 @@ function CustomerCard({ customer, onEdit, onDelete }) {
             className="flex items-center gap-1.5 text-sm font-medium text-accent hover:text-accent-hover transition-colors bg-transparent border-none cursor-pointer"
           >
             {t('customers.viewProfile')}
-            <IconArrowRight size={16} />
+            <ArrowRight size={16} />
           </button>
         </div>
       </div>
     </Card>
   );
-}
+});
 
 /* ─── Main View ─── */
 export default function CustomersView() {
@@ -238,6 +237,13 @@ export default function CustomersView() {
   const [customerToDelete, setCustomerToDelete] = useState(null);
   const [deletingCustomer, setDeletingCustomer] = useState(false);
 
+  const handleEditCustomer = useCallback((customer) => {
+    setCustomerToEdit(customer);
+  }, []);
+
+  const handleDeleteCustomerSelect = useCallback((customer) => {
+    setCustomerToDelete(customer);
+  }, []);
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true);
@@ -245,16 +251,7 @@ export default function CustomersView() {
       const skip = (page - 1) * LIMIT;
       const data = await api.getCustomers(skip, LIMIT);
       const list = Array.isArray(data) ? data : (data?.data || data?.items || []);
-      const withBalances = await Promise.all(list.map(async (c) => {
-        try {
-          const res = await api.getCustomerBalance(c.id);
-          const balance = res?.balance ?? res?.data?.balance ?? 0;
-          return { ...c, calculated_balance: Number(balance) };
-        } catch {
-          return { ...c, calculated_balance: Number(c.calculated_balance || 0) };
-        }
-      }));
-      setCustomers(withBalances);
+      setCustomers(list);
       setHasMore(list.length === LIMIT);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
@@ -312,7 +309,7 @@ export default function CustomersView() {
         <div className="flex items-center gap-4 w-full sm:w-auto">
           <h2 className="text-h1 text-charcoal-ink whitespace-nowrap">{t('customers.title')}</h2>
           <div className="relative w-full sm:w-64">
-            <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-steel pointer-events-none" size={18} />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-steel pointer-events-none" size={18} />
             <input
               type="text"
               placeholder={t('common.search')}
@@ -377,8 +374,8 @@ export default function CustomersView() {
               <CustomerCard
                 key={customer.id}
                 customer={customer}
-                onEdit={() => setCustomerToEdit(customer)}
-                onDelete={() => setCustomerToDelete(customer)}
+                onEdit={handleEditCustomer}
+                onDelete={handleDeleteCustomerSelect}
               />
             ))}
           </SimpleGrid>
@@ -412,7 +409,7 @@ export default function CustomersView() {
           <div className="bg-surface-container-lowest rounded-2xl shadow-2xl border border-outline-variant/60 w-full max-w-md overflow-hidden animate-fade-in-up">
             <div className="p-6">
               <div className="w-12 h-12 rounded-xl bg-error-container/30 text-error flex items-center justify-center mb-4">
-                <IconTrash size={24} />
+                <Trash2 size={24} />
               </div>
               <h3 className="text-h3 text-charcoal-ink mb-2">{t('customers.deleteCustomer')}</h3>
               <p className="text-muted-steel text-sm leading-relaxed mb-6" dir="auto"

@@ -85,6 +85,11 @@ export const InvoiceDocument = ({
   const itemsTotal = data.itemsTotal ?? totals.itemsTotal;
   const grandTotal = data.grandTotal ?? totals.grandTotal;
 
+  // Format party details
+  const displayPartyName = dataPartyName || partyName || '';
+  const displayPartyPhone = data.partyPhone || data.party_phone || partyPhone || '';
+  const cleanPartyName = displayPartyName.replace(/^Dr\s*\/?\s*/i, '').trim();
+
   // Determine invoice type title
   const normalizedType = String(invoiceType).toUpperCase();
   let typeWord = 'Sell';
@@ -140,13 +145,19 @@ export const InvoiceDocument = ({
         </div>
 
         <div className={styles.headerCenter}>
-          <h2 className={styles.titleType}>{typeWord}</h2>
-          <h2 className={styles.titleInvoice}>INVOICE</h2>
+          <h2 className={styles.mainInvoiceTitle}>
+            <span className={styles.invoiceTypePrefix}>{typeWord}</span> INVOICE
+          </h2>
         </div>
 
         <div className={styles.headerRight}>
           <div className={styles.invoiceNumber}>{invoiceNumber}</div>
-          {dataPartyName && <p className={styles.partyName}>{dataPartyName}</p>}
+          {cleanPartyName && (
+            <p className={styles.partyName}>
+              <span style={{ unicodeBidi: 'plaintext' }}>Dr / {cleanPartyName}</span>
+            </p>
+          )}
+          {displayPartyPhone && <p className={styles.partyPhone}>{displayPartyPhone}</p>}
         </div>
       </header>
 
@@ -195,19 +206,17 @@ export const InvoiceDocument = ({
               <td className={styles.labelCol}>{t('invoice.items_total', 'Items Total')}</td>
             </tr>
 
+            <tr>
+              <td className={styles.amountCol}>{fmtMoney(totals.deliveryFee)}</td>
+              <td className={styles.labelCol}>{t('invoice.delivery_fee', 'Delivery Fees')}</td>
+            </tr>
+
             {totals.discountAmount > 0 && (
               <tr>
                 <td className={styles.amountCol}>-{fmtMoney(totals.discountAmount)}</td>
                 <td className={styles.labelCol}>Discount</td>
               </tr>
             )}
-
-            <tr>
-              <td className={styles.amountCol}>
-                {fmtMoney(totals.deliveryFee)}
-              </td>
-              <td className={styles.labelCol}>{t('invoice.delivery_fee', 'Delivery Fee')}</td>
-            </tr>
 
             <tr className={styles.grandTotalRow}>
               <td className={styles.amountCol}>EGP {fmtMoney(grandTotal)}</td>

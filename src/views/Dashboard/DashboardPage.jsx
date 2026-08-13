@@ -8,11 +8,12 @@ import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, 
 
 import { getDashboardData } from '../../services/dashboardService';
 import KpiCard from './components/KpiCard';
-import SalesPurchasesTrendChart from './components/SalesPurchasesTrendChart';
-import ProfitTrendChart from './components/ProfitTrendChart';
 import TopProductsTable from './components/TopProductsTable';
 import LowStockAlertList from './components/LowStockAlertList';
 import TopPartiesTable from './components/TopPartiesTable';
+
+const SalesPurchasesTrendChart = React.lazy(() => import('./components/SalesPurchasesTrendChart'));
+const ProfitTrendChart = React.lazy(() => import('./components/ProfitTrendChart'));
 
 export default function DashboardPage() {
   const { t } = useTranslation();
@@ -266,10 +267,10 @@ export default function DashboardPage() {
             <div className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl p-6 h-80 animate-shimmer" />
           </>
         ) : (
-          <>
+          <React.Suspense fallback={<div className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl p-6 h-80 animate-shimmer col-span-2" />}>
             <SalesPurchasesTrendChart data={data?.trend || []} />
             <ProfitTrendChart data={data?.trend || []} />
-          </>
+          </React.Suspense>
         )}
       </div>
 

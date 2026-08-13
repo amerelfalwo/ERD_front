@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import api from '../services/api';
 
 const AuthContext = createContext();
@@ -30,7 +30,7 @@ export function AuthProvider({ children }) {
     });
   }, []);
 
-  const updateTenantContext = (newTenantData) => {
+  const updateTenantContext = useCallback((newTenantData) => {
     setUser((prev) => {
       if (!prev) return prev;
       const updatedUser = {
@@ -43,7 +43,13 @@ export function AuthProvider({ children }) {
       localStorage.setItem('erp_user', JSON.stringify(updatedUser));
       return updatedUser;
     });
-  };
+  }, []);
+
+  const value = useMemo(() => ({
+    user,
+    setUser,
+    updateTenantContext,
+  }), [user, updateTenantContext]);
 
   if (isLoading) {
     return (
@@ -54,7 +60,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, setUser, updateTenantContext }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

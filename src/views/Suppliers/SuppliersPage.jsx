@@ -1,9 +1,8 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Loader2, Plus } from 'lucide-react';
+import { X, Loader2, Plus, Search, Pencil, Trash2, Phone, ArrowRight } from 'lucide-react';
 import { ActionIcon, Flex, Tooltip, SimpleGrid, Card, Pagination, Select } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { IconSearch, IconPencil, IconTrash, IconPhone, IconArrowRight } from '@tabler/icons-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 
@@ -152,7 +151,7 @@ function SupplierDetailPanel({ supplier }) {
 }
 
 /* ─── Supplier Card ─── */
-function SupplierCard({ supplier, onEdit, onDelete }) {
+const SupplierCard = memo(function SupplierCard({ supplier, onEdit, onDelete }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   
@@ -173,7 +172,7 @@ function SupplierCard({ supplier, onEdit, onDelete }) {
         </div>
 
         <div className="flex items-center gap-2 text-muted-steel mb-6 mt-2">
-          <IconPhone size={14} />
+          <Phone size={14} />
           <span className="text-sm">{supplier.phone || 'N/A'}</span>
         </div>
 
@@ -181,12 +180,12 @@ function SupplierCard({ supplier, onEdit, onDelete }) {
           <Flex gap="sm">
             <Tooltip label={t('common.edit')}>
               <ActionIcon variant="subtle" color="violet" onClick={(e) => { e.stopPropagation(); onEdit(supplier); }} radius="md">
-                <IconPencil size={18} />
+                <Pencil size={18} />
               </ActionIcon>
             </Tooltip>
             <Tooltip label={t('common.delete')}>
               <ActionIcon variant="subtle" color="red" onClick={(e) => { e.stopPropagation(); onDelete(supplier); }} radius="md">
-                <IconTrash size={18} />
+                <Trash2 size={18} />
               </ActionIcon>
             </Tooltip>
           </Flex>
@@ -196,13 +195,13 @@ function SupplierCard({ supplier, onEdit, onDelete }) {
             className="flex items-center gap-1.5 text-sm font-medium text-accent hover:text-accent-hover transition-colors bg-transparent border-none cursor-pointer"
           >
             {t('suppliers.viewProfile')}
-            <IconArrowRight size={16} />
+            <ArrowRight size={16} />
           </button>
         </div>
       </div>
     </Card>
   );
-}
+});
 
 /* ─── Main View ─── */
 export default function SuppliersView() {
@@ -222,22 +221,21 @@ export default function SuppliersView() {
   const [supplierToDelete, setSupplierToDelete] = useState(null);
   const [deletingSupplier, setDeletingSupplier] = useState(false);
 
+  const handleEditSupplier = useCallback((supplier) => {
+    setSupplierToEdit(supplier);
+  }, []);
+
+  const handleDeleteSupplierSelect = useCallback((supplier) => {
+    setSupplierToDelete(supplier);
+  }, []);
+
   const fetchSuppliers = useCallback(async () => {
     setLoading(true);
     try {
       const skip = (page - 1) * LIMIT;
       const data = await api.getSuppliers(skip, LIMIT);
       const list = Array.isArray(data) ? data : (data?.data || data?.items || []);
-      const withBalances = await Promise.all(list.map(async (s) => {
-        try {
-          const res = await api.getSupplierBalance(s.id);
-          const balance = res?.balance ?? res?.data?.balance ?? 0;
-          return { ...s, calculated_balance: Number(balance) };
-        } catch {
-          return { ...s, calculated_balance: Number(s.calculated_balance || 0) };
-        }
-      }));
-      setSuppliers(withBalances);
+      setSuppliers(list);
       setHasMore(list.length === LIMIT);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
@@ -295,7 +293,7 @@ export default function SuppliersView() {
         <div className="flex items-center gap-4 w-full sm:w-auto">
           <h2 className="text-h1 text-charcoal-ink whitespace-nowrap">{t('suppliers.title')}</h2>
           <div className="relative w-full sm:w-64">
-            <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-steel pointer-events-none" size={18} />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-steel pointer-events-none" size={18} />
             <input
               type="text"
               placeholder={t('common.search')}
@@ -360,8 +358,8 @@ export default function SuppliersView() {
               <SupplierCard
                 key={supplier.id}
                 supplier={supplier}
-                onEdit={() => setSupplierToEdit(supplier)}
-                onDelete={() => setSupplierToDelete(supplier)}
+                onEdit={handleEditSupplier}
+                onDelete={handleDeleteSupplierSelect}
               />
             ))}
           </SimpleGrid>
@@ -394,7 +392,7 @@ export default function SuppliersView() {
           <div className="bg-surface-container-lowest rounded-2xl shadow-2xl border border-outline-variant/60 w-full max-w-md overflow-hidden animate-fade-in-up">
             <div className="p-6">
               <div className="w-12 h-12 rounded-xl bg-error-container/30 text-error flex items-center justify-center mb-4">
-                <IconTrash size={24} />
+                <Trash2 size={24} />
               </div>
               <h3 className="text-h3 text-charcoal-ink mb-2">{t('suppliers.deleteSupplier')}</h3>
               <p className="text-muted-steel text-sm leading-relaxed mb-6" dir="auto"

@@ -173,7 +173,7 @@
     "subtotal": "Subtotal",
     "addDelivery": "Add Delivery",
     "hasDelivery": "Has Delivery ✓",
-    "deliveryFee": "Delivery Fee",
+    "deliveryFee": "Delivery Fees",
     "deliveryPrice": "Delivery price",
     "totalAmount": "Total Amount",
     "estProfit": "Est. Profit",
@@ -247,7 +247,31 @@
     "returnInvoice": "Return Invoice",
     "discount": "Discount",
     "addDiscount": "+ Discount",
-    "hasDiscount": "Discount"
+    "hasDiscount": "Discount",
+    "createInvoice": "Create Invoice",
+    "invoiceSummary": "Invoice Summary",
+    "addProduct": "Add Product",
+    "selectProduct": "Select Product...",
+    "selectCustomerSupplier": "Select Customer/Supplier...",
+    "confirmSave": "Confirm & Save Invoice",
+    "paymentStatus": "Payment Status",
+    "notes": "Invoice Notes",
+    "notesPlaceholder": "Additional notes or terms...",
+    "addNew": "+ Add New",
+    "newPartyInfo": "New Party Information",
+    "tax": "Tax",
+    "invoiceCreatedSuccess": "Invoice created successfully!",
+    "createInvoiceError": "Failed to create invoice",
+    "types": {
+      "sale": "Sale Invoice",
+      "purchase": "Purchase Invoice",
+      "sell_return": "Customer Return",
+      "supplier_return": "Supplier Return"
+    },
+    "tabs": {
+      "create": "Create Invoice",
+      "history": "Invoice History"
+    }
   },
   "customers": {
     "title": "Customers",
@@ -467,7 +491,7 @@
     "price": "Price",
     "total": "Total",
     "itemsTotal": "Items Total",
-    "deliveryFee": "Delivery Fee",
+    "deliveryFee": "Delivery Fees",
     "grandTotal": "Grand Total",
     "paidAmount": "Paid",
     "remainingAmount": "Remaining",

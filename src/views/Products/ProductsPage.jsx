@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Plus, Search, Package, ChevronDown, ChevronUp, X, Loader2, Trash2, Pencil } from 'lucide-react';
+import { Pagination } from '@mantine/core';
 import api from '../../services/api';
 import { notifications } from '@mantine/notifications';
 import { useTranslation } from 'react-i18next';
@@ -233,6 +234,9 @@ function ProductRow({ product, inventoryProduct, onDelete, onEdit }) {
 
 export default function ProductsView() {
   const { t } = useTranslation();
+  const LIMIT = 20;
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
   const [products, setProducts] = useState([]);
   const [inventory, setInventory] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -244,17 +248,28 @@ export default function ProductsView() {
   const [productToEdit, setProductToEdit] = useState(null);
   const [deletingProduct, setDeletingProduct] = useState(false);
 
-  async function fetchProducts() {
-    await Promise.resolve();
+  const fetchProducts = useCallback(async () => {
     setLoading(true);
     try {
-      const [prods, inv] = await Promise.all([api.getProducts(), api.getInventoryReport()]);
-      setProducts(prods); setInventory(inv);
+      const skip = (page - 1) * LIMIT;
+      const [prods, inv] = await Promise.all([
+        api.getProducts(skip, LIMIT, search),
+        api.getInventoryReport()
+      ]);
+      const list = Array.isArray(prods) ? prods : (prods?.data || []);
+      setProducts(list);
+      setInventory(inv);
+      setHasMore(list.length === LIMIT);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
-  }
+  }, [page, search]);
 
-  useEffect(() => { fetchProducts(); }, []);
+  useEffect(() => { fetchProducts(); }, [fetchProducts]);
+
+  const handleSearchChange = (e) => {
+    setSearch(e.target.value);
+    setPage(1);
+  };
 
   async function handleDeleteProduct() {
     if (!productToDelete) return;
@@ -279,7 +294,6 @@ export default function ProductsView() {
   const filteredProducts = useMemo(() => {
     return products
       .filter((p) => {
-        if (!p.name.toLowerCase().includes(search.toLowerCase())) return false;
         if (stockFilter !== 'all') {
           const invProd = inventoryMap[p.id];
           const totalQty = invProd?.batches?.reduce((sum, b) => sum + parseFloat(b.remaining_quantity || 0), 0) || 0;
@@ -293,7 +307,7 @@ export default function ProductsView() {
         if (sortBy === 'name_desc') return b.name.localeCompare(a.name);
         return 0;
       });
-  }, [products, search, stockFilter, sortBy, inventoryMap]);
+  }, [products, stockFilter, sortBy, inventoryMap]);
 
   const selectClass = "px-4 py-2 rounded-xl border border-outline-variant/60 bg-surface-container-lowest text-sm text-muted-steel focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all duration-200 appearance-none min-w-[120px] cursor-pointer";
 
@@ -313,7 +327,7 @@ export default function ProductsView() {
       <div className="flex flex-col sm:flex-row gap-3 animate-fade-in-up stagger-1">
         <div className="flex-1 relative">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-steel" />
-          <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('products.searchProducts')}
+          <input type="text" value={search} onChange={handleSearchChange} placeholder={t('products.searchProducts')}
             className="w-full pl-9 pr-4 py-2 rounded-xl border border-outline-variant/60 bg-surface-container-lowest text-sm text-charcoal-ink placeholder:text-outline focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all duration-200"
           />
         </div>
@@ -370,6 +384,18 @@ export default function ProductsView() {
           </div>
         )}
       </div>
+
+      {(!loading && (page > 1 || hasMore)) && (
+        <div className="flex justify-center mt-6">
+          <Pagination
+            total={hasMore ? page + 1 : page}
+            value={page}
+            onChange={setPage}
+            color="indigo"
+            radius="md"
+          />
+        </div>
+      )}
 
       <AddProductModal isOpen={showModal} onClose={() => setShowModal(false)} onCreated={fetchProducts} />
       <EditProductModal isOpen={!!productToEdit} product={productToEdit} onClose={() => setProductToEdit(null)} onUpdated={fetchProducts} />

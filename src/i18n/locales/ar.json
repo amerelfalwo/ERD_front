@@ -245,9 +245,33 @@
     "createProductError": "خطأ في إنشاء المنتج",
     "createPartyError": "خطأ في إنشاء الطرف",
     "returnInvoice": "استرجاع الفاتورة",
-    "discount": "الخصم",
+    "discount": "Discount",
     "addDiscount": "+ خصم مالي",
-    "hasDiscount": "خصم مالي"
+    "hasDiscount": "خصم مالي",
+    "createInvoice": "إنشاء فاتورة",
+    "invoiceSummary": "ملخص الفاتورة",
+    "addProduct": "إضافة منتج",
+    "selectProduct": "اختر المنتج...",
+    "selectCustomerSupplier": "اختر العميل / المورد...",
+    "confirmSave": "تأكيد وحفظ الفاتورة",
+    "paymentStatus": "حالة الدفع",
+    "notes": "ملاحظات الفاتورة",
+    "notesPlaceholder": "أي ملاحظات إضافية على الفاتورة...",
+    "addNew": "+ إضافة جديد",
+    "newPartyInfo": "بيانات الطرف الجديد",
+    "tax": "الضريبة",
+    "invoiceCreatedSuccess": "تم إنشاء الفاتورة بنجاح!",
+    "createInvoiceError": "فشل إنشاء الفاتورة",
+    "types": {
+      "sale": "فاتورة بيع",
+      "purchase": "فاتورة شراء",
+      "sell_return": "مرتجع عميل",
+      "supplier_return": "مرتجع مورد"
+    },
+    "tabs": {
+      "create": "إنشاء فاتورة",
+      "history": "سجل الفواتير"
+    }
   },
   "customers": {
     "title": "العملاء",
@@ -663,7 +687,7 @@
     }
   },
   "invoice": {
-    "discount": "الخصم",
+    "discount": "Discount",
     "addDiscount": "+ خصم مالي",
     "hasDiscount": "خصم مالي"
   }

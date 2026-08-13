@@ -1,13 +1,10 @@
-/* ================================================================
-   InvoiceDocument.module.css
-   Professional Doctor M Invoice — A4 / A5 / 80mm Thermal Receipt
-   ================================================================ */
+@import url('https://fonts.googleapis.com/css2?family=Readex+Pro:wght@300;400;500;600;700&display=swap');
 
 /* ── Base Container ─────────────────────────────────────────────── */
 .invoiceContainer {
   background-color: #ffffff;
   color: #1a1a1a;
-  font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+  font-family: 'Readex Pro', 'Inter', 'Helvetica Neue', Arial, sans-serif;
   margin: 0 auto;
   box-sizing: border-box;
   width: 100%;
@@ -59,15 +56,17 @@
 }
 
 .tenantLogo {
-  max-height: 50px;
-  max-width: 120px;
+  max-height: 65px;
+  max-width: 160px;
+  width: auto;
+  height: auto;
   object-fit: contain;
-  margin-bottom: 0.4rem;
+  margin-bottom: 0.5rem;
 }
 
 .tenantName {
   font-size: 1.1em;
-  font-weight: 800;
+  font-weight: 700;
   color: #000000;
   margin: 0 0 0.15rem 0;
   word-break: break-word;
@@ -84,23 +83,26 @@
   flex: 1;
   text-align: center;
   min-width: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding-top: 0.25rem;
 }
 
-.titleType {
-  font-size: 1.5em;
-  font-weight: 800;
-  color: #000000;
+.mainInvoiceTitle {
+  font-size: 1.35em;
+  font-weight: 700;
+  color: #0f172a;
   margin: 0;
-  line-height: 1.15;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
-.titleInvoice {
-  font-size: 1.45em;
+.invoiceTypePrefix {
+  color: #2563eb;
   font-weight: 800;
-  color: #000000;
-  margin: 0;
-  letter-spacing: 0.06em;
-  line-height: 1.15;
+  margin-right: 0.25rem;
 }
 
 .headerRight {
@@ -117,11 +119,19 @@
 }
 
 .partyName {
-  font-size: 1em;
+  font-size: 1.05em;
   font-weight: 700;
   color: #000000;
   margin: 0;
   word-break: break-word;
+}
+
+.partyPhone {
+  font-size: 0.82em;
+  font-weight: 500;
+  color: #4b5563;
+  margin: 0.15rem 0 0 0;
+  direction: ltr;
 }
 
 /* ── Header — Receipt (Stacked, no overlap) ─────────────────────── */
@@ -143,9 +153,9 @@
 }
 
 .headerReceipt .tenantLogo {
-  max-height: 36px;
-  max-width: 80px;
-  margin-bottom: 0.25rem;
+  max-height: 42px;
+  max-width: 100px;
+  margin-bottom: 0.3rem;
 }
 
 .headerReceipt .tenantName {
@@ -167,8 +177,9 @@
 }
 
 .sizeA5 .tenantLogo {
-  max-height: 40px;
-  max-width: 100px;
+  max-height: 50px;
+  max-width: 130px;
+  margin-bottom: 0.35rem;
 }
 
 .sizeA5 .titleType,
@@ -180,7 +191,7 @@
 .table {
   width: 100%;
   border-collapse: collapse;
-  margin-bottom: auto;
+  margin-bottom: 0.75rem;
 }
 
 /* Table Header — bordered top & bottom */
@@ -201,27 +212,27 @@
 /* Column widths & alignment */
 .colTotal {
   text-align: left;
-  width: 22%;
+  width: 20%;
 }
 
 .colQty {
   text-align: center;
-  width: 10%;
+  width: 12%;
 }
 
 .colPrice {
-  text-align: center;
-  width: 22%;
+  text-align: right;
+  width: 20%;
 }
 
 .colItem {
   text-align: right;
-  width: 46%;
+  width: 48%;
 }
 
 /* Table Body Cells */
 .table td {
-  padding: 0.4rem 0.4rem 0.9rem; /* top horizontal bottom */
+  padding: 0.45rem 0.4rem 0.75rem; /* top horizontal bottom */
   vertical-align: middle;
   font-size: 0.9em;
   color: #1a1a1a;
@@ -238,7 +249,7 @@
 }
 
 .tdPrice {
-  text-align: center;
+  text-align: right;
 }
 
 .tdItem {
