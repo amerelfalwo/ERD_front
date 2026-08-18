@@ -166,8 +166,18 @@ const SupplierCard = memo(function SupplierCard({ supplier, onEdit, onDelete }) 
       <div className="p-5 flex-1 flex flex-col">
         <div className="flex items-start justify-between mb-1 gap-2">
           <h3 className="text-lg font-medium text-charcoal-ink truncate">{supplier.name}</h3>
-          <span className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${supplier.calculated_balance > 0 ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
-            {Number(supplier.calculated_balance || 0).toLocaleString()} {t('common.currency')}
+          <span className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${
+            Number(supplier.calculated_balance || 0) > 0
+              ? 'bg-amber-50 text-amber-700 border border-amber-200'
+              : Number(supplier.calculated_balance || 0) < 0
+              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+              : 'bg-surface-container text-muted-steel'
+          }`}>
+            {Number(supplier.calculated_balance || 0) > 0
+              ? `عليـنا للمورد EGP ${Number(supplier.calculated_balance).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+              : Number(supplier.calculated_balance || 0) < 0
+              ? `لصالحنا لدى المورد EGP ${Number(Math.abs(supplier.calculated_balance)).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+              : '0.00 EGP'}
           </span>
         </div>
 

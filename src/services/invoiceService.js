@@ -32,10 +32,7 @@ export function formatInvoiceDate(dateVal) {
   return `${month} ${day}, ${year} · ${hoursStr}: ${minutes} ${ampm}`;
 }
 
-/**
- * Standardized PDF export filename generator: {partyName}-{date}.pdf (e.g. محمد-2026-08-08.pdf)
- */
-export function generatePdfFileName(partyName, dateVal) {
+export function generatePdfFileName(partyName, dateVal, invoiceType) {
   const rawName = (partyName || 'Customer').toString().trim();
   const cleanName = rawName
     .replace(/^Dr\s*\/?\s*/i, '')
@@ -51,6 +48,11 @@ export function generatePdfFileName(partyName, dateVal) {
     }
   } else {
     dateClean = new Date().toISOString().split('T')[0];
+  }
+
+  const isReturn = invoiceType && String(invoiceType).toUpperCase().includes('RETURN');
+  if (isReturn) {
+    return `${cleanName}-مرتجع-${dateClean}.pdf`;
   }
 
   return `${cleanName}-${dateClean}.pdf`;

@@ -49,7 +49,7 @@ export default function TopPartiesTable({ parties = [] }) {
                       </span>
                     </td>
                     <td className="py-3 px-2 font-bold font-mono-tabular text-charcoal-ink text-left">
-                      ${Number(party.total_amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      EGP {Number(party.total_amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </td>
                   </tr>
                 );

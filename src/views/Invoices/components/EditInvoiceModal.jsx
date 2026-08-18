@@ -216,15 +216,22 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
                       className={`${inputCls} disabled:opacity-50 disabled:bg-surface-container`}
                     >
                       <option value="">{t('editInvoiceModal.editInvoiceSelectProduct')}</option>
-                      {products.map((p) => (
-                        (batches[p.id] || []).map((b) => (
-                          <option key={b.id} value={b.id}>
+                      {products.map((p) => {
+                        const pBatches = batches[p.id] || [];
+                        const totalRemaining = pBatches.reduce((acc, b) => acc + Number(b.remaining_quantity || 0), 0);
+                        const totalInitial = pBatches.reduce((acc, b) => acc + Number(b.initial_quantity || 0), 0);
+                        const totalSold = totalInitial - totalRemaining;
+                        const activeBatch = pBatches.find((b) => Number(b.remaining_quantity) > 0) || pBatches[0];
+                        const batchValue = activeBatch ? activeBatch.id : '';
+
+                        return (
+                          <option key={p.id} value={batchValue}>
                             {invoice.invoice_type === 'PURCHASE'
-                              ? `${p.name} — (${t('editInvoiceModal.editInvoiceOriginal')} ${b.initial_quantity}, ${t('editInvoiceModal.editInvoiceSold')} ${(Number(b.initial_quantity) - Number(b.remaining_quantity)).toFixed(2)})`
-                              : `${p.name} — ${t('editInvoiceModal.editInvoiceAvailable')} ${Number(b.remaining_quantity).toFixed(2)}`}
+                              ? `${p.name} — (${t('editInvoiceModal.editInvoiceOriginal')} ${totalInitial}, ${t('editInvoiceModal.editInvoiceSold')} ${totalSold.toFixed(2)})`
+                              : `${p.name} — ${t('editInvoiceModal.editInvoiceAvailable')} ${totalRemaining.toFixed(2)}`}
                           </option>
-                        ))
-                      ))}
+                        );
+                      })}
                     </select>
                     {invoice.invoice_type === 'PURCHASE' && (() => {
                       const allBatches = Object.values(batches).flat();

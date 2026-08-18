@@ -90,13 +90,20 @@ export const InvoiceDocument = ({
   const displayPartyPhone = data.partyPhone || data.party_phone || partyPhone || '';
   const cleanPartyName = displayPartyName.replace(/^Dr\s*\/?\s*/i, '').trim();
 
-  // Determine invoice type title
+  // Determine invoice type title and visual badge
   const normalizedType = String(invoiceType).toUpperCase();
-  let typeWord = 'Sell';
-  if (normalizedType === 'PURCHASE') {
-    typeWord = 'Purchase';
-  } else if (normalizedType === 'RETURN') {
-    typeWord = 'Return';
+  const isReturn = normalizedType.includes('RETURN');
+  const isPurchaseReturn = normalizedType.includes('PURCHASE_RETURN');
+  const isSellReturn = normalizedType.includes('SELL_RETURN') || (isReturn && !isPurchaseReturn);
+  const isPurchase = normalizedType === 'PURCHASE';
+
+  let mainTitleText = 'SELL INVOICE';
+  if (isSellReturn) {
+    mainTitleText = 'SELL RETURN';
+  } else if (isPurchaseReturn) {
+    mainTitleText = 'PURCHASE RETURN';
+  } else if (isPurchase) {
+    mainTitleText = 'PURCHASE INVOICE';
   }
 
   // Format currency
@@ -145,8 +152,8 @@ export const InvoiceDocument = ({
         </div>
 
         <div className={styles.headerCenter}>
-          <h2 className={styles.mainInvoiceTitle}>
-            <span className={styles.invoiceTypePrefix}>{typeWord}</span> INVOICE
+          <h2 className={styles.mainInvoiceTitle} style={isReturn ? { color: '#b91c1c' } : {}}>
+            {mainTitleText}
           </h2>
         </div>
 

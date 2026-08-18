@@ -38,7 +38,7 @@ export default function TopProductsTable({ products = [] }) {
                   <td className="py-3 px-2 font-semibold text-charcoal-ink text-right">{prod.product_name}</td>
                   <td className="py-3 px-2 text-center font-mono-tabular text-muted-steel">{Number(prod.qty_sold).toLocaleString()}</td>
                   <td className="py-3 px-2 font-bold font-mono-tabular text-accent text-left">
-                    ${Number(prod.revenue || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    EGP {Number(prod.revenue || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </td>
                 </tr>
               ))

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   TrendingUp, TrendingDown, Wallet, CreditCard, ShoppingCart,
-  Download, Filter, RefreshCw, AlertTriangle, FileText, Activity
+  Download, Filter, RefreshCw, AlertTriangle, FileText, Activity, Package, Users
 } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear } from 'date-fns';
 
@@ -29,24 +29,23 @@ export default function DashboardPage() {
 
   const applyPeriodFilter = (type) => {
     setActiveFilter(type);
-    const today = new Date();
-
+    const now = new Date();
     if (type === 'today') {
-      const formatted = format(today, 'yyyy-MM-dd');
-      setDateFrom(formatted);
-      setDateTo(formatted);
+      const todayStr = format(now, 'yyyy-MM-dd');
+      setDateFrom(todayStr);
+      setDateTo(todayStr);
       setShowCustomRange(false);
     } else if (type === 'week') {
-      setDateFrom(format(startOfWeek(today, { weekStartsOn: 6 }), 'yyyy-MM-dd')); // Saturday start
-      setDateTo(format(endOfWeek(today, { weekStartsOn: 6 }), 'yyyy-MM-dd'));
+      setDateFrom(format(startOfWeek(now, { weekStartsOn: 6 }), 'yyyy-MM-dd'));
+      setDateTo(format(endOfWeek(now, { weekStartsOn: 6 }), 'yyyy-MM-dd'));
       setShowCustomRange(false);
     } else if (type === 'month') {
-      setDateFrom(format(startOfMonth(today), 'yyyy-MM-dd'));
-      setDateTo(format(endOfMonth(today), 'yyyy-MM-dd'));
+      setDateFrom(format(startOfMonth(now), 'yyyy-MM-dd'));
+      setDateTo(format(endOfMonth(now), 'yyyy-MM-dd'));
       setShowCustomRange(false);
     } else if (type === 'year') {
-      setDateFrom(format(startOfYear(today), 'yyyy-MM-dd'));
-      setDateTo(format(endOfYear(today), 'yyyy-MM-dd'));
+      setDateFrom(format(startOfYear(now), 'yyyy-MM-dd'));
+      setDateTo(format(endOfYear(now), 'yyyy-MM-dd'));
       setShowCustomRange(false);
     } else if (type === 'custom') {
       setShowCustomRange(true);
@@ -57,113 +56,95 @@ export default function DashboardPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await getDashboardData(dateFrom, dateTo);
+      const res = await getDashboardData(dateFrom || null, dateTo || null);
       setData(res);
     } catch (err) {
-      console.error('Failed to load dashboard', err);
-      setError(t('dashboard.error', 'فشل تحميل بيانات لوحة التحكم. يرجى المحاولة مرة أخرى.'));
+      console.error('Failed to load dashboard data:', err);
+      setError(err.response?.data?.detail || t('dashboard.fetchError', 'فشل في تحميل بيانات لوحة التحكم'));
     } finally {
       setLoading(false);
     }
   }, [dateFrom, dateTo, t]);
 
   useEffect(() => {
-    fetchDashboard();
-  }, [fetchDashboard]);
+    applyPeriodFilter('month');
+  }, []);
 
-  const handleExportCSV = () => {
-    if (!data?.kpis) return;
-    let csv = "data:text/csv;charset=utf-8,";
-    csv += "Metric,Value\n";
+  useEffect(() => {
+    if (activeFilter !== 'custom') {
+      fetchDashboard();
+    }
+  }, [activeFilter, fetchDashboard]);
+
+  const exportCsv = () => {
+    if (!data) return;
+    let csv = `Metric,Value\n`;
     csv += `Total Sales,${data.kpis.total_sales}\n`;
     csv += `Total Purchases,${data.kpis.total_purchases}\n`;
+    csv += `Total Inventory Value,${data.kpis.total_inventory_value || 0}\n`;
     csv += `Gross Profit,${data.kpis.gross_profit}\n`;
-    csv += `Total Expenses,${data.kpis.total_expenses}\n`;
     csv += `Net Profit,${data.kpis.net_profit}\n`;
-    csv += `Outstanding Balance,${data.kpis.outstanding_balance}\n`;
-    csv += `Total Invoices,${data.kpis.total_invoices_count}\n`;
-
-    const encoded = encodeURI(csv);
-    const link = document.createElement("a");
-    link.setAttribute("href", encoded);
-    link.setAttribute("download", `dashboard_report_${format(new Date(), 'yyyyMMdd')}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    csv += `Customer Receivables,${data.kpis.customer_receivables || 0}\n`;
+    csv += `Supplier Payables,${data.kpis.supplier_payables || 0}\n`;
+    
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `dashboard-report-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    a.click();
   };
 
+  const fmtCurr = (val) => `EGP ${Number(val || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+
   const kpis = data?.kpis || {};
-  const fmtCurr = (val) => `$${Number(val || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 animate-fade-in">
+    <div className="p-6 space-y-6 max-w-[1600px] mx-auto animate-fade-in-up">
       {/* ── Page Header ── */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-wrap justify-between items-center gap-4">
         <div>
-          <h1 className="text-h1 text-charcoal-ink font-extrabold tracking-tight">
-            {t('dashboard.title', 'لوحة التحكم والتحليلات')}
-          </h1>
-          <p className="text-body-base text-muted-steel mt-1">
-            {t('dashboard.subtitle', 'رؤى المخزون والمقاييس التشغيلية في الوقت الفعلي')}
+          <h1 className="text-h1 text-charcoal-ink font-bold tracking-tight">{t('dashboard.title', 'لوحة التحكم القيادية')}</h1>
+          <p className="text-body-sm text-muted-steel mt-1">
+            {t('dashboard.subtitle', 'نظرة شاملة ومحدثة فورياً للأداء المالي، المخزون، والديون')}
           </p>
         </div>
 
-        {/* ── Controls & Quick Period Selectors ── */}
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="bg-surface-container-high p-1 rounded-xl flex items-center gap-1 border border-outline-variant/60 shadow-whisper">
-            <button
-              onClick={() => applyPeriodFilter('today')}
-              className={`px-3 py-1.5 rounded-lg text-label-md transition-all font-medium cursor-pointer ${
-                activeFilter === 'today' ? 'bg-accent text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
-              }`}
-            >
-              {t('dashboard.today', 'اليوم')}
-            </button>
-            <button
-              onClick={() => applyPeriodFilter('week')}
-              className={`px-3 py-1.5 rounded-lg text-label-md transition-all font-medium cursor-pointer ${
-                activeFilter === 'week' ? 'bg-accent text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
-              }`}
-            >
-              {t('dashboard.week', 'الأسبوع')}
-            </button>
-            <button
-              onClick={() => applyPeriodFilter('month')}
-              className={`px-3 py-1.5 rounded-lg text-label-md transition-all font-medium cursor-pointer ${
-                activeFilter === 'month' ? 'bg-accent text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
-              }`}
-            >
-              {t('dashboard.month', 'الشهر')}
-            </button>
-            <button
-              onClick={() => applyPeriodFilter('year')}
-              className={`px-3 py-1.5 rounded-lg text-label-md transition-all font-medium cursor-pointer ${
-                activeFilter === 'year' ? 'bg-accent text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
-              }`}
-            >
-              {t('dashboard.year', 'السنة')}
-            </button>
-            <button
-              onClick={() => applyPeriodFilter('custom')}
-              className={`px-3 py-1.5 rounded-lg text-label-md transition-all font-medium cursor-pointer ${
-                activeFilter === 'custom' ? 'bg-accent text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
-              }`}
-            >
-              {t('dashboard.custom', 'مخصص')}
-            </button>
+        {/* Quick Period Filters & Export */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="bg-surface-container-low p-1 rounded-2xl border border-outline-variant/60 flex items-center gap-1">
+            {[
+              { id: 'today', label: 'اليوم' },
+              { id: 'week', label: 'هذا الأسبوع' },
+              { id: 'month', label: 'هذا الشهر' },
+              { id: 'year', label: 'هذه السنة' },
+              { id: 'custom', label: 'مخصص' },
+            ].map((item) => (
+              <button
+                key={item.id}
+                onClick={() => applyPeriodFilter(item.id)}
+                className={`px-3 py-1.5 rounded-xl text-label-sm font-medium transition-all cursor-pointer ${
+                  activeFilter === item.id
+                    ? 'bg-accent text-on-primary shadow-sm font-bold'
+                    : 'text-muted-steel hover:text-charcoal-ink hover:bg-surface-container'
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
           </div>
 
           <button
             onClick={fetchDashboard}
+            className="p-2.5 rounded-xl border border-outline-variant/60 bg-surface-container-lowest text-muted-steel hover:text-charcoal-ink hover:bg-surface-container-low transition-all cursor-pointer"
             title="تحديث البيانات"
-            className="p-2.5 bg-surface-container-lowest border border-outline-variant/60 rounded-xl hover:bg-surface-container-low transition-colors text-on-surface-variant cursor-pointer"
           >
             <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
           </button>
 
           <button
-            onClick={handleExportCSV}
-            className="flex items-center gap-1.5 px-4 py-2 bg-accent text-on-primary rounded-xl text-label-md font-semibold hover:bg-accent-hover transition-all shadow-sm cursor-pointer"
+            onClick={exportCsv}
+            className="flex items-center gap-2 px-4 py-2 bg-surface-container-lowest border border-outline-variant/60 rounded-xl text-label-md text-charcoal-ink font-medium hover:bg-surface-container-low transition-all cursor-pointer"
           >
             <Download size={16} />
             تصدير CSV
@@ -173,9 +154,9 @@ export default function DashboardPage() {
 
       {/* Custom Date Range Picker */}
       {showCustomRange && (
-        <div className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant/60 flex flex-wrap items-center gap-4 animate-fade-in shadow-whisper">
-          <div>
-            <label className="block text-label-sm text-muted-steel mb-1">من تاريخ</label>
+        <div className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl p-4 flex flex-wrap items-center gap-4 animate-fade-in-up">
+          <div className="flex items-center gap-2">
+            <span className="text-label-sm text-muted-steel">من:</span>
             <input
               type="date"
               value={dateFrom}
@@ -183,8 +164,8 @@ export default function DashboardPage() {
               className="bg-surface-container-high border border-outline-variant/60 rounded-xl px-3 py-2 text-label-md text-charcoal-ink"
             />
           </div>
-          <div>
-            <label className="block text-label-sm text-muted-steel mb-1">إلى تاريخ</label>
+          <div className="flex items-center gap-2">
+            <span className="text-label-sm text-muted-steel">إلى:</span>
             <input
               type="date"
               value={dateTo}
@@ -192,14 +173,12 @@ export default function DashboardPage() {
               className="bg-surface-container-high border border-outline-variant/60 rounded-xl px-3 py-2 text-label-md text-charcoal-ink"
             />
           </div>
-          <div className="flex items-end self-end">
-            <button
-              onClick={fetchDashboard}
-              className="px-4 py-2 bg-accent text-on-primary rounded-xl text-label-md font-semibold hover:bg-accent-hover transition-all"
-            >
-              تطبيق الفلتر
-            </button>
-          </div>
+          <button
+            onClick={fetchDashboard}
+            className="px-4 py-2 bg-accent text-on-primary rounded-xl text-label-md font-semibold hover:bg-accent-hover transition-all"
+          >
+            تطبيق
+          </button>
         </div>
       )}
 
@@ -212,15 +191,11 @@ export default function DashboardPage() {
       )}
 
       {/* ── KPI Cards Grid ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
         {loading ? (
-          <>
-            <div className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl p-6 h-36 animate-shimmer" />
-            <div className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl p-6 h-36 animate-shimmer" />
-            <div className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl p-6 h-36 animate-shimmer" />
-            <div className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl p-6 h-36 animate-shimmer" />
-            <div className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl p-6 h-36 animate-shimmer" />
-          </>
+          Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl p-6 h-36 animate-shimmer" />
+          ))
         ) : (
           <>
             <KpiCard
@@ -228,13 +203,20 @@ export default function DashboardPage() {
               value={fmtCurr(kpis.total_sales)}
               icon={ShoppingCart}
               variant="accent"
-              subtitle={`${kpis.total_invoices_count || 0} ${t('dashboard.totalInvoices', 'فاتورة')}`}
+              subtitle={`${kpis.total_invoices_count || 0} فاتورة`}
             />
             <KpiCard
               title={t('dashboard.totalPurchases', 'إجمالي المشتريات')}
               value={fmtCurr(kpis.total_purchases)}
               icon={Wallet}
               variant="info"
+            />
+            <KpiCard
+              title="قيمة المخزون الإجمالية"
+              value={fmtCurr(kpis.total_inventory_value)}
+              icon={Package}
+              variant="success"
+              subtitle="تقييم الأصول بسعر التكلفة"
             />
             <KpiCard
               title={t('dashboard.grossProfit', 'إجمالي الأرباح')}
@@ -250,10 +232,11 @@ export default function DashboardPage() {
               subtitle={`مصروفات: ${fmtCurr(kpis.total_expenses)}`}
             />
             <KpiCard
-              title={t('dashboard.outstandingBalance', 'مستحقات العملاء')}
-              value={fmtCurr(kpis.outstanding_balance)}
-              icon={CreditCard}
+              title="ديون العملاء (مستحقات)"
+              value={fmtCurr(kpis.customer_receivables)}
+              icon={Users}
               variant="warning"
+              subtitle={`مستحقات للموردين: ${fmtCurr(kpis.supplier_payables)}`}
             />
           </>
         )}

@@ -1363,7 +1363,7 @@ export default function InvoicesView() {
 
                       const partyNameForPdf = partyForPrint?.name || invoiceToPrint?.party_name || invoiceToPrint?.party?.name || 'Customer';
                       const rawDate = invoiceToPrint?.created_at || invoiceToPrint?.issue_date || invoiceToPrint?.date;
-                      const pdfFileName = generatePdfFileName(partyNameForPdf, rawDate);
+                      const pdfFileName = generatePdfFileName(partyNameForPdf, rawDate, invoiceToPrint?.invoice_type || invoiceToPrint?.invoiceType);
 
                       const { default: html2pdf } = await import('html2pdf.js');
                       await html2pdf()
