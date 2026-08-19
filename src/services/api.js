@@ -178,6 +178,30 @@ export const api = {
   getSettings: () => request('/tenants/me'),
   updateSettings: (data) => request('/tenants/me', { method: 'PATCH', body: JSON.stringify(data) }),
 
+  // Expenses
+  getExpenses: (filters = {}) => {
+    const params = new URLSearchParams();
+    if (filters.date_from) params.append('date_from', filters.date_from);
+    if (filters.date_to) params.append('date_to', filters.date_to);
+    if (filters.category) params.append('category', filters.category);
+    return request(`/expenses?${params.toString()}`);
+  },
+  getExpenseSummary: (filters = {}) => {
+    const params = new URLSearchParams();
+    if (filters.date_from) params.append('date_from', filters.date_from);
+    if (filters.date_to) params.append('date_to', filters.date_to);
+    return request(`/expenses/summary?${params.toString()}`);
+  },
+  createExpense: (data) => request('/expenses', { method: 'POST', body: JSON.stringify(data) }),
+  deleteExpense: (id) => request(`/expenses/${id}`, { method: 'DELETE' }),
+
+  getNetProfitReport: (date_from, date_to) => {
+    const params = new URLSearchParams();
+    if (date_from) params.append('start_date', date_from);
+    if (date_to) params.append('end_date', date_to);
+    return request(`/reports/net-profit?${params.toString()}`);
+  },
+
   // Admin Panel
   getAdminStats: () => request('/admin/stats'),
   getAdminTenants: (statusFilter = null) => {
@@ -215,6 +239,25 @@ export const api = {
   put: (endpoint, data) => request(endpoint, { method: 'PUT', body: data ? JSON.stringify(data) : undefined }),
   patch: (endpoint, data) => request(endpoint, { method: 'PATCH', body: data ? JSON.stringify(data) : undefined }),
   delete: (endpoint) => request(endpoint, { method: 'DELETE' }),
+
+  prefetchAll: async () => {
+    try {
+      await Promise.allSettled([
+        api.getCustomers(),
+        api.getSuppliers(),
+        api.getProducts(),
+        api.getInvoices({}),
+        api.getExpenses(),
+        api.getExpenseSummary(),
+        api.getDashboardAnalytics(),
+        api.getProfitReport(),
+        api.getInventoryReport()
+      ]);
+      console.log('Cache warmed up successfully!');
+    } catch (err) {
+      console.error('Failed to prefetch data', err);
+    }
+  },
 };
 
 export default api;

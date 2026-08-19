@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Package, Users, Truck, FileText, Settings,
@@ -9,6 +9,7 @@ import myLogo from '../assets/logo.webp';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { getLogoUrl } from '../utils/url';
+import api from '../services/api';
 
 export default function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -16,6 +17,11 @@ export default function Layout() {
   const { user } = useAuth();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const { t, i18n } = useTranslation();
+
+  // Pre-warm the cache when the layout mounts (user logs in)
+  useEffect(() => {
+    api.prefetchAll();
+  }, []);
 
   const toggleCollapse = () => {
     setCollapsed((prev) => {

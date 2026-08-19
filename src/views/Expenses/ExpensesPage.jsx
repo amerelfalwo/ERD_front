@@ -6,12 +6,8 @@ import {
   ChevronLeft, ChevronRight, RefreshCw, X, Tag, Calendar, DollarSign
 } from 'lucide-react';
 
-import {
-  getExpenses,
-  createExpense,
-  deleteExpense,
-  getExpenseSummary
-} from '../../services/expenseService';
+import api from '../../services/api';
+const { getExpenses, createExpense, deleteExpense, getExpenseSummary } = api;
 
 const CATEGORY_COLORS = {
   marketing: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20',
