@@ -242,6 +242,7 @@ export default function PartyDashboard() {
               <button
                 onClick={() => {
                   setPaymentAmount('');
+                  setPaymentNotes('');
                   setIsPaymentModalOpen(true);
                 }}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-label-md bg-accent text-on-primary hover:bg-accent-hover shadow-sm transition-all cursor-pointer btn-tactile"
@@ -255,6 +256,7 @@ export default function PartyDashboard() {
               <button
                 onClick={() => {
                   setPaymentAmount(String(Math.abs(balance)));
+                  setPaymentNotes('');
                   setIsPaymentModalOpen(true);
                 }}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-label-md bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm transition-all cursor-pointer btn-tactile font-medium"
@@ -268,6 +270,7 @@ export default function PartyDashboard() {
               <button
                 onClick={() => {
                   setPaymentAmount(String(Math.abs(balance)));
+                  setPaymentNotes('');
                   setIsPaymentModalOpen(true);
                 }}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-label-md bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm transition-all cursor-pointer btn-tactile font-medium"
@@ -999,88 +1002,7 @@ export default function PartyDashboard() {
         </div>
       )}
 
-      {isPaymentModalOpen && (
-        <div className="fixed inset-0 z-[100] bg-charcoal-ink/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-surface-container-lowest rounded-2xl shadow-2xl border border-outline-variant/60 w-full max-w-md overflow-hidden animate-fade-in-up">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-h3 text-charcoal-ink">
-                  {financials.balance < 0 ? 'إرجاع الرصيد للعميل (تسجيل دفعة إرجاع)' : t('partyDashboard.recordPayment')}
-                </h3>
-                <button onClick={() => setIsPaymentModalOpen(false)} className="p-2 text-muted-steel hover:bg-surface-container-low rounded-xl transition-all btn-tactile">
-                  <X size={20} />
-                </button>
-              </div>
-              
-              <div className="mb-6 space-y-4">
-                <div className="bg-surface-container-low p-4 rounded-xl border border-outline-variant/30 flex justify-between items-center">
-                  <span className="text-label-sm text-muted-steel">
-                    {financials.balance < 0 ? 'الرصيد المستحق للعميل (له):' : t('partyDashboard.outstandingBalance') + ':'}
-                  </span>
-                  <span className={`text-label-md font-mono-tabular ${financials.balance < 0 ? 'text-emerald-600 font-bold' : 'text-error'}`}>
-                    {t('common.currency')} {Math.abs(Number(financials.balance)).toLocaleString()}
-                  </span>
-                </div>
-                
-                <div>
-                  <label className="block text-label-sm text-charcoal-ink mb-1.5">
-                    {financials.balance < 0 ? 'مبلغ الاسترداد المسدد للعميل (EGP)' : `${t('partyDashboard.paymentAmount')} (${t('common.currency')})`}
-                  </label>
-                  <input 
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    max={Math.abs(financials.balance)}
-                    value={paymentAmount}
-                    onChange={(e) => {
-                      setPaymentAmount(e.target.value);
-                      if (paymentError) setPaymentError('');
-                    }}
-                    placeholder={t('partyDashboard.enterAmount')}
-                    className="w-full px-4 py-2.5 bg-surface-container-lowest border border-outline-variant focus:border-accent focus:ring-1 focus:ring-accent rounded-xl outline-none transition-all text-charcoal-ink font-mono-tabular"
-                  />
-                  {paymentError && <p className="text-error text-xs mt-1.5">{paymentError}</p>}
-                </div>
 
-                <div>
-                  <label className="block text-label-sm text-charcoal-ink mb-1.5">
-                    ملاحظات (اختياري)
-                  </label>
-                  <input 
-                    type="text"
-                    value={paymentNotes}
-                    onChange={(e) => setPaymentNotes(e.target.value)}
-                    placeholder="أدخل أي ملاحظات على الدفعة..."
-                    className="w-full px-4 py-2.5 bg-surface-container-lowest border border-outline-variant focus:border-accent focus:ring-1 focus:ring-accent rounded-xl outline-none transition-all text-charcoal-ink text-sm"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  onClick={() => setIsPaymentModalOpen(false)}
-                  disabled={paymentSubmitting}
-                  className="px-5 py-2.5 rounded-xl text-label-md text-muted-steel hover:bg-surface-container-low transition-all cursor-pointer btn-tactile"
-                >
-                  {t('partyDashboard.cancel')}
-                </button>
-                <button
-                  onClick={handleRecordPayment}
-                  disabled={paymentSubmitting || !paymentAmount || Number(paymentAmount) <= 0 || Number(paymentAmount) > Math.abs(financials.balance)}
-                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-label-md transition-all cursor-pointer btn-tactile disabled:opacity-50 disabled:cursor-not-allowed ${
-                    financials.balance < 0
-                      ? 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm font-medium'
-                      : 'bg-accent text-on-primary hover:bg-accent-hover shadow-sm'
-                  }`}
-                >
-                  {paymentSubmitting && <Loader2 size={16} className="animate-spin" />}
-                  {financials.balance < 0 ? 'تأكيد إرجاع الرصيد وتصفير الحساب' : t('partyDashboard.recordPayment')}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
 
 
