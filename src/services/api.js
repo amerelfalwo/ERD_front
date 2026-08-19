@@ -6,21 +6,91 @@ function buildUrl(endpoint) {
   return `${BASE_URL}${path}`;
 }
 
-const frontendCache = new Map();
-const CACHE_TTL = 600000; // 10 minutes (600,000 ms) - keeps cache for the whole session
+const APP_VERSION = 'v1';
+const CACHE_TTL = 600000; // 10 minutes
+
+// In-memory fallback if localStorage fails or is unavailable
+const memoryCache = new Map();
+
+function getTenantId() {
+  try {
+    const user = JSON.parse(localStorage.getItem('erp_user'));
+    return user?.tenant_id || user?.id || 'public';
+  } catch (e) {
+    return 'public';
+  }
+}
+
+function getCacheKey(url) {
+  return `erb_${APP_VERSION}_${getTenantId()}_${url}`;
+}
+
+function setCache(url, data) {
+  const key = getCacheKey(url);
+  const payload = { data, timestamp: Date.now() };
+  try {
+    localStorage.setItem(key, JSON.stringify(payload));
+  } catch (e) {
+    // If quota exceeded or localStorage disabled, fallback to memory
+    memoryCache.set(key, payload);
+    if (e.name === 'QuotaExceededError') {
+      console.warn('LocalStorage quota exceeded. Falling back to memory cache.');
+    }
+  }
+}
+
+function getCache(url) {
+  const key = getCacheKey(url);
+  
+  // Check memory fallback first
+  if (memoryCache.has(key)) {
+    const cached = memoryCache.get(key);
+    if (Date.now() - cached.timestamp < CACHE_TTL) return cached.data;
+    memoryCache.delete(key);
+  }
+
+  // Check localStorage
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw) {
+      const cached = JSON.parse(raw);
+      if (Date.now() - cached.timestamp < CACHE_TTL) return cached.data;
+      localStorage.removeItem(key);
+    }
+  } catch (e) {
+    // Ignore parse errors or disabled localStorage
+  }
+  return null;
+}
+
+function clearCache() {
+  memoryCache.clear();
+  const prefix = `erb_${APP_VERSION}_${getTenantId()}_`;
+  try {
+    const keysToRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(prefix)) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach(k => localStorage.removeItem(k));
+  } catch (e) {
+    // Ignore if localStorage is disabled
+  }
+}
 
 async function request(endpoint, options = {}) {
   const url = buildUrl(endpoint);
   const method = options.method || 'GET';
   
   if (method !== 'GET') {
-    frontendCache.clear(); // Invalidate on any mutation to keep data fresh
-  } else if (frontendCache.has(url)) {
-    const cached = frontendCache.get(url);
-    if (Date.now() - cached.timestamp < CACHE_TTL) {
-      return cached.data;
+    clearCache(); // Invalidate on mutation
+  } else {
+    const cachedData = getCache(url);
+    if (cachedData !== null) {
+      return cachedData;
     }
-    frontendCache.delete(url);
   }
 
   const config = {
@@ -61,7 +131,7 @@ async function request(endpoint, options = {}) {
   
   const data = await response.json();
   if (method === 'GET') {
-    frontendCache.set(url, { data, timestamp: Date.now() });
+    setCache(url, data);
   }
   
   return data;

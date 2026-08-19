@@ -10,6 +10,7 @@ export default function LoginView() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('');
   const [error, setError] = useState('');
 
   async function handleSubmit(e) {
@@ -20,6 +21,7 @@ export default function LoginView() {
       return;
     }
     setLoading(true);
+    setLoadingMessage('Signing in...');
     try {
       const data = await api.login({ username, password });
       if (data.access_token) {
@@ -30,6 +32,10 @@ export default function LoginView() {
         } catch (_) {
           void 0;
         }
+        
+        setLoadingMessage('Preparing Workspace...');
+        await api.prefetchAll();
+        
         navigate('/dashboard');
       } else {
         setError('Invalid credentials. Please try again.');
@@ -123,7 +129,10 @@ export default function LoginView() {
               className="w-full flex items-center justify-center gap-2 bg-accent hover:bg-accent-hover text-on-primary font-medium py-2.5 rounded-xl transition-all duration-200 shadow-sm focus:ring-2 focus:ring-offset-2 focus:ring-accent/40 focus:outline-none disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer btn-tactile mt-2"
             >
               {loading ? (
-                <Loader2 size={18} className="animate-spin" />
+                <>
+                  <Loader2 size={18} className="animate-spin" />
+                  {loadingMessage || 'Loading...'}
+                </>
               ) : (
                 <>
                   Sign In
