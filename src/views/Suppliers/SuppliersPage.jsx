@@ -190,12 +190,12 @@ const SupplierCard = memo(function SupplierCard({ supplier, onEdit, onDelete }) 
         <div className="mt-auto flex items-center justify-between pt-4 border-t border-outline-variant/30">
           <Flex gap="sm">
             <Tooltip label={t('common.edit')}>
-              <ActionIcon variant="subtle" color="violet" onClick={(e) => { e.stopPropagation(); onEdit(supplier); }} radius="md">
+              <ActionIcon aria-label={t('common.edit')} variant="subtle" color="violet" onClick={(e) => { e.stopPropagation(); onEdit(supplier); }} radius="md">
                 <Pencil size={18} />
               </ActionIcon>
             </Tooltip>
             <Tooltip label={t('common.delete')}>
-              <ActionIcon variant="subtle" color="red" onClick={(e) => { e.stopPropagation(); onDelete(supplier); }} radius="md">
+              <ActionIcon aria-label={t('common.delete')} variant="subtle" color="red" onClick={(e) => { e.stopPropagation(); onDelete(supplier); }} radius="md">
                 <Trash2 size={18} />
               </ActionIcon>
             </Tooltip>
@@ -323,6 +323,7 @@ export default function SuppliersView() {
         
         <div className="flex items-center gap-3 w-full sm:w-auto">
           <Select
+            aria-label={t('suppliers.sort')}
             data={[
               { value: 'a-z', label: t('suppliers.sortAZ') },
               { value: 'z-a', label: t('suppliers.sortZA') },

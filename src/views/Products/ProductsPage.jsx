@@ -198,12 +198,14 @@ function ProductRow({ product, inventoryProduct, onDelete, onEdit }) {
             {totalQty > 0 ? t('products.inStock') : t('products.outOfStock')}
           </span>
           <button
+            aria-label={t('common.edit', 'Edit')}
             onClick={(e) => { e.stopPropagation(); onEdit(product); }}
             className="p-1.5 rounded-xl text-muted-steel hover:bg-surface-container-low hover:text-accent transition-all duration-200 opacity-0 group-hover:opacity-100 cursor-pointer btn-tactile"
           >
             <Pencil size={16} />
           </button>
           <button
+            aria-label={t('common.delete', 'Delete')}
             onClick={(e) => { e.stopPropagation(); onDelete(product); }}
             className="p-1.5 rounded-xl text-muted-steel hover:bg-error-container/30 hover:text-error transition-all duration-200 opacity-0 group-hover:opacity-100 cursor-pointer btn-tactile"
           >
@@ -337,12 +339,12 @@ export default function ProductsView() {
           />
         </div>
         <div className="flex gap-2">
-          <select value={stockFilter} onChange={(e) => setStockFilter(e.target.value)} className={selectClass}>
+          <select aria-label={t('products.inStock')} value={stockFilter} onChange={(e) => setStockFilter(e.target.value)} className={selectClass}>
             <option value="all">{t('common.all')}</option>
             <option value="in_stock">{t('products.inStock')}</option>
             <option value="out_of_stock">{t('products.outOfStock')}</option>
           </select>
-          <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className={selectClass}>
+          <select aria-label={t('customers.sortAZ')} value={sortBy} onChange={(e) => setSortBy(e.target.value)} className={selectClass}>
             <option value="name_asc">{t('customers.sortAZ')}</option>
             <option value="name_desc">{t('customers.sortZA')}</option>
           </select>

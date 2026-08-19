@@ -6,8 +6,23 @@ function buildUrl(endpoint) {
   return `${BASE_URL}${path}`;
 }
 
+const frontendCache = new Map();
+const CACHE_TTL = 600000; // 10 minutes (600,000 ms) - keeps cache for the whole session
+
 async function request(endpoint, options = {}) {
   const url = buildUrl(endpoint);
+  const method = options.method || 'GET';
+  
+  if (method !== 'GET') {
+    frontendCache.clear(); // Invalidate on any mutation to keep data fresh
+  } else if (frontendCache.has(url)) {
+    const cached = frontendCache.get(url);
+    if (Date.now() - cached.timestamp < CACHE_TTL) {
+      return cached.data;
+    }
+    frontendCache.delete(url);
+  }
+
   const config = {
     headers: {
       'Content-Type': 'application/json',
@@ -43,7 +58,13 @@ async function request(endpoint, options = {}) {
   if (response.status === 204) {
     return null;
   }
-  return response.json();
+  
+  const data = await response.json();
+  if (method === 'GET') {
+    frontendCache.set(url, { data, timestamp: Date.now() });
+  }
+  
+  return data;
 }
 
 export const api = {
