@@ -64,9 +64,11 @@ export default function ReturnInvoiceModal({ invoice, onClose, onSaved }) {
     }
   };
 
+  const totalReturnSum = returnItems.reduce((sum, i) => sum + (Number(i.return_qty || 0) * Number(i.unit_price || 0)), 0);
+
   return (
     <div className="fixed inset-0 z-[100] bg-charcoal-ink/60 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-surface-container-lowest rounded-2xl shadow-2xl border border-outline-variant/60 w-full max-w-2xl overflow-hidden animate-fade-in-up">
+      <div className="bg-surface-container-lowest rounded-2xl shadow-2xl border border-outline-variant/60 w-full max-w-3xl overflow-hidden animate-fade-in-up">
         <div className="p-6">
           <div className="flex items-center justify-between mb-4 border-b border-outline-variant/30 pb-3">
             <h3 className="text-h3 text-charcoal-ink font-semibold">
@@ -74,7 +76,7 @@ export default function ReturnInvoiceModal({ invoice, onClose, onSaved }) {
             </h3>
             <button onClick={onClose} className="p-1 text-muted-steel hover:text-charcoal-ink transition-colors"><X size={20}/></button>
           </div>
-          <div className="max-h-[60vh] overflow-y-auto mb-6">
+          <div className="max-h-[60vh] overflow-y-auto mb-4">
             <table className="w-full text-sm text-left border-collapse">
               <thead>
                 <tr className="border-b border-outline-variant/30 text-muted-steel text-xs uppercase tracking-wider">
@@ -82,11 +84,15 @@ export default function ReturnInvoiceModal({ invoice, onClose, onSaved }) {
                   <th className="py-2.5 px-3 text-center font-medium">{t('returnInvoice.purchased')}</th>
                   <th className="py-2.5 px-3 text-center font-medium">{t('returnInvoice.returned')}</th>
                   <th className="py-2.5 px-3 text-center font-medium">{t('returnInvoice.available')}</th>
+                  <th className="py-2.5 px-3 text-right font-medium">سعر الوحدة</th>
                   <th className="py-2.5 px-3 text-right font-medium">{t('returnInvoice.returnQty')}</th>
+                  <th className="py-2.5 px-3 text-right font-medium">قيمة المرتجع</th>
                 </tr>
               </thead>
               <tbody>
-                {returnItems.map(item => (
+                {returnItems.map(item => {
+                  const itemReturnValue = Number(item.return_qty || 0) * Number(item.unit_price || 0);
+                  return (
                   <tr key={item.invoice_item_id} className="border-b border-outline-variant/20 hover:bg-surface-container-low/40 transition-colors">
                     <td className="py-3 px-3 text-left font-medium text-charcoal-ink">{item.product_name}</td>
                     <td className="py-3 px-3 text-center text-muted-steel">{item.purchased_qty}</td>
@@ -100,6 +106,9 @@ export default function ReturnInvoiceModal({ invoice, onClose, onSaved }) {
                       )}
                     </td>
                     <td className="py-3 px-3 text-center font-semibold text-accent">{item.remaining_qty}</td>
+                    <td className="py-3 px-3 text-right font-mono-tabular text-muted-steel">
+                      EGP {Number(item.unit_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </td>
                     <td className="py-3 px-3 text-right">
                       <div className="flex flex-col items-end gap-0.5">
                         <input 
@@ -110,7 +119,7 @@ export default function ReturnInvoiceModal({ invoice, onClose, onSaved }) {
                           disabled={item.remaining_qty === 0}
                           onChange={e => handleQtyChange(item.invoice_item_id, e.target.value)}
                           placeholder="0"
-                          className={`w-24 text-center bg-surface-container-low border border-outline-variant/60 rounded-lg px-2 py-1 text-charcoal-ink focus:border-accent outline-none transition-all ${
+                          className={`w-20 text-center bg-surface-container-low border border-outline-variant/60 rounded-lg px-2 py-1 text-charcoal-ink focus:border-accent outline-none transition-all ${
                             item.remaining_qty === 0 ? 'opacity-50 cursor-not-allowed bg-surface-container-low/50' : 'hover:border-outline-variant'
                           }`}
                         />
@@ -121,11 +130,23 @@ export default function ReturnInvoiceModal({ invoice, onClose, onSaved }) {
                         )}
                       </div>
                     </td>
+                    <td className="py-3 px-3 text-right font-mono-tabular font-semibold text-charcoal-ink">
+                      EGP {itemReturnValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
+
+          <div className="bg-surface-container-low p-3.5 rounded-xl border border-outline-variant/30 flex justify-between items-center mb-4">
+            <span className="text-sm font-medium text-charcoal-ink">إجمالي قيمة المرتجع:</span>
+            <span className="text-base font-bold font-mono-tabular text-accent">
+              EGP {totalReturnSum.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </span>
+          </div>
+
           <div className="flex justify-end gap-3 border-t border-outline-variant/30 pt-4">
             <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-label-md text-muted-steel hover:bg-surface-container-low transition-all cursor-pointer">
               {t('returnInvoice.cancel')}

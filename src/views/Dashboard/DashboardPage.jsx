@@ -203,13 +203,21 @@ export default function DashboardPage() {
               value={fmtCurr(kpis.total_sales)}
               icon={ShoppingCart}
               variant="accent"
-              subtitle={`${kpis.total_invoices_count || 0} فاتورة`}
+              subtitle={`بضاعة: ${fmtCurr(kpis.net_product_sales ?? (kpis.total_sales - (kpis.delivery_total_sales || 0)))} | توصيل: ${fmtCurr(kpis.delivery_total_sales ?? kpis.delivery_revenue)}`}
+              expandableDetails={[
+                { label: 'مبيعات البضاعة الفعلية', value: fmtCurr(kpis.net_product_sales ?? (kpis.total_sales - (kpis.delivery_total_sales || 0))) },
+                { label: 'إجمالي رسوم التوصيل', value: fmtCurr(kpis.delivery_total_sales ?? kpis.delivery_revenue) },
+                { label: 'إجمالي الخصومات الممنوحة', value: fmtCurr(kpis.total_discounts || 0) },
+              ]}
             />
             <KpiCard
               title={t('dashboard.totalPurchases', 'إجمالي المشتريات')}
               value={fmtCurr(kpis.total_purchases)}
               icon={Wallet}
               variant="info"
+              expandableDetails={[
+                { label: 'رسوم التوصيل المتضمنة', value: fmtCurr(kpis.delivery_total_purchases) },
+              ]}
             />
             <KpiCard
               title="قيمة المخزون الإجمالية"

@@ -146,7 +146,13 @@ export const api = {
     const qs = params.toString();
     return request(`/reports/dashboard${qs ? `?${qs}` : ''}`);
   },
-  getPartyProfits: () => request('/reports/party-profits'),
+  getPartyProfits: (startDate, endDate) => {
+    const params = new URLSearchParams();
+    if (startDate) params.append('start_date', startDate);
+    if (endDate) params.append('end_date', endDate);
+    const qs = params.toString();
+    return request(`/reports/party-profits${qs ? `?${qs}` : ''}`);
+  },
 
   getSettings: () => request('/tenants/me'),
   updateSettings: (data) => request('/tenants/me', { method: 'PATCH', body: JSON.stringify(data) }),

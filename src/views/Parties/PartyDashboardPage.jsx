@@ -37,6 +37,7 @@ export default function PartyDashboard() {
   const [paperSize, setPaperSize] = useState('a4');
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentNotes, setPaymentNotes] = useState('');
   const [paymentSubmitting, setPaymentSubmitting] = useState(false);
   const [paymentError, setPaymentError] = useState('');
   const [toastMessage, setToastMessage] = useState('');
@@ -104,18 +105,19 @@ export default function PartyDashboard() {
     try {
       const payFn = isCustomer ? api.createCustomerPayment : api.createSupplierPayment;
       const amount_paid = balance < 0 ? -amt : amt;
-      await payFn(partyId, { amount_paid });
+      await payFn(partyId, { amount_paid, notes: paymentNotes.trim() || null });
       setToastMessage(t('partyDashboard.paymentRecorded'));
       setTimeout(() => setToastMessage(''), 3000);
       setIsPaymentModalOpen(false);
       setPaymentAmount('');
+      setPaymentNotes('');
       loadSummary();
     } catch (err) {
       setPaymentError(err.response?.data?.detail || 'Failed to record payment.');
     } finally {
       setPaymentSubmitting(false);
     }
-  }, [paymentAmount, summary?.financials?.balance, isCustomer, partyId, t, loadSummary]);
+  }, [paymentAmount, paymentNotes, summary?.financials?.balance, isCustomer, partyId, t, loadSummary]);
 
   const handleUpdatePayment = useCallback(async (paymentId) => {
     const amt = Number(editPaymentAmount);
@@ -428,6 +430,19 @@ export default function PartyDashboard() {
                     />
                     {paymentError && <p className="text-error text-xs mt-1.5">{paymentError}</p>}
                   </div>
+
+                  <div>
+                    <label className="block text-label-sm text-charcoal-ink mb-1.5">
+                      ملاحظات (اختياري)
+                    </label>
+                    <input 
+                      type="text"
+                      value={paymentNotes}
+                      onChange={(e) => setPaymentNotes(e.target.value)}
+                      placeholder="أدخل أي ملاحظات على الدفعة..."
+                      className="w-full px-4 py-2.5 bg-surface-container-lowest border border-outline-variant focus:border-accent focus:ring-1 focus:ring-accent rounded-xl outline-none transition-all text-charcoal-ink text-sm"
+                    />
+                  </div>
                 </div>
 
                 <div className="flex justify-end gap-3 pt-2">
@@ -651,6 +666,7 @@ export default function PartyDashboard() {
                   <tr className="border-b border-outline-variant/30 text-label-sm text-muted-steel uppercase tracking-wider">
                     <th className="py-3 px-6 text-left">{t('partyDashboard.invoiceId')}</th>
                     <th className="py-3 px-6 text-right">{t('partyDashboard.amount')}</th>
+                    <th className="py-3 px-6 text-left">الملاحظات</th>
                     <th className="py-3 px-6 text-left">{t('partyDashboard.date')}</th>
                     <th className="py-3 px-6 text-right">{t('partyDashboard.actions')}</th>
                   </tr>
@@ -705,6 +721,9 @@ export default function PartyDashboard() {
                             {isReturnOffset ? '−' : ''}EGP {Math.abs(Number(payment.amount)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                           </span>
                         )}
+                      </td>
+                      <td className="py-3 px-6 text-left text-charcoal-ink font-normal text-xs" dir="auto">
+                        {payment.notes || '—'}
                       </td>
                       <td className="py-3 px-6 font-mono-tabular text-muted-steel text-xs">{payment.created_at ? new Date(payment.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : (payment.payment_date ? new Date(payment.payment_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '-')}</td>
                       <td className="py-3 px-6 text-right">
@@ -1021,6 +1040,19 @@ export default function PartyDashboard() {
                     className="w-full px-4 py-2.5 bg-surface-container-lowest border border-outline-variant focus:border-accent focus:ring-1 focus:ring-accent rounded-xl outline-none transition-all text-charcoal-ink font-mono-tabular"
                   />
                   {paymentError && <p className="text-error text-xs mt-1.5">{paymentError}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-label-sm text-charcoal-ink mb-1.5">
+                    ملاحظات (اختياري)
+                  </label>
+                  <input 
+                    type="text"
+                    value={paymentNotes}
+                    onChange={(e) => setPaymentNotes(e.target.value)}
+                    placeholder="أدخل أي ملاحظات على الدفعة..."
+                    className="w-full px-4 py-2.5 bg-surface-container-lowest border border-outline-variant focus:border-accent focus:ring-1 focus:ring-accent rounded-xl outline-none transition-all text-charcoal-ink text-sm"
+                  />
                 </div>
               </div>
 

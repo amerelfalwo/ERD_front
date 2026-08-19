@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Users, X, Loader2, Eye, DollarSign, User, Building2, BarChart2, Phone, MapPin, Trash2, TrendingUp, Printer } from 'lucide-react';
+import { Plus, Search, Users, X, Loader2, Eye, DollarSign, User, Building2, BarChart2, Phone, MapPin, Trash2, TrendingUp, Printer, Calendar } from 'lucide-react';
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear } from 'date-fns';
 import api from '../../services/api';
 import { notifications } from '@mantine/notifications';
 import { useAuth } from '../../context/AuthContext';
@@ -277,12 +278,37 @@ export default function PartiesView() {
   const [filter, setFilter] = useState('all');
   const [balanceFilter, setBalanceFilter] = useState('all');
   const [sortBy, setSortBy] = useState('name_asc');
+  const [activePeriod, setActivePeriod] = useState('all'); // all | today | week | month | year
   const [showModal, setShowModal] = useState(false);
   const [statementModal, setStatementModal] = useState({ open: false, partyId: null, partyName: '' });
   const [balances, setBalances] = useState({});
   const [profits, setProfits] = useState({});
   const [partyToDelete, setPartyToDelete] = useState(null);
   const [deletingParty, setDeletingParty] = useState(false);
+
+  const getPeriodDates = useCallback((period) => {
+    const now = new Date();
+    if (period === 'today') {
+      const todayStr = format(now, 'yyyy-MM-dd');
+      return { startDate: todayStr, endDate: todayStr };
+    } else if (period === 'week') {
+      return {
+        startDate: format(startOfWeek(now, { weekStartsOn: 6 }), 'yyyy-MM-dd'),
+        endDate: format(endOfWeek(now, { weekStartsOn: 6 }), 'yyyy-MM-dd'),
+      };
+    } else if (period === 'month') {
+      return {
+        startDate: format(startOfMonth(now), 'yyyy-MM-dd'),
+        endDate: format(endOfMonth(now), 'yyyy-MM-dd'),
+      };
+    } else if (period === 'year') {
+      return {
+        startDate: format(startOfYear(now), 'yyyy-MM-dd'),
+        endDate: format(endOfYear(now), 'yyyy-MM-dd'),
+      };
+    }
+    return { startDate: null, endDate: null };
+  }, []);
 
   const fetchParties = useCallback(async () => {
     setLoading(true);
@@ -296,19 +322,24 @@ export default function PartiesView() {
       setBalances(balanceMap);
 
       try {
-        const profitData = await api.getPartyProfits();
+        setProfits({});
+        const { startDate, endDate } = getPeriodDates(activePeriod);
+        const profitData = await api.getPartyProfits(startDate, endDate);
         const profitMap = {};
         for (const row of profitData) {
           profitMap[row.party_id] = { profit: row.total_profit, revenue: row.total_revenue, count: row.invoice_count };
         }
         setProfits(profitMap);
-      } catch { /* profits are optional */ }
+      } catch (err) {
+        console.error('Failed to load party profits:', err);
+        setProfits({});
+      }
     } catch (err) { 
       console.error(err);
       notifications.show({ title: 'Error', message: 'Failed to load parties.', color: 'red' });
     }
     finally { setLoading(false); }
-  }, []);
+  }, [activePeriod, getPeriodDates]);
 
   useEffect(() => { fetchParties(); }, [fetchParties]);
 
@@ -351,6 +382,14 @@ export default function PartiesView() {
 
   const selectClass = "px-4 py-2 rounded-xl border border-outline-variant/60 bg-surface-container-lowest text-sm text-muted-steel focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all duration-200 appearance-none min-w-[120px] cursor-pointer";
 
+  const periodLabels = {
+    all: 'كل الوقت',
+    today: 'اليوم',
+    week: 'هذا الأسبوع',
+    month: 'هذا الشهر',
+    year: 'هذه السنة',
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -365,36 +404,67 @@ export default function PartiesView() {
         </button>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3 animate-fade-in-up stagger-1">
-        <div className="flex-1 relative">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-steel" />
-          <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search parties..."
-            className="w-full pl-9 pr-4 py-2 rounded-xl border border-outline-variant/60 bg-surface-container-lowest text-sm text-charcoal-ink placeholder:text-outline focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all duration-200"
-          />
+      {/* Filters & Period Selector */}
+      <div className="flex flex-col gap-3 animate-fade-in-up stagger-1">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex-1 relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-steel" />
+            <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search parties..."
+              className="w-full pl-9 pr-4 py-2 rounded-xl border border-outline-variant/60 bg-surface-container-lowest text-sm text-charcoal-ink placeholder:text-outline focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all duration-200"
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <div className="flex gap-1 bg-surface-container-lowest border border-outline-variant/60 rounded-xl p-1">
+              {['all', 'client', 'supplier'].map((f) => (
+                <button key={f} onClick={() => setFilter(f)}
+                  className={`px-3 py-1.5 rounded-lg text-label-md capitalize transition-all duration-200 cursor-pointer btn-tactile
+                    ${filter === f ? 'bg-accent text-on-primary shadow-sm' : 'text-muted-steel hover:bg-surface-container-low'}`}>
+                  {f === 'all' ? 'All' : f + 's'}
+                </button>
+              ))}
+            </div>
+            <select value={balanceFilter} onChange={(e) => setBalanceFilter(e.target.value)} className={selectClass}>
+              <option value="all">All Balances</option>
+              <option value="has_balance">Has Balance</option>
+              <option value="zero_balance">Zero Balance</option>
+            </select>
+            <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className={selectClass}>
+              <option value="name_asc">Name (A-Z)</option>
+              <option value="name_desc">Name (Z-A)</option>
+              <option value="balance_desc">Highest Balance</option>
+              <option value="balance_asc">Lowest Balance</option>
+              <option value="profit_desc">Most Profitable</option>
+            </select>
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <div className="flex gap-1 bg-surface-container-lowest border border-outline-variant/60 rounded-xl p-1">
-            {['all', 'client', 'supplier'].map((f) => (
-              <button key={f} onClick={() => setFilter(f)}
-                className={`px-3 py-1.5 rounded-lg text-label-md capitalize transition-all duration-200 cursor-pointer btn-tactile
-                  ${filter === f ? 'bg-accent text-on-primary shadow-sm' : 'text-muted-steel hover:bg-surface-container-low'}`}>
-                {f === 'all' ? 'All' : f + 's'}
+
+        {/* Period Filter Selector Bar */}
+        <div className="flex items-center justify-between bg-surface-container-lowest border border-outline-variant/60 rounded-2xl p-2 px-4 flex-wrap gap-2">
+          <div className="flex items-center gap-2 text-label-sm text-muted-steel font-medium">
+            <Calendar size={16} className="text-accent" />
+            <span>نطاق الأرباح المعروضة:</span>
+          </div>
+          <div className="flex items-center gap-1 flex-wrap">
+            {[
+              { id: 'all', label: 'كل الوقت' },
+              { id: 'today', label: 'اليوم' },
+              { id: 'week', label: 'هذا الأسبوع' },
+              { id: 'month', label: 'هذا الشهر' },
+              { id: 'year', label: 'هذه السنة' },
+            ].map((p) => (
+              <button
+                key={p.id}
+                onClick={() => setActivePeriod(p.id)}
+                className={`px-3 py-1 rounded-xl text-label-sm font-medium transition-all cursor-pointer ${
+                  activePeriod === p.id
+                    ? 'bg-accent text-on-primary shadow-sm font-bold'
+                    : 'text-muted-steel hover:text-charcoal-ink hover:bg-surface-container-low'
+                }`}
+              >
+                {p.label}
               </button>
             ))}
           </div>
-          <select value={balanceFilter} onChange={(e) => setBalanceFilter(e.target.value)} className={selectClass}>
-            <option value="all">All Balances</option>
-            <option value="has_balance">Has Balance</option>
-            <option value="zero_balance">Zero Balance</option>
-          </select>
-          <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className={selectClass}>
-            <option value="name_asc">Name (A-Z)</option>
-            <option value="name_desc">Name (Z-A)</option>
-            <option value="balance_desc">Highest Balance</option>
-            <option value="balance_asc">Lowest Balance</option>
-            <option value="profit_desc">Most Profitable</option>
-          </select>
         </div>
       </div>
 
@@ -424,15 +494,15 @@ export default function PartiesView() {
                     <div className={`p-2 rounded-xl ${party.party_type === 'client' ? 'bg-accent-surface text-accent' : 'bg-tertiary-container/20 text-tertiary'}`}>
                       {party.party_type === 'client' ? <User size={18} strokeWidth={1.8} /> : <Building2 size={18} strokeWidth={1.8} />}
                     </div>
-                <div>
-                    <p className="text-label-md text-charcoal-ink" dir="auto">{party.name}</p>
-                    <span className={`text-label-sm uppercase tracking-wider ${party.party_type === 'client' ? 'text-accent' : 'text-tertiary'}`}>{party.party_type}</span>
-                    {party.phone && (
-                      <p className="text-[11px] text-muted-steel mt-0.5 flex items-center gap-1">
-                        <Phone size={10} />{party.phone}
-                      </p>
-                    )}
-                  </div>
+                    <div>
+                      <p className="text-label-md text-charcoal-ink" dir="auto">{party.name}</p>
+                      <span className={`text-label-sm uppercase tracking-wider ${party.party_type === 'client' ? 'text-accent' : 'text-tertiary'}`}>{party.party_type}</span>
+                      {party.phone && (
+                        <p className="text-[11px] text-muted-steel mt-0.5 flex items-center gap-1">
+                          <Phone size={10} />{party.phone}
+                        </p>
+                      )}
+                    </div>
                   </div>
                   <div className="flex items-center gap-1">
                     <button onClick={(e) => { e.stopPropagation(); setStatementModal({ open: true, partyId: party.id, partyName: party.name }); }}
@@ -452,10 +522,16 @@ export default function PartiesView() {
                   <span className="text-label-sm text-muted-steel uppercase tracking-wider">Balance</span>
                   <span className="text-h3 font-mono-tabular text-charcoal-ink">EGP {Number(balances[party.id] || 0).toLocaleString()}</span>
                 </div>
-                {profits[party.id]?.profit > 0 && (
+                {party.party_type === 'client' && (
                   <div className="flex items-center justify-between pt-2">
-                    <span className="text-label-sm text-muted-steel uppercase tracking-wider flex items-center gap-1"><TrendingUp size={11} />Profit</span>
-                    <span className="text-label-md font-mono-tabular text-emerald-600 font-semibold">EGP {Number(profits[party.id].profit).toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</span>
+                    <span className="text-label-sm text-muted-steel uppercase tracking-wider flex items-center gap-1 font-medium">
+                      <TrendingUp size={11} /> Profit ({periodLabels[activePeriod] || 'كل الوقت'})
+                    </span>
+                    <span className={`text-label-md font-mono-tabular font-semibold ${
+                      (profits[party.id]?.profit || 0) > 0 ? 'text-emerald-600' : 'text-muted-steel'
+                    }`}>
+                      EGP {Number(profits[party.id]?.profit || 0).toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}
+                    </span>
                   </div>
                 )}
               </div>
