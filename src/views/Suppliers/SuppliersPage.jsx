@@ -5,6 +5,7 @@ import { ActionIcon, Flex, Tooltip, SimpleGrid, Card, Pagination, Select } from 
 import { notifications } from '@mantine/notifications';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
+import { SkeletonCard } from '../../components/Skeleton';
 
 /* ─── Add / Edit Modal ─── */
 function SupplierModal({ isOpen, onClose, supplier, onSaved }) {
@@ -220,6 +221,11 @@ export default function SuppliersView() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
 
+  useEffect(() => {
+    document.title = `${t('common.erbSystem', 'ERB_SYSTEM')} | ${t('suppliers.title', 'الموردين')}`;
+  }, [t]);
+
+
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
   
@@ -306,6 +312,7 @@ export default function SuppliersView() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-steel pointer-events-none" size={18} />
             <input
               type="text"
+              aria-label={t('common.search')}
               placeholder={t('common.search')}
               value={search}
               onChange={e => setSearch(e.target.value)}
@@ -354,9 +361,11 @@ export default function SuppliersView() {
 
       <div className="animate-fade-in-up stagger-3 mt-6">
         {loading ? (
-          <div className="flex justify-center py-20">
-            <Loader2 size={32} className="animate-spin text-accent" />
-          </div>
+          <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="lg">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </SimpleGrid>
         ) : processedSuppliers.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-muted-steel bg-surface-container-lowest rounded-3xl border border-outline-variant/40 border-dashed">
             <p className="text-body-base text-charcoal-ink">{t('suppliers.noSuppliers')}</p>

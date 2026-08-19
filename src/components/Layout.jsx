@@ -5,7 +5,7 @@ import {
   Bell, Menu, X, LogOut, Building2, Globe, Shield, DollarSign,
   ChevronLeft, ChevronRight
 } from 'lucide-react';
-import myLogo from '../assets/my.png';
+import myLogo from '../assets/logo.webp';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { getLogoUrl } from '../utils/url';

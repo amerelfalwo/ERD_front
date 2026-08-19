@@ -239,6 +239,11 @@ export default function InvoicesView() {
   }, []);
 
   useEffect(() => {
+    document.title = `${t('common.erbSystem', 'ERB_SYSTEM')} | ${t('invoices.title', 'الفواتير')}`;
+  }, [t]);
+
+
+  useEffect(() => {
     if (invoiceType !== 'supplier_return' || !selectedParty) {
       setSupplierProducts([]);
       setSupplierStockMap({});

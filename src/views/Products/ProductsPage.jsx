@@ -237,6 +237,11 @@ export default function ProductsView() {
   const LIMIT = 20;
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
+
+  useEffect(() => {
+    document.title = `${t('common.erbSystem', 'ERB_SYSTEM')} | ${t('products.title', 'المنتجات')}`;
+  }, [t]);
+
   const [products, setProducts] = useState([]);
   const [inventory, setInventory] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -327,7 +332,7 @@ export default function ProductsView() {
       <div className="flex flex-col sm:flex-row gap-3 animate-fade-in-up stagger-1">
         <div className="flex-1 relative">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-steel" />
-          <input type="text" value={search} onChange={handleSearchChange} placeholder={t('products.searchProducts')}
+          <input type="text" aria-label={t('products.searchProducts')} value={search} onChange={handleSearchChange} placeholder={t('products.searchProducts')}
             className="w-full pl-9 pr-4 py-2 rounded-xl border border-outline-variant/60 bg-surface-container-lowest text-sm text-charcoal-ink placeholder:text-outline focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all duration-200"
           />
         </div>

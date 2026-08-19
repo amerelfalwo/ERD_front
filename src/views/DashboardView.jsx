@@ -1,16 +1,35 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   TrendingUp, Wallet, AlertTriangle, CreditCard,
   Download, Filter, Package, ArrowUpRight, ArrowDownRight,
   ChevronDown, ChevronUp, DollarSign, TrendingDown, Activity
 } from 'lucide-react';
-import {
-  ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
-} from 'recharts';
 import api from '../services/api';
 import { getNetProfitReport } from '../services/expenseService';
 import { SkeletonCard } from '../components/Skeleton';
+
+// Lazy-loaded chart to keep recharts out of the initial bundle
+const LazyDashboardChart = lazy(() =>
+  import('recharts').then(({ ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend }) => ({
+    default: function DashboardChart({ data, t, CustomTooltip }) {
+      return (
+        <ResponsiveContainer width="100%" height={320}>
+          <ComposedChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-outline-variant)" strokeOpacity={0.35} vertical={false} />
+            <XAxis dataKey="name" tick={{ fontSize: 12, fill: 'var(--color-muted-steel)', fontFamily: 'Satoshi' }} axisLine={false} tickLine={false} dy={10} />
+            <YAxis tick={{ fontSize: 11, fill: 'var(--color-muted-steel)', fontFamily: 'JetBrains Mono' }} axisLine={false} tickLine={false} dx={-10} tickFormatter={(val) => val >= 1000 ? `${(val/1000).toFixed(0)}k` : val} />
+            <Tooltip content={<CustomTooltip />} />
+            <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', fontFamily: 'Satoshi', color: 'var(--color-muted-steel)' }} />
+            <Bar dataKey="sales" name={t('dashboard.sales')} fill="#4F46E5" radius={[4, 4, 0, 0]} maxBarSize={40} />
+            <Bar dataKey="purchases" name={t('dashboard.purchases')} fill="#93C5FD" radius={[4, 4, 0, 0]} maxBarSize={40} />
+            <Line type="monotone" dataKey="profit" name={t('dashboard.profits')} stroke="#4F46E5" strokeWidth={2.5} strokeDasharray="5 5" dot={{ r: 3, fill: '#fff', stroke: '#4F46E5', strokeWidth: 2 }} activeDot={{ r: 5, fill: '#4F46E5', stroke: '#fff', strokeWidth: 2 }} />
+          </ComposedChart>
+        </ResponsiveContainer>
+      );
+    }
+  }))
+);
 
 /* ── KPI Card ── */
 function KPICard({ title, value, icon: Icon, trend, trendValue, accent = false, className = '' }) {
@@ -292,18 +311,13 @@ export default function DashboardView() {
             </div>
           </div>
           <div className="p-6 min-h-[360px] flex-1">
-            <ResponsiveContainer width="100%" height={320}>
-              <ComposedChart data={(analyticsData?.monthly_sales || []).map(m => ({ ...m, profit: Number(m.sales) - Number(m.purchases) }))} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-outline-variant)" strokeOpacity={0.35} vertical={false} />
-                <XAxis dataKey="name" tick={{ fontSize: 12, fill: 'var(--color-muted-steel)', fontFamily: 'Satoshi' }} axisLine={false} tickLine={false} dy={10} />
-                <YAxis tick={{ fontSize: 11, fill: 'var(--color-muted-steel)', fontFamily: 'JetBrains Mono' }} axisLine={false} tickLine={false} dx={-10} tickFormatter={(val) => val >= 1000 ? `${(val/1000).toFixed(0)}k` : val} />
-                <Tooltip content={<CustomTooltip />} />
-                <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', fontFamily: 'Satoshi', color: 'var(--color-muted-steel)' }} />
-                <Bar dataKey="sales" name={t('dashboard.sales')} fill="#4F46E5" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                <Bar dataKey="purchases" name={t('dashboard.purchases')} fill="#93C5FD" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                <Line type="monotone" dataKey="profit" name={t('dashboard.profits')} stroke="#4F46E5" strokeWidth={2.5} strokeDasharray="5 5" dot={{ r: 3, fill: '#fff', stroke: '#4F46E5', strokeWidth: 2 }} activeDot={{ r: 5, fill: '#4F46E5', stroke: '#fff', strokeWidth: 2 }} />
-              </ComposedChart>
-            </ResponsiveContainer>
+            <Suspense fallback={<div className="h-80 animate-shimmer rounded-xl bg-surface-container-low" />}>
+              <LazyDashboardChart
+                data={(analyticsData?.monthly_sales || []).map(m => ({ ...m, profit: Number(m.sales) - Number(m.purchases) }))}
+                t={t}
+                CustomTooltip={CustomTooltip}
+              />
+            </Suspense>
           </div>
         </div>
 

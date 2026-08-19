@@ -99,6 +99,11 @@ export default function ExpensesView() {
     fetchData();
   }, [fetchData]);
 
+  useEffect(() => {
+    document.title = `${t('common.erbSystem', 'ERB_SYSTEM')} | ${t('expenses.title', 'المصروفات')}`;
+  }, [t]);
+
+
   const handleAddExpense = async (e) => {
     e.preventDefault();
     if (!description.trim() || !amount || parseFloat(amount) <= 0 || !expenseDate) return;
