@@ -61,7 +61,7 @@ export default function LoginView() {
             />
             <div className="text-center space-y-1">
               <h1 className="text-2xl font-bold text-charcoal-ink tracking-tight">
-               Hello 👋
+                Hello
               </h1>
               <p className="text-sm text-muted-steel">
                 Login to access the dashboard
