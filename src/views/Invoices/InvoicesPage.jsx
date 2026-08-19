@@ -449,6 +449,8 @@ export default function InvoicesView() {
       if (invoiceType === 'supplier_return') {
         result = await api.createSupplierStockReturn(partyId, { items: payload.items });
         notifications.show({ title: t('common.success', { defaultValue: 'Success' }), message: t('invoices.supplierReturnSuccess'), color: 'green' });
+        setLastInvoice(result);
+        if (result) handleOpenPrintPreview(result);
       } else {
         result = invoiceType === 'sale' ? await api.createSellInvoice(payload) : await api.createPurchaseInvoice(payload);
         setLastInvoice(result);
@@ -773,6 +775,13 @@ export default function InvoicesView() {
                         {(invoiceType === 'supplier_return' ? supplierProducts : products)
                           .filter(p => p.name.trim().toLowerCase().includes(productSearch.trim().toLowerCase()))
                           .filter(p => editingItemId === p.id || !items.some(i => i.product_id === p.id))
+                          .filter(p => {
+                            if (invoiceType === 'supplier_return') {
+                              const supplierQty = supplierStockMap[p.id] != null ? Number(supplierStockMap[p.id]) : Number(p.remaining_stock ?? 0);
+                              return supplierQty > 0;
+                            }
+                            return true;
+                          })
                           .map(p => {
                             const stock = inventoryProductsMap?.[String(p.id)];
                             const stockQty = stock ? stock.batches?.reduce((s, b) => s + Number(b.remaining_quantity || 0), 0) : null;
