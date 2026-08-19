@@ -252,7 +252,9 @@ export default function InvoicesView() {
         setSupplierProducts(list);
         const map = {};
         list.forEach((p) => {
-          map[p.id] = Number(p.supplier_stock ?? p.remaining_stock ?? 0);
+          const suppQty = Number(p.supplier_stock ?? 0);
+          const remQty = Number(p.remaining_stock ?? 0);
+          map[p.id] = Math.min(suppQty, remQty);
         });
         setSupplierStockMap(map);
       })
@@ -450,7 +452,6 @@ export default function InvoicesView() {
         result = await api.createSupplierStockReturn(partyId, { items: payload.items });
         notifications.show({ title: t('common.success', { defaultValue: 'Success' }), message: t('invoices.supplierReturnSuccess'), color: 'green' });
         setLastInvoice(result);
-        if (result) handleOpenPrintPreview(result);
       } else {
         result = invoiceType === 'sale' ? await api.createSellInvoice(payload) : await api.createPurchaseInvoice(payload);
         setLastInvoice(result);
@@ -777,8 +778,10 @@ export default function InvoicesView() {
                           .filter(p => editingItemId === p.id || !items.some(i => i.product_id === p.id))
                           .filter(p => {
                             if (invoiceType === 'supplier_return') {
-                              const supplierQty = supplierStockMap[p.id] != null ? Number(supplierStockMap[p.id]) : Number(p.remaining_stock ?? 0);
-                              return supplierQty > 0;
+                              const suppQty = Number(p.supplier_stock ?? 0);
+                              const remQty = Number(p.remaining_stock ?? 0);
+                              const avail = supplierStockMap[p.id] != null ? Number(supplierStockMap[p.id]) : Math.min(suppQty, remQty);
+                              return avail > 0;
                             }
                             return true;
                           })
