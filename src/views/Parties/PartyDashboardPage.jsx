@@ -865,6 +865,7 @@ export default function PartyDashboard() {
                         image: { type: 'jpeg', quality: 0.98 },
                         html2canvas: { scale: 2, useCORS: true },
                         jsPDF: { unit: 'mm', format: paperSize === 'a5' ? 'a5' : (paperSize === 'receipt' || paperSize === '80mm') ? [80, 297] : 'a4', orientation: 'portrait' },
+                        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
                       }).from(clone).save();
 
                       document.body.removeChild(clonedContainer);
