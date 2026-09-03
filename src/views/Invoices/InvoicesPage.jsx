@@ -158,6 +158,7 @@ export default function InvoicesView() {
   const [bulkInvoicesToPrint, setBulkInvoicesToPrint] = useState([]);
   const [editingInvoice, setEditingInvoice] = useState(null);
   const [invoiceToDelete, setInvoiceToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [invoiceToReturn, setInvoiceToReturn] = useState(null);
   const [activeTab, setActiveTab] = useState('create');
   const [historySearch, setHistorySearch] = useState('');
@@ -210,6 +211,8 @@ export default function InvoicesView() {
   }, [historyPage, historyPageSize, historyTypeFilter, historyStatusFilter, historySearch]);
 
   const handleDeleteInvoice = useCallback(async (invoiceId) => {
+    if (isDeleting) return;
+    setIsDeleting(true);
     try {
       await api.deleteInvoice(invoiceId);
       setInvoiceToDelete(null);
@@ -217,8 +220,10 @@ export default function InvoicesView() {
       api.getInventoryReport().then(setInventory);
     } catch (err) {
       notifications.show({ title: t('common.error', { defaultValue: 'Error' }), message: err.message || t('invoices.deleteInvoiceError', { defaultValue: 'Failed to delete invoice' }), color: 'red' });
+    } finally {
+      setIsDeleting(false);
     }
-  }, [historyPage, historyPageSize, loadHistory]);
+  }, [historyPage, historyPageSize, loadHistory, isDeleting]);
 
   useEffect(() => {
     api.getParties(0, 1000)
@@ -1556,8 +1561,10 @@ export default function InvoicesView() {
                 </button>
                 <button
                   onClick={() => handleDeleteInvoice(invoiceToDelete.id)}
-                  className="px-5 py-2.5 rounded-xl text-label-md bg-error text-white hover:bg-error/90 shadow-sm transition-all cursor-pointer btn-tactile"
+                  disabled={isDeleting}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-label-md bg-error text-white hover:bg-error/90 shadow-sm transition-all cursor-pointer btn-tactile disabled:opacity-50"
                 >
+                  {isDeleting && <Loader2 size={16} className="animate-spin" />}
                   {t('invoices.confirmDelete')}
                 </button>
               </div>

@@ -49,6 +49,7 @@ export default function PartyDashboard() {
   const [editPaymentAmount, setEditPaymentAmount] = useState('');
   const [paymentActionLoading, setPaymentActionLoading] = useState(null);
   const [paymentToDelete, setPaymentToDelete] = useState(null);
+  const [isDeletingInvoice, setIsDeletingInvoice] = useState(false);
   const [productToReturn, setProductToReturn] = useState(null);
 
   const toggleRow = useCallback((id) => {
@@ -157,14 +158,18 @@ export default function PartyDashboard() {
 
 
   const handleDeleteInvoice = useCallback(async (invoiceId) => {
+    if (isDeletingInvoice) return;
+    setIsDeletingInvoice(true);
     try {
       await api.deleteInvoice(invoiceId);
       setInvoiceToDelete(null);
       loadSummary();
     } catch (err) {
       notifications.show({ title: 'Error', message: err?.message || 'Failed to delete invoice', color: 'red' });
+    } finally {
+      setIsDeletingInvoice(false);
     }
-  }, [loadSummary]);
+  }, [loadSummary, isDeletingInvoice]);
 
   const toggleSelect = useCallback((id) => {
     setSelectedIds(prev => {
@@ -993,8 +998,10 @@ export default function PartyDashboard() {
                 </button>
                 <button
                   onClick={() => handleDeleteInvoice(invoiceToDelete.id)}
-                  className="px-5 py-2.5 rounded-xl text-label-md bg-error text-white hover:bg-error/90 shadow-sm transition-all cursor-pointer btn-tactile"
+                  disabled={isDeletingInvoice}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-label-md bg-error text-white hover:bg-error/90 shadow-sm transition-all cursor-pointer btn-tactile disabled:opacity-50"
                 >
+                  {isDeletingInvoice && <Loader2 size={16} className="animate-spin" />}
                   {t('partyDashboard.confirmDelete')}
                 </button>
               </div>
