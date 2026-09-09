@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo, memo, Suspense, lazy } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createPortal } from 'react-dom';
 import {
   ShoppingCart, Plus, Minus, Trash2, Printer, Loader2,
@@ -74,6 +75,11 @@ const InvoiceItemRow = memo(function InvoiceItemRow({ item, products, invoiceTyp
             )}
           </span>
         )}
+        {item.serial_number && (
+          <span className="font-mono text-xs text-indigo-600 font-semibold mt-0.5 block truncate" dir="ltr">
+            SN: {item.serial_number}
+          </span>
+        )}
       </div>
 
       <div className="col-span-3 flex flex-col items-center justify-center">
@@ -122,9 +128,31 @@ export default function InvoicesView() {
     addItem: storeAddItem, updateItem, updateQuantity, removeItem, clearCart,
   } = useInvoiceStore();
 
-  const [parties, setParties] = useState([]);
-  const [products, setProducts] = useState([]);
-  const [inventory, setInventory] = useState(null);
+  const queryClient = useQueryClient();
+
+  const { data: partiesRaw } = useQuery({
+    queryKey: ['parties'],
+    queryFn: () => api.getParties(0, 1000),
+  });
+  const parties = useMemo(() => Array.isArray(partiesRaw) ? partiesRaw : (partiesRaw?.data || partiesRaw?.items || []), [partiesRaw]);
+
+  const { data: productsRaw } = useQuery({
+    queryKey: ['products'],
+    queryFn: () => api.getProducts(0, 1000),
+  });
+  const products = useMemo(() => Array.isArray(productsRaw) ? productsRaw : (productsRaw?.data || productsRaw?.items || []), [productsRaw]);
+
+  const { data: inventory = null } = useQuery({
+    queryKey: ['inventory'],
+    queryFn: () => api.getInventoryReport(),
+  });
+
+  const { data: templatesRaw } = useQuery({
+    queryKey: ['templates'],
+    queryFn: () => api.getTemplates(),
+  });
+  const templates = useMemo(() => Array.isArray(templatesRaw) ? templatesRaw : (templatesRaw?.data || templatesRaw?.items || []), [templatesRaw]);
+
   const [selectedProduct, setSelectedProduct] = useState('');
   const [productSearch, setProductSearch] = useState('');
   const [showProductDropdown, setShowProductDropdown] = useState(false);
@@ -132,12 +160,13 @@ export default function InvoicesView() {
   const [purchasePrice, setPurchasePrice] = useState('');
   const [sellingPrice, setSellingPrice] = useState('');
   const [salePrice, setSalePrice] = useState('');
+  const [hasSerials, setHasSerials] = useState(false);
+  const [serialNumber, setSerialNumber] = useState('');
   const [autoFetchedCost, setAutoFetchedCost] = useState(null);
   const [editingItemId, setEditingItemId] = useState(null);
   const [itemQuantity, setItemQuantity] = useState('1');
   const [submitting, setSubmitting] = useState(false);
   const [lastInvoice, setLastInvoice] = useState(null);
-  const [templates, setTemplates] = useState([]);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [invoiceToPrint, setInvoiceToPrint] = useState(null);
   const [paperSize, setPaperSize] = useState('a4');
@@ -147,18 +176,14 @@ export default function InvoicesView() {
   const [hasDelivery, setHasDelivery] = useState(false);
   const [discountAmount, setDiscountAmount] = useState('');
   const [hasDiscount, setHasDiscount] = useState(false);
-  const [invoiceHistory, setInvoiceHistory] = useState([]);
-  const [historyTotal, setHistoryTotal] = useState(0);
   const [historyPage, setHistoryPage] = useState(1);
   const [historyPageSize, setHistoryPageSize] = useState(20);
-  const [historyLoading, setHistoryLoading] = useState(false);
   const [historyTypeFilter, setHistoryTypeFilter] = useState('all');
   const [historyStatusFilter, setHistoryStatusFilter] = useState('all');
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [bulkInvoicesToPrint, setBulkInvoicesToPrint] = useState([]);
   const [editingInvoice, setEditingInvoice] = useState(null);
   const [invoiceToDelete, setInvoiceToDelete] = useState(null);
-  const [isDeleting, setIsDeleting] = useState(false);
   const [invoiceToReturn, setInvoiceToReturn] = useState(null);
   const [activeTab, setActiveTab] = useState('create');
   const [historySearch, setHistorySearch] = useState('');
@@ -166,8 +191,74 @@ export default function InvoicesView() {
   const [newPartyName, setNewPartyName] = useState('');
   const [newPartyPhone, setNewPartyPhone] = useState('');
   const [newPartyAddress, setNewPartyAddress] = useState('');
-  const [supplierProducts, setSupplierProducts] = useState([]);
-  const [supplierStockMap, setSupplierStockMap] = useState({});
+
+  const { data: supplierSummaryRes } = useQuery({
+    queryKey: ['supplierSummary', selectedParty],
+    queryFn: () => api.getSupplierSummary(selectedParty),
+    enabled: invoiceType === 'supplier_return' && Boolean(selectedParty),
+  });
+
+  const supplierProducts = useMemo(() => {
+    return Array.isArray(supplierSummaryRes?.products) ? supplierSummaryRes.products : [];
+  }, [supplierSummaryRes]);
+
+  const supplierStockMap = useMemo(() => {
+    const map = {};
+    if (supplierProducts.length > 0) {
+      supplierProducts.forEach((p) => {
+        const suppQty = Number(p.supplier_stock ?? 0);
+        const remQty = Number(p.remaining_stock ?? 0);
+        map[p.id] = Math.min(suppQty, remQty);
+      });
+    }
+    return map;
+  }, [supplierProducts]);
+
+  const { data: historyResponse, isLoading: historyLoading } = useQuery({
+    queryKey: ['invoices', { page: historyPage, pageSize: historyPageSize, type: historyTypeFilter, status: historyStatusFilter, search: historySearch }],
+    queryFn: () => api.getInvoices({
+      skip: (historyPage - 1) * historyPageSize,
+      limit: historyPageSize,
+      invoiceType: historyTypeFilter !== 'all' ? historyTypeFilter : undefined,
+      status: historyStatusFilter !== 'all' ? historyStatusFilter : undefined,
+      search: historySearch.trim() || undefined,
+    }),
+    enabled: activeTab === 'history',
+  });
+
+  const invoiceHistory = useMemo(() => {
+    if (!historyResponse) return [];
+    return Array.isArray(historyResponse) ? historyResponse : (historyResponse?.data || historyResponse?.items || []);
+  }, [historyResponse]);
+
+  const historyTotal = useMemo(() => {
+    if (!historyResponse) return 0;
+    return Array.isArray(historyResponse) ? historyResponse.length : Number(historyResponse?.total ?? 0);
+  }, [historyResponse]);
+
+  const invalidateInvoiceQueries = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['invoices'] });
+    queryClient.invalidateQueries({ queryKey: ['products'] });
+    queryClient.invalidateQueries({ queryKey: ['inventory'] });
+    queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    queryClient.invalidateQueries({ queryKey: ['parties'] });
+  }, [queryClient]);
+
+  const deleteMutation = useMutation({
+    mutationFn: (invoiceId) => api.deleteInvoice(invoiceId),
+    onSuccess: () => {
+      setInvoiceToDelete(null);
+      invalidateInvoiceQueries();
+    },
+    onError: (err) => {
+      notifications.show({ title: t('common.error', { defaultValue: 'Error' }), message: err?.message || t('invoices.deleteInvoiceError', { defaultValue: 'Failed to delete invoice' }), color: 'red' });
+    }
+  });
+  const isDeleting = deleteMutation.isPending;
+
+  const handleDeleteInvoice = useCallback((invoiceId) => {
+    deleteMutation.mutate(invoiceId);
+  }, [deleteMutation]);
 
   const inventoryProductsMap = useMemo(() => {
     const map = {};
@@ -185,104 +276,9 @@ export default function InvoicesView() {
   const taxNumber = user?.tenant?.tax_number || null;
   const [downloadingPdf, setDownloadingPdf] = useState(false);
 
-  const loadHistory = useCallback(async (page = historyPage, pageSize = historyPageSize) => {
-    setHistoryLoading(true);
-    try {
-      const skip = (page - 1) * pageSize;
-      const response = await api.getInvoices({
-        skip,
-        limit: pageSize,
-        invoiceType: historyTypeFilter !== 'all' ? historyTypeFilter : undefined,
-        status: historyStatusFilter !== 'all' ? historyStatusFilter : undefined,
-        search: historySearch.trim() || undefined,
-      });
-      const list = Array.isArray(response) ? response : (response?.data || response?.items || []);
-      const total = Array.isArray(response) ? list.length : Number(response?.total ?? list.length);
-      setInvoiceHistory(list);
-      setHistoryTotal(total);
-      setSelectedIds(new Set());
-    } catch (err) {
-      notifications.show({ title: t('common.error', { defaultValue: 'Error' }), message: err?.message || t('invoices.fetchHistoryError', { defaultValue: 'Failed to load invoice history' }), color: 'red' });
-      setInvoiceHistory([]);
-      setHistoryTotal(0);
-    } finally {
-      setHistoryLoading(false);
-    }
-  }, [historyPage, historyPageSize, historyTypeFilter, historyStatusFilter, historySearch]);
-
-  const handleDeleteInvoice = useCallback(async (invoiceId) => {
-    if (isDeleting) return;
-    setIsDeleting(true);
-    try {
-      await api.deleteInvoice(invoiceId);
-      setInvoiceToDelete(null);
-      loadHistory(historyPage, historyPageSize);
-      api.getInventoryReport().then(setInventory);
-    } catch (err) {
-      notifications.show({ title: t('common.error', { defaultValue: 'Error' }), message: err.message || t('invoices.deleteInvoiceError', { defaultValue: 'Failed to delete invoice' }), color: 'red' });
-    } finally {
-      setIsDeleting(false);
-    }
-  }, [historyPage, historyPageSize, loadHistory, isDeleting]);
-
-  useEffect(() => {
-    api.getParties(0, 1000)
-      .then((res) => setParties(Array.isArray(res) ? res : (res?.data || res?.items || [])))
-      .catch((err) => console.error('Failed to load parties:', err));
-
-    api.getProducts(0, 1000)
-      .then((res) => setProducts(Array.isArray(res) ? res : (res?.data || res?.items || [])))
-      .catch((err) => console.error('Failed to load products:', err));
-
-    api.getInventoryReport()
-      .then((res) => setInventory(res || null))
-      .catch((err) => console.error('Failed to load inventory report:', err));
-
-    api.getTemplates()
-      .then((res) => setTemplates(Array.isArray(res) ? res : (res?.data || res?.items || [])))
-      .catch((err) => console.error('Failed to load templates:', err));
-  }, []);
-
   useEffect(() => {
     document.title = `${t('common.erbSystem', 'ERB_SYSTEM')} | ${t('invoices.title', 'الفواتير')}`;
   }, [t]);
-
-
-  useEffect(() => {
-    if (invoiceType !== 'supplier_return' || !selectedParty) {
-      setSupplierProducts([]);
-      setSupplierStockMap({});
-      return;
-    }
-    let canceled = false;
-    api.getSupplierSummary(selectedParty)
-      .then((res) => {
-        if (canceled) return;
-        const list = Array.isArray(res?.products) ? res.products : [];
-        setSupplierProducts(list);
-        const map = {};
-        list.forEach((p) => {
-          const suppQty = Number(p.supplier_stock ?? 0);
-          const remQty = Number(p.remaining_stock ?? 0);
-          map[p.id] = Math.min(suppQty, remQty);
-        });
-        setSupplierStockMap(map);
-      })
-      .catch((err) => {
-        notifications.show({ title: t('common.error', { defaultValue: 'Error' }), message: err?.message || t('invoices.loadSupplierDataError', { defaultValue: 'Failed to load supplier data' }), color: 'red' });
-        if (!canceled) {
-          setSupplierProducts([]);
-          setSupplierStockMap({});
-        }
-      });
-    return () => { canceled = true; };
-  }, [invoiceType, selectedParty]);
-
-  useEffect(() => {
-    if (activeTab === 'history') {
-      loadHistory(historyPage, historyPageSize);
-    }
-  }, [activeTab, historyPage, historyPageSize, historyTypeFilter, historyStatusFilter, historySearch, loadHistory]);
 
   const filteredParties = useMemo(() => {
     return parties.filter((p) => {
@@ -343,6 +339,7 @@ export default function InvoicesView() {
         const parsedSalePrice = parseFloat(salePrice);
         updates.sale_price = !isNaN(parsedSalePrice) ? parsedSalePrice : undefined;
         updates.purchase_price = autoFetchedCost != null ? autoFetchedCost : undefined;
+        updates.serial_number = (hasSerials && serialNumber.trim()) ? serialNumber.trim() : undefined;
       }
       updateItem(editingItemId, updates);
       setEditingItemId(null);
@@ -356,6 +353,9 @@ export default function InvoicesView() {
         const parsedSalePrice = parseFloat(salePrice);
         newItem.sale_price = !isNaN(parsedSalePrice) ? parsedSalePrice : undefined;
         newItem.purchase_price = autoFetchedCost != null ? autoFetchedCost : undefined;
+        if (hasSerials && serialNumber.trim()) {
+          newItem.serial_number = serialNumber.trim();
+        }
       }
       storeAddItem(newItem);
     }
@@ -364,9 +364,10 @@ export default function InvoicesView() {
     setPurchasePrice('');
     setSellingPrice('');
     setSalePrice('');
+    setSerialNumber('');
     setItemQuantity('1');
     setAutoFetchedCost(null);
-  }, [selectedProduct, invoiceType, purchasePrice, sellingPrice, salePrice, itemQuantity, autoFetchedCost, storeAddItem, updateItem, editingItemId, selectedAvailableStock]);
+  }, [selectedProduct, invoiceType, purchasePrice, sellingPrice, salePrice, itemQuantity, autoFetchedCost, storeAddItem, updateItem, editingItemId, selectedAvailableStock, hasSerials, serialNumber]);
 
   const handleEditItem = useCallback((item) => {
     const prod = products.find(p => p.id === item.product_id);
@@ -381,6 +382,12 @@ export default function InvoicesView() {
     if (invoiceType === 'sale') {
       setSalePrice(String(item.sale_price || ''));
       setAutoFetchedCost(item.purchase_price != null ? Number(item.purchase_price) : null);
+      if (item.serial_number) {
+        setHasSerials(true);
+        setSerialNumber(item.serial_number);
+      } else {
+        setSerialNumber('');
+      }
     }
   }, [products, invoiceType]);
 
@@ -390,7 +397,7 @@ export default function InvoicesView() {
     setCreatingProduct(true);
     try {
       const newProd = await api.createProduct({ name: productSearch.trim() });
-      setProducts(prev => [...prev, newProd]);
+      queryClient.invalidateQueries({ queryKey: ['products'] });
       setSelectedProduct(newProd.id);
       setProductSearch(newProd.name);
       setShowProductDropdown(false);
@@ -399,7 +406,7 @@ export default function InvoicesView() {
     } finally {
       setCreatingProduct(false);
     }
-  }, [productSearch]);
+  }, [productSearch, queryClient, t]);
 
   const handleSubmit = useCallback(async () => {
     if (items.length === 0) return;
@@ -419,7 +426,7 @@ export default function InvoicesView() {
           address: newPartyAddress.trim() || null,
         });
         partyId = newParty.id;
-        setParties(prev => [...prev, newParty]);
+        queryClient.invalidateQueries({ queryKey: ['parties'] });
         setSelectedParty(String(newParty.id));
         setIsNewParty(false);
         setNewPartyName('');
@@ -454,6 +461,7 @@ export default function InvoicesView() {
             quantity: i.quantity,
             ...(i.sale_price != null ? { sell_price: i.sale_price } : {}),
             ...(i.purchase_price != null ? { purchase_price: i.purchase_price } : {}),
+            ...(i.serial_number ? { serial_number: i.serial_number } : {}),
           };
         }),
       };
@@ -474,12 +482,13 @@ export default function InvoicesView() {
       setDiscountAmount('');
       setHasDiscount(false);
       setSalePrice('');
+      setSerialNumber('');
+      setHasSerials(false);
       setAutoFetchedCost(null);
-      loadHistory(historyPage, historyPageSize);
-      api.getInventoryReport().then(setInventory);
+      invalidateInvoiceQueries();
     } catch (err) { notifications.show({ title: t('common.error', { defaultValue: 'Error' }), message: err?.message || t('common.error', { defaultValue: 'Error' }), color: 'red' }); }
     finally { setSubmitting(false); }
-  }, [items, selectedParty, isNewParty, newPartyName, newPartyPhone, newPartyAddress, invoiceType, t, amountPaid, hasDelivery, deliveryFee, hasDiscount, discountAmount, clearCart, loadHistory, historyPage, historyPageSize]);
+  }, [items, selectedParty, isNewParty, newPartyName, newPartyPhone, newPartyAddress, invoiceType, t, amountPaid, hasDelivery, deliveryFee, hasDiscount, discountAmount, clearCart, invalidateInvoiceQueries, queryClient]);
 
   const handleOpenPrintPreview = useCallback((invoiceData) => {
     setInvoiceToPrint(invoiceData);
@@ -846,29 +855,63 @@ export default function InvoicesView() {
                     </div>
                   )}
                   {invoiceType === 'sale' && (
-                    <div className="flex flex-col gap-1">
-                      <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">{t('invoices.salePrice')}</label>
-                      <input
-                        type="number"
-                        value={salePrice}
-                        onChange={(e) => setSalePrice(e.target.value)}
-                        placeholder="0"
-                        className={`sm:w-32 ${inputClass}`}
-                      />
-                      {autoFetchedCost != null && (
-                        <span className="text-[10px] text-muted-steel px-1">
-                          {t('invoices.cost')}: <span className="font-mono font-semibold text-charcoal-ink">{autoFetchedCost.toLocaleString()}</span>
-                          {salePrice && parseFloat(salePrice) > 0 && (
-                            <span className={`ml-2 font-bold ${
-                              parseFloat(salePrice) - autoFetchedCost > 0 ? 'text-emerald-600' : 'text-red-500'
-                            }`}>
-                              {parseFloat(salePrice) - autoFetchedCost > 0 ? '+' : ''}
-                              {(parseFloat(salePrice) - autoFetchedCost).toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                            </span>
-                          )}
-                        </span>
-                      )}
-                    </div>
+                    <>
+                      <div className="flex flex-col gap-1">
+                        <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">{t('invoices.salePrice')}</label>
+                        <input
+                          type="number"
+                          value={salePrice}
+                          onChange={(e) => setSalePrice(e.target.value)}
+                          placeholder="0"
+                          className={`sm:w-28 ${inputClass}`}
+                        />
+                        {autoFetchedCost != null && (
+                          <span className="text-[10px] text-muted-steel px-1">
+                            {t('invoices.cost')}: <span className="font-mono font-semibold text-charcoal-ink">{autoFetchedCost.toLocaleString()}</span>
+                            {salePrice && parseFloat(salePrice) > 0 && (
+                              <span className={`ml-2 font-bold ${
+                                parseFloat(salePrice) - autoFetchedCost > 0 ? 'text-emerald-600' : 'text-red-500'
+                              }`}>
+                                {parseFloat(salePrice) - autoFetchedCost > 0 ? '+' : ''}
+                                {(parseFloat(salePrice) - autoFetchedCost).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                              </span>
+                            )}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Serial Number Toggle & Field */}
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center justify-between mb-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setHasSerials(!hasSerials);
+                              if (hasSerials) setSerialNumber('');
+                            }}
+                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-label-sm font-semibold transition-all cursor-pointer btn-tactile ${
+                              hasSerials
+                                ? 'bg-indigo-600 text-white shadow-xs'
+                                : 'bg-surface-container-low text-muted-steel hover:text-charcoal-ink border border-outline-variant/50'
+                            }`}
+                            title={t('invoices.toggleSerials', { defaultValue: 'تفعيل/إلغاء إدخال السيريال' })}
+                          >
+                            <Tag size={13} />
+                            {hasSerials ? t('invoices.serialActive', { defaultValue: 'السيريال مفعل' }) : t('invoices.addSerialBtn', { defaultValue: 'إدخال السيريال' })}
+                          </button>
+                        </div>
+                        {hasSerials && (
+                          <input
+                            type="text"
+                            value={serialNumber}
+                            onChange={(e) => setSerialNumber(e.target.value)}
+                            placeholder={t('invoices.enterSerialPlaceholder', { defaultValue: 'رقم السيريال...' })}
+                            className={`sm:w-36 ${inputClass}`}
+                            autoFocus
+                          />
+                        )}
+                      </div>
+                    </>
                   )}
                   <div className="flex flex-col gap-1">
                     <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">{t('invoices.quantity')}</label>
@@ -1533,8 +1576,7 @@ export default function InvoicesView() {
             onClose={() => setEditingInvoice(null)}
             onSaved={() => {
               setEditingInvoice(null);
-              loadHistory();
-              api.getInventoryReport().then(setInventory);
+              invalidateInvoiceQueries();
             }}
           />
         </Suspense>
@@ -1580,8 +1622,7 @@ export default function InvoicesView() {
             onClose={() => setInvoiceToReturn(null)}
             onSaved={() => {
               setInvoiceToReturn(null);
-              loadHistory(historyPage, historyPageSize);
-              api.getInventoryReport().then(setInventory);
+              invalidateInvoiceQueries();
             }}
           />
         </Suspense>

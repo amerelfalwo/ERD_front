@@ -77,6 +77,7 @@ export function formatInvoiceData(rawInvoice) {
       id: item.id,
       name: item.product_name || item.product?.name || item.name || 'N/A',
       sku: item.product_sku || item.product?.sku || '',
+      serial_number: item.serial_number || item.serialNumber || item.serial || item.sn || item.serials || item.serial_numbers || '',
       qty,
       price,
       total: Number((qty * price).toFixed(2)),

@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useQuery } from '@tanstack/react-query';
 import {
   TrendingUp, TrendingDown, Wallet, CreditCard, ShoppingCart,
   Download, Filter, RefreshCw, AlertTriangle, FileText, Activity, Package, Users
@@ -17,9 +18,6 @@ const ProfitTrendChart = React.lazy(() => import('./components/ProfitTrendChart'
 
 export default function DashboardPage() {
   const { t } = useTranslation();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [data, setData] = useState(null);
 
   // Quick Period & Date Filters
   const [activeFilter, setActiveFilter] = useState('month'); // today | week | month | year | custom
@@ -52,29 +50,23 @@ export default function DashboardPage() {
     }
   };
 
-  const fetchDashboard = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await getDashboardData(dateFrom || null, dateTo || null);
-      setData(res);
-    } catch (err) {
-      console.error('Failed to load dashboard data:', err);
-      setError(err.response?.data?.detail || t('dashboard.fetchError', 'فشل في تحميل بيانات لوحة التحكم'));
-    } finally {
-      setLoading(false);
-    }
-  }, [dateFrom, dateTo, t]);
-
   useEffect(() => {
     applyPeriodFilter('month');
   }, []);
 
-  useEffect(() => {
-    if (activeFilter !== 'custom') {
-      fetchDashboard();
-    }
-  }, [activeFilter, fetchDashboard]);
+  const {
+    data,
+    isLoading: loading,
+    isFetching,
+    error: queryError,
+    refetch: fetchDashboard,
+  } = useQuery({
+    queryKey: ['dashboard', { dateFrom, dateTo }],
+    queryFn: () => getDashboardData(dateFrom || null, dateTo || null),
+    enabled: activeFilter !== 'custom' || (Boolean(dateFrom) && Boolean(dateTo)),
+  });
+
+  const error = queryError ? (queryError.response?.data?.detail || t('dashboard.fetchError', 'فشل في تحميل بيانات لوحة التحكم')) : null;
 
   const exportCsv = () => {
     if (!data) return;

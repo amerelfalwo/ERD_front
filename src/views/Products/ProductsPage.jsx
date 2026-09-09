@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, Package, ChevronDown, ChevronUp, X, Loader2, Trash2, Pencil } from 'lucide-react';
 import { Pagination } from '@mantine/core';
 import api from '../../services/api';
@@ -238,59 +239,65 @@ export default function ProductsView() {
   const { t } = useTranslation();
   const LIMIT = 20;
   const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
 
   useEffect(() => {
     document.title = `${t('common.erbSystem', 'ERB_SYSTEM')} | ${t('products.title', 'المنتجات')}`;
   }, [t]);
 
-  const [products, setProducts] = useState([]);
-  const [inventory, setInventory] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [stockFilter, setStockFilter] = useState('all');
   const [sortBy, setSortBy] = useState('name_asc');
   const [showModal, setShowModal] = useState(false);
   const [productToDelete, setProductToDelete] = useState(null);
   const [productToEdit, setProductToEdit] = useState(null);
-  const [deletingProduct, setDeletingProduct] = useState(false);
 
-  const fetchProducts = useCallback(async () => {
-    setLoading(true);
-    try {
-      const skip = (page - 1) * LIMIT;
-      const [prods, inv] = await Promise.all([
-        api.getProducts(skip, LIMIT, search),
-        api.getInventoryReport()
-      ]);
-      const list = Array.isArray(prods) ? prods : (prods?.data || []);
-      setProducts(list);
-      setInventory(inv);
-      setHasMore(list.length === LIMIT);
-    } catch (err) { console.error(err); }
-    finally { setLoading(false); }
-  }, [page, search]);
+  const skip = (page - 1) * LIMIT;
 
-  useEffect(() => { fetchProducts(); }, [fetchProducts]);
+  const { data: prodsRaw, isLoading: loadingProducts, refetch: fetchProducts } = useQuery({
+    queryKey: ['products', { page, limit: LIMIT, search, stockFilter }],
+    queryFn: () => api.getProducts(skip, LIMIT, search, stockFilter),
+  });
+
+  const { data: inventory } = useQuery({
+    queryKey: ['inventory'],
+    queryFn: () => api.getInventoryReport(),
+  });
+
+  const products = useMemo(() => Array.isArray(prodsRaw) ? prodsRaw : (prodsRaw?.data || []), [prodsRaw]);
+  const hasMore = products.length === LIMIT;
+  const loading = loadingProducts;
 
   const handleSearchChange = (e) => {
     setSearch(e.target.value);
     setPage(1);
   };
 
-  async function handleDeleteProduct() {
-    if (!productToDelete) return;
-    setDeletingProduct(true);
-    try {
-      await api.deleteProduct(productToDelete.id);
+  const deleteMutation = useMutation({
+    mutationFn: (id) => api.deleteProduct(id),
+    onSuccess: () => {
       setProductToDelete(null);
-      fetchProducts();
-    } catch (err) {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    },
+    onError: (err) => {
       notifications.show({ title: t('common.error'), message: err?.message || t('products.failedDelete'), color: 'red' });
-    } finally {
-      setDeletingProduct(false);
-    }
+    },
+  });
+
+  const deletingProduct = deleteMutation.isPending;
+
+  function handleDeleteProduct() {
+    if (!productToDelete) return;
+    deleteMutation.mutate(productToDelete.id);
   }
+
+  const handleCreatedOrUpdated = () => {
+    queryClient.invalidateQueries({ queryKey: ['products'] });
+    queryClient.invalidateQueries({ queryKey: ['inventory'] });
+    queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+  };
 
   const inventoryMap = useMemo(() => {
     const map = {};
@@ -299,22 +306,12 @@ export default function ProductsView() {
   }, [inventory]);
 
   const filteredProducts = useMemo(() => {
-    return products
-      .filter((p) => {
-        if (stockFilter !== 'all') {
-          const invProd = inventoryMap[p.id];
-          const totalQty = invProd?.batches?.reduce((sum, b) => sum + parseFloat(b.remaining_quantity || 0), 0) || 0;
-          if (stockFilter === 'in_stock' && totalQty <= 0) return false;
-          if (stockFilter === 'out_of_stock' && totalQty > 0) return false;
-        }
-        return true;
-      })
-      .sort((a, b) => {
-        if (sortBy === 'name_asc') return a.name.localeCompare(b.name);
-        if (sortBy === 'name_desc') return b.name.localeCompare(a.name);
-        return 0;
-      });
-  }, [products, stockFilter, sortBy, inventoryMap]);
+    return [...products].sort((a, b) => {
+      if (sortBy === 'name_asc') return a.name.localeCompare(b.name);
+      if (sortBy === 'name_desc') return b.name.localeCompare(a.name);
+      return 0;
+    });
+  }, [products, sortBy]);
 
   const selectClass = "px-4 py-2 rounded-xl border border-outline-variant/60 bg-surface-container-lowest text-sm text-muted-steel focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all duration-200 appearance-none min-w-[120px] cursor-pointer";
 
@@ -339,7 +336,7 @@ export default function ProductsView() {
           />
         </div>
         <div className="flex gap-2">
-          <select aria-label={t('products.inStock')} value={stockFilter} onChange={(e) => setStockFilter(e.target.value)} className={selectClass}>
+          <select aria-label={t('products.inStock')} value={stockFilter} onChange={(e) => { setStockFilter(e.target.value); setPage(1); }} className={selectClass}>
             <option value="all">{t('common.all')}</option>
             <option value="in_stock">{t('products.inStock')}</option>
             <option value="out_of_stock">{t('products.outOfStock')}</option>

@@ -115,6 +115,20 @@ export const InvoiceDocument = ({
     });
   };
 
+  // Extract serial numbers if any items possess them
+  const serialItems = items
+    .map((item) => {
+      const rawSn = item.serial_number ?? item.serialNumber ?? item.serial ?? item.sn ?? item.serials ?? item.serial_numbers;
+      if (!rawSn) return null;
+      const snText = Array.isArray(rawSn) ? rawSn.join(', ') : String(rawSn).trim();
+      if (!snText) return null;
+      return {
+        name: item.name || item.product_name || 'Item',
+        serial: snText,
+      };
+    })
+    .filter(Boolean);
+
   const handlePrint = () => {
     window.print();
   };
@@ -260,6 +274,22 @@ export const InvoiceDocument = ({
           </footer>
         );
       })()}
+
+      {/* Serial Numbers Section (The ABSOLUTE LAST element in the invoice) */}
+      {serialItems.length > 0 && (
+        <div className={styles.serialSection}>
+          <div className={styles.serialHeader}>{t('invoice.serial_numbers', 'Serial Numbers')}</div>
+          <div className={styles.serialList}>
+            {serialItems.map((s, idx) => (
+              <div key={idx} className={styles.serialItem}>
+                <span className={styles.serialProductName}>{s.name}</span>
+                <span className={styles.serialSeparator}> - </span>
+                <span className={styles.serialValue}>{s.serial}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -426,7 +426,76 @@
   font-size: 0.78em;
 }
 
-.sizeReceipt .websiteLink {
+/* ── Serial Numbers Section (Absolute bottom) ───────────────────── */
+.serialSection {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed #cccccc;
+  text-align: center;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.serialHeader {
+  font-size: 0.85em;
+  font-weight: 800;
+  color: #000000;
+  margin-bottom: 0.35rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.serialList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  align-items: center;
+}
+
+.serialItem {
+  font-size: 0.82em;
+  color: #1a1a1a;
+  direction: ltr;
+}
+
+.serialProductName {
+  font-weight: 700;
+}
+
+.serialSeparator {
+  color: #666666;
+  margin: 0 0.2rem;
+}
+
+.serialValue {
+  font-family: monospace, sans-serif;
+  font-weight: 600;
+  color: #000000;
+}
+
+.sizeA5 .serialSection {
+  margin-top: 0.75rem;
+  padding-top: 0.5rem;
+}
+
+.sizeA5 .serialHeader {
+  font-size: 0.78em;
+}
+
+.sizeA5 .serialItem {
+  font-size: 0.75em;
+}
+
+.sizeReceipt .serialSection {
+  margin-top: 0.5rem;
+  padding-top: 0.4rem;
+}
+
+.sizeReceipt .serialHeader {
+  font-size: 0.72em;
+}
+
+.sizeReceipt .serialItem {
   font-size: 0.7em;
 }
 

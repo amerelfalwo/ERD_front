@@ -295,11 +295,26 @@ export default function SuppliersView() {
     return result;
   }, [suppliers, search, sort]);
 
-  const { totalSuppliers, totalPayables, accountsWithBalance } = useMemo(() => {
+  const { totalSuppliers, totalPayables, totalCredits, accountsWithBalance } = useMemo(() => {
+    let payables = 0;
+    let credits = 0;
+    let countWithBalance = 0;
+    suppliers.forEach(s => {
+      const bal = Number(s.calculated_balance || 0);
+      if (Math.abs(bal) > 0.001) {
+        countWithBalance++;
+        if (bal > 0) {
+          payables += bal;
+        } else {
+          credits += Math.abs(bal);
+        }
+      }
+    });
     return {
       totalSuppliers: suppliers.length,
-      totalPayables: suppliers.reduce((sum, s) => sum + (Number(s.calculated_balance) > 0 ? Number(s.calculated_balance) : 0), 0),
-      accountsWithBalance: suppliers.filter(s => Number(s.calculated_balance || 0) > 0).length
+      totalPayables: payables,
+      totalCredits: credits,
+      accountsWithBalance: countWithBalance
     };
   }, [suppliers]);
 
@@ -350,9 +365,16 @@ export default function SuppliersView() {
           <p className="text-label-sm text-muted-steel uppercase tracking-wider mb-1">{t('suppliers.totalSuppliers')}</p>
           <p className="text-3xl font-semibold text-charcoal-ink">{totalSuppliers}</p>
         </div>
-        <div className="bg-surface-container-lowest p-5 rounded-2xl border border-outline-variant/50 shadow-sm flex flex-col">
-          <p className="text-label-sm text-muted-steel uppercase tracking-wider mb-1">{t('suppliers.totalPayables')}</p>
-          <p className="text-3xl font-semibold text-charcoal-ink">{totalPayables.toLocaleString()} {t('common.currency')}</p>
+        <div className="bg-surface-container-lowest p-5 rounded-2xl border border-outline-variant/50 shadow-sm flex flex-col justify-between">
+          <div>
+            <p className="text-label-sm text-muted-steel uppercase tracking-wider mb-1">{t('suppliers.totalPayables')}</p>
+            <p className="text-3xl font-semibold text-charcoal-ink">{totalPayables.toLocaleString(undefined, { minimumFractionDigits: 2 })} {t('common.currency')}</p>
+          </div>
+          {totalCredits > 0 && (
+            <p className="text-xs text-emerald-600 font-medium mt-1">
+              (لصالحنا: EGP {totalCredits.toLocaleString(undefined, { minimumFractionDigits: 2 })})
+            </p>
+          )}
         </div>
         <div className="bg-surface-container-lowest p-5 rounded-2xl border border-outline-variant/50 shadow-sm flex flex-col">
           <p className="text-label-sm text-muted-steel uppercase tracking-wider mb-1">{t('suppliers.accountsWithBalance')}</p>

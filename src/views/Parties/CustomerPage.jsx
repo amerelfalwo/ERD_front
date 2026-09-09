@@ -311,11 +311,26 @@ export default function CustomersView() {
     return result;
   }, [customers, search, sort]);
 
-  const { totalCustomers, totalReceivables, overdueAccounts } = useMemo(() => {
+  const { totalCustomers, totalReceivables, customerCredits, overdueAccounts } = useMemo(() => {
+    let receivables = 0;
+    let credits = 0;
+    let countWithBalance = 0;
+    customers.forEach(c => {
+      const bal = Number(c.calculated_balance || 0);
+      if (Math.abs(bal) > 0.001) {
+        countWithBalance++;
+        if (bal > 0) {
+          receivables += bal;
+        } else {
+          credits += Math.abs(bal);
+        }
+      }
+    });
     return {
       totalCustomers: customers.length,
-      totalReceivables: customers.reduce((sum, c) => sum + (Number(c.calculated_balance) > 0 ? Number(c.calculated_balance) : 0), 0),
-      overdueAccounts: customers.filter(c => Number(c.calculated_balance || 0) > 0).length
+      totalReceivables: receivables,
+      customerCredits: credits,
+      overdueAccounts: countWithBalance
     };
   }, [customers]);
 
