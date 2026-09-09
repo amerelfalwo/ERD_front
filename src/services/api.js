@@ -208,6 +208,40 @@ export const api = {
   createPurchaseInvoice: (data) => request('/invoices/purchase', { method: 'POST', body: JSON.stringify(data) }),
   createSellInvoice: (data) => request('/invoices/sell', { method: 'POST', body: JSON.stringify(data) }),
   getInvoice: (invoiceId) => request(`/invoices/${invoiceId}`),
+  downloadInvoicePdf: async (invoiceId, fallbackFileName) => {
+    const url = buildUrl(`/invoices/${invoiceId}/pdf`);
+    const token = localStorage.getItem('access_token');
+    const headers = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    const response = await fetch(url, { headers });
+    if (!response.ok) {
+      throw new Error(`Failed to download PDF: ${response.status}`);
+    }
+    let fileName = fallbackFileName;
+    const contentDisposition = response.headers.get('Content-Disposition');
+    if (contentDisposition) {
+      const matchUtf8 = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+      if (matchUtf8 && matchUtf8[1]) {
+        fileName = decodeURIComponent(matchUtf8[1]);
+      } else {
+        const matchStandard = contentDisposition.match(/filename="?([^";]+)"?/i);
+        if (matchStandard && matchStandard[1]) {
+          fileName = matchStandard[1];
+        }
+      }
+    }
+    const blob = await response.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = fileName || `Invoice-${invoiceId}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(blobUrl);
+  },
   updateInvoice: (invoiceId, data) => request(`/invoices/${invoiceId}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteInvoice: (invoiceId) => request(`/invoices/${invoiceId}`, { method: 'DELETE' }),
   processReturn: (invoiceId, data) => request(`/invoices/${invoiceId}/return`, { method: 'POST', body: JSON.stringify(data) }),

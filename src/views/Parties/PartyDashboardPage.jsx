@@ -840,46 +840,17 @@ export default function PartyDashboard() {
                 <button onClick={handleClosePrint} className="flex items-center gap-2 px-4 py-2 rounded-xl text-label-md text-muted-steel border border-outline-variant/60 hover:bg-surface-container-low transition-all cursor-pointer btn-tactile"><X size={16} /> {t('common.cancel', 'Cancel')}</button>
                 <button
                   onClick={async () => {
-                    const el = invoicePrintRef.current?.querySelector('.invoice-print-area') || invoicePrintRef.current;
-                    if (!el) return;
+                    if (!invoiceToPrint?.id) return;
                     setDownloadingPdf(true);
-                    let clonedContainer;
                     try {
-                      clonedContainer = document.createElement('div');
-                      clonedContainer.innerHTML = el.outerHTML;
-                      const clone = clonedContainer.firstElementChild;
-                      document.body.appendChild(clonedContainer);
-                      
-                      clonedContainer.style.position = 'absolute';
-                      clonedContainer.style.left = '0';
-                      clonedContainer.style.top = '0';
-                      clonedContainer.style.width = (paperSize === 'a5' ? 559 : (paperSize === 'receipt' || paperSize === '80mm') ? 302 : 794) + 'px';
-                      clonedContainer.style.zIndex = '-9999';
-                      clonedContainer.style.opacity = '0';
-                      clonedContainer.style.pointerEvents = 'none';
-
                       const partyNameForPdf = party?.name || invoiceToPrint?.party_name || 'Customer';
                       const rawDate = invoiceToPrint?.created_at || invoiceToPrint?.issue_date || invoiceToPrint?.date;
                       const pdfFileName = generatePdfFileName(partyNameForPdf, rawDate, invoiceToPrint?.invoice_type || invoiceToPrint?.invoiceType);
 
-                      const html2pdfModule = await import('html2pdf.js');
-                      const html2pdf = html2pdfModule.default || html2pdfModule;
-                      await html2pdf().set({
-                        margin: [5, 0, 5, 0],
-                        filename: pdfFileName,
-                        image: { type: 'jpeg', quality: 0.98 },
-                        html2canvas: { scale: 2, useCORS: true },
-                        jsPDF: { unit: 'mm', format: paperSize === 'a5' ? 'a5' : (paperSize === 'receipt' || paperSize === '80mm') ? [80, 297] : 'a4', orientation: 'portrait' },
-                        pagebreak: { mode: ['css', 'legacy'] },
-                      }).from(clone).save();
-
-                      document.body.removeChild(clonedContainer);
+                      await api.downloadInvoicePdf(invoiceToPrint.id, pdfFileName);
                     } catch (err) {
                       console.error('PDF error:', err);
                       notifications.show({ title: 'Error', message: 'Error downloading PDF. Falling back to print dialog.', color: 'red' });
-                      if (clonedContainer && document.body.contains(clonedContainer)) {
-                        document.body.removeChild(clonedContainer);
-                      }
                       try {
                         window.print();
                       } catch (e) {
