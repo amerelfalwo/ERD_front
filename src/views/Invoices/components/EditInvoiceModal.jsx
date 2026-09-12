@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, Plus, Trash2, Save, Loader2, CreditCard, AlertCircle, CheckCircle, Package, Printer } from 'lucide-react';
 import api from '../../../services/api';
@@ -15,14 +15,28 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
   const [addingPayment, setAddingPayment] = useState(false);
   const [activeTab, setActiveTab] = useState('items');
   const [feedback, setFeedback] = useState(null);
+  // Track whether items were loaded for this invoice ID (avoid resetting on onSaved updates)
+  const loadedInvoiceIdRef = useRef(null);
 
   const flash = useCallback((type, msg) => {
     setFeedback({ type, msg });
     setTimeout(() => setFeedback(null), 2800);
   }, []);
 
+  // Only reload items when the invoice.id changes (new invoice opened)
+  // NOT when onSaved updates the invoice object (which would overwrite user edits)
   useEffect(() => {
     if (!invoice) return;
+    if (loadedInvoiceIdRef.current === invoice.id) {
+      // Same invoice — only refresh payments, keep item edits intact
+      setLoadingPayments(true);
+      api.getInvoicePayments(invoice.id)
+        .then(setPayments)
+        .catch(() => setPayments([]))
+        .finally(() => setLoadingPayments(false));
+      return;
+    }
+    loadedInvoiceIdRef.current = invoice.id;
     setItems(
       invoice.items.map((it) => ({
         id: it.id,
@@ -81,6 +95,10 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
   }
 
   function removeItem(idx) {
+    if (items.length <= 1) {
+      flash('error', t('editInvoiceModal.cannotDeleteLastItem', { defaultValue: 'لا يمكن حذف كل البنود — يجب أن تحتوي الفاتورة على بند واحد على الأقل' }));
+      return;
+    }
     setItems((prev) => prev.filter((_, i) => i !== idx));
   }
 
@@ -357,8 +375,9 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
                   </div>
                   <div className="col-span-1 flex items-end pb-1">
                     <button
-                      disabled={!isSell}
+                      disabled={!isSell || items.length <= 1}
                       onClick={() => removeItem(idx)}
+                      title={items.length <= 1 ? 'لا يمكن حذف البند الأخير' : 'حذف البند'}
                       className="p-1.5 rounded-lg text-red-400 hover:bg-red-50 disabled:hover:bg-transparent disabled:opacity-30 transition-colors cursor-pointer btn-tactile"
                     >
                       <Trash2 size={16} />
