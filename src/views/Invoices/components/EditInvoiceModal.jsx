@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, Plus, Trash2, Save, Loader2, CreditCard, AlertCircle, CheckCircle, Package, Printer } from 'lucide-react';
 import api from '../../../services/api';
-import { notifications } from '@mantine/notifications';
 
 export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, paperSize, onPaperSizeChange }) {
   const { t } = useTranslation();
@@ -28,12 +27,18 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
       invoice.items.map((it) => ({
         id: it.id,
         batch_id: it.batch_id,
+        // product_id is returned by the backend in InvoiceItemOut
+        product_id: it.product_id ?? null,
         quantity: String(it.quantity),
         unit_price: String(it.unit_price),
         product_name: it.product_name || `Batch #${it.batch_id}`,
       }))
     );
-    api.getProducts().then(setProducts).catch(console.error);
+    // Fetch all products (high limit so dropdown is complete)
+    api.getProducts(0, 1000).then((res) => {
+      const list = Array.isArray(res) ? res : (res?.data ?? []);
+      setProducts(list);
+    }).catch(console.error);
     setLoadingPayments(true);
     api.getInvoicePayments(invoice.id)
       .then(setPayments)
@@ -71,7 +76,8 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
   };
 
   function addItem() {
-    setItems((prev) => [...prev, { id: null, batch_id: '', quantity: '1', unit_price: '', product_name: '' }]);
+    // New blank row — product_id='' so the select shows the placeholder
+    setItems((prev) => [...prev, { id: null, batch_id: '', product_id: '', quantity: '1', unit_price: '', product_name: '' }]);
   }
 
   function removeItem(idx) {
@@ -82,6 +88,48 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
     setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, [field]: value } : it)));
   }
 
+  /**
+   * SELL invoices: user picks a product from the dropdown.
+   * We store product_id (for the save payload) and resolve the active batch
+   * only for price look-up purposes.
+   */
+  function onProductSelect(idx, productId) {
+    if (!productId) {
+      setItems((prev) => prev.map((it, i) =>
+        i === idx ? { ...it, product_id: '', batch_id: '', unit_price: '', product_name: '' } : it
+      ));
+      return;
+    }
+    const pId = Number(productId);
+    const product = products.find((p) => p.id === pId);
+    const pBatches = batches[pId] || [];
+    const activeBatch = pBatches.find((b) => Number(b.remaining_quantity) > 0) || pBatches[0];
+    const highestBatch = pBatches.reduce((acc, b) => {
+      if (!acc) return b;
+      const bPrice = Number(b.selling_price ?? b.current_selling_price ?? 0);
+      const aPrice = Number(acc.selling_price ?? acc.current_selling_price ?? 0);
+      return bPrice > aPrice ? b : acc;
+    }, null);
+    const latestPrice =
+      highestBatch?.selling_price ??
+      highestBatch?.current_selling_price ??
+      activeBatch?.selling_price ??
+      activeBatch?.current_selling_price ??
+      '';
+    setItems((prev) => prev.map((it, i) =>
+      i === idx
+        ? {
+            ...it,
+            product_id: pId,
+            batch_id: activeBatch ? activeBatch.id : '',
+            unit_price: String(latestPrice),
+            product_name: product?.name || '',
+          }
+        : it
+    ));
+  }
+
+  /** PURCHASE invoices: batch-level dropdown (disabled in UI but kept for completeness) */
   function onBatchSelect(idx, batchId) {
     const allBatches = Object.values(batches).flat();
     const batch = allBatches.find((b) => String(b.id) === String(batchId));
@@ -90,27 +138,53 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
       const productBatches = batches[batch.product_id] || [];
       const highestBatch = productBatches.reduce((acc, b) => {
         if (!acc) return b;
-        return Number(b.selling_price) > Number(acc.selling_price) ? b : acc;
+        const bPrice = Number(b.selling_price ?? b.current_selling_price ?? 0);
+        const aPrice = Number(acc.selling_price ?? acc.current_selling_price ?? 0);
+        return bPrice > aPrice ? b : acc;
       }, null);
-      const latestPrice = highestBatch?.selling_price ?? batch.selling_price ?? batch.purchase_price ?? '';
+      const latestPrice = highestBatch?.selling_price ?? highestBatch?.current_selling_price ?? batch.selling_price ?? batch.purchase_price ?? '';
       updateItem(idx, 'unit_price', String(latestPrice));
     }
   }
 
   async function handleSaveItems() {
-    if (items.some((it) => !it.batch_id || !it.quantity || !it.unit_price)) {
-      flash('error', t('editInvoiceModal.pleaseFillItemFields'));
-      return;
+    const isSell = invoice.invoice_type === 'SELL' || invoice.invoice_type === 'sell';
+
+    // Validate: SELL needs product_id; PURCHASE needs batch_id
+    if (isSell) {
+      if (items.some((it) => !it.product_id || !it.quantity || !it.unit_price)) {
+        flash('error', t('editInvoiceModal.pleaseFillItemFields'));
+        return;
+      }
+    } else {
+      if (items.some((it) => !it.batch_id || !it.quantity || !it.unit_price)) {
+        flash('error', t('editInvoiceModal.pleaseFillItemFields'));
+        return;
+      }
     }
+
     setSaving(true);
     try {
-      const payload = {
-        items: items.map((it) => ({
-          batch_id: Number(it.batch_id),
-          quantity: parseFloat(it.quantity),
-          unit_price: parseFloat(it.unit_price),
-        })),
-      };
+      let payload;
+      if (isSell) {
+        // Send product_id so backend performs FIFO allocation correctly
+        payload = {
+          items: items.map((it) => ({
+            product_id: Number(it.product_id),
+            quantity: parseFloat(it.quantity),
+            unit_price: parseFloat(it.unit_price),
+          })),
+        };
+      } else {
+        // PURCHASE: adjust existing batch quantities directly
+        payload = {
+          items: items.map((it) => ({
+            batch_id: Number(it.batch_id),
+            quantity: parseFloat(it.quantity),
+            unit_price: parseFloat(it.unit_price),
+          })),
+        };
+      }
       const updated = await api.updateInvoice(invoice.id, payload);
       flash('success', t('editInvoiceModal.modificationsSaved'));
       onSaved(updated);
@@ -170,6 +244,8 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
 
   if (!invoice) return null;
 
+  const isSell = invoice.invoice_type === 'SELL' || invoice.invoice_type === 'sell';
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in-up">
       <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col border border-outline-variant/40">
@@ -209,31 +285,50 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
                 <div key={idx} className="grid grid-cols-12 gap-2 items-start p-3 rounded-xl bg-surface-container-low/40 border border-outline-variant/30">
                   <div className="col-span-5">
                     <label className="block text-label-sm text-muted-steel mb-1 uppercase tracking-wider">{t('editInvoiceModal.editInvoiceProduct')}</label>
-                    <select
-                      disabled={invoice.invoice_type === 'PURCHASE'}
-                      value={item.batch_id}
-                      onChange={(e) => onBatchSelect(idx, e.target.value)}
-                      className={`${inputCls} disabled:opacity-50 disabled:bg-surface-container`}
-                    >
-                      <option value="">{t('editInvoiceModal.editInvoiceSelectProduct')}</option>
-                      {products.map((p) => {
-                        const pBatches = batches[p.id] || [];
-                        const totalRemaining = pBatches.reduce((acc, b) => acc + Number(b.remaining_quantity || 0), 0);
-                        const totalInitial = pBatches.reduce((acc, b) => acc + Number(b.initial_quantity || 0), 0);
-                        const totalSold = totalInitial - totalRemaining;
-                        const activeBatch = pBatches.find((b) => Number(b.remaining_quantity) > 0) || pBatches[0];
-                        const batchValue = activeBatch ? activeBatch.id : '';
 
-                        return (
-                          <option key={p.id} value={batchValue}>
-                            {invoice.invoice_type === 'PURCHASE'
-                              ? `${p.name} — (${t('editInvoiceModal.editInvoiceOriginal')} ${totalInitial}, ${t('editInvoiceModal.editInvoiceSold')} ${totalSold.toFixed(2)})`
-                              : `${p.name} — ${t('editInvoiceModal.editInvoiceAvailable')} ${totalRemaining.toFixed(2)}`}
-                          </option>
-                        );
-                      })}
-                    </select>
-                    {invoice.invoice_type === 'PURCHASE' && (() => {
+                    {isSell ? (
+                      /* SELL: value = product_id — fixes name disappearing on edit */
+                      <select
+                        value={item.product_id ?? ''}
+                        onChange={(e) => onProductSelect(idx, e.target.value)}
+                        className={inputCls}
+                      >
+                        <option value="">{t('editInvoiceModal.editInvoiceSelectProduct')}</option>
+                        {products.map((p) => {
+                          const pBatches = batches[p.id] || [];
+                          const totalRemaining = pBatches.reduce((acc, b) => acc + Number(b.remaining_quantity || 0), 0);
+                          return (
+                            <option key={p.id} value={p.id}>
+                              {`${p.name} — ${t('editInvoiceModal.editInvoiceAvailable')} ${totalRemaining.toFixed(2)}`}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    ) : (
+                      /* PURCHASE: disabled — shows current batch, adjusted via qty/price fields */
+                      <select
+                        disabled
+                        value={item.batch_id}
+                        className={`${inputCls} disabled:opacity-50 disabled:bg-surface-container`}
+                      >
+                        <option value="">{t('editInvoiceModal.editInvoiceSelectProduct')}</option>
+                        {products.map((p) => {
+                          const pBatches = batches[p.id] || [];
+                          const totalInitial = pBatches.reduce((acc, b) => acc + Number(b.initial_quantity || 0), 0);
+                          const totalRemaining = pBatches.reduce((acc, b) => acc + Number(b.remaining_quantity || 0), 0);
+                          const totalSold = totalInitial - totalRemaining;
+                          const activeBatch = pBatches.find((b) => Number(b.remaining_quantity) > 0) || pBatches[0];
+                          const batchValue = activeBatch ? activeBatch.id : '';
+                          return (
+                            <option key={p.id} value={batchValue}>
+                              {`${p.name} — (${t('editInvoiceModal.editInvoiceOriginal')} ${totalInitial}, ${t('editInvoiceModal.editInvoiceSold')} ${totalSold.toFixed(2)})`}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    )}
+
+                    {!isSell && (() => {
                       const allBatches = Object.values(batches).flat();
                       const b = allBatches.find((x) => String(x.id) === String(item.batch_id));
                       const sold = b ? Number(b.initial_quantity) - Number(b.remaining_quantity) : 0;
@@ -262,7 +357,7 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
                   </div>
                   <div className="col-span-1 flex items-end pb-1">
                     <button
-                      disabled={invoice.invoice_type === 'PURCHASE'}
+                      disabled={!isSell}
                       onClick={() => removeItem(idx)}
                       className="p-1.5 rounded-lg text-red-400 hover:bg-red-50 disabled:hover:bg-transparent disabled:opacity-30 transition-colors cursor-pointer btn-tactile"
                     >
@@ -278,7 +373,7 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
                 </div>
               ))}
 
-              {invoice.invoice_type !== 'PURCHASE' ? (
+              {isSell ? (
                 <button onClick={addItem} className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border-2 border-dashed border-accent/30 text-accent text-label-sm hover:bg-accent-surface transition-colors cursor-pointer">
                   <Plus size={16} /> {t('editInvoiceModal.editInvoiceAddNewItem')}
                 </button>
