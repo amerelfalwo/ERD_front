@@ -1547,8 +1547,12 @@ export default function InvoicesView() {
             onPaperSizeChange={setPaperSize}
             onPrint={(printInvoice) => handleOpenPrintPreview(printInvoice)}
             onClose={() => setEditingInvoice(null)}
-            onSaved={() => {
-              setEditingInvoice(null);
+            onSaved={(updatedInvoice) => {
+              // If the save returned updated invoice data, refresh the modal state
+              // so the user sees the new items without closing the modal
+              if (updatedInvoice && updatedInvoice.id) {
+                setEditingInvoice(updatedInvoice);
+              }
               invalidateInvoiceQueries();
             }}
           />
