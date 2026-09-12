@@ -158,7 +158,8 @@ function CustomerDetailPanel({ customer }) {
 const CustomerCard = memo(function CustomerCard({ customer, onEdit, onDelete }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  
+  const balance = Number(customer.calculated_balance || 0);
+
   return (
     <Card 
       shadow="xs" 
@@ -171,16 +172,16 @@ const CustomerCard = memo(function CustomerCard({ customer, onEdit, onDelete }) 
         <div className="flex items-start justify-between mb-1 gap-2">
           <h3 className="text-lg font-medium text-charcoal-ink truncate">{customer.name}</h3>
           <span className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${
-            Number(customer.calculated_balance || 0) > 0
+            balance > 0
               ? 'bg-amber-50 text-amber-700 border border-amber-200'
-              : Number(customer.calculated_balance || 0) < 0
+              : balance < 0
               ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
               : 'bg-surface-container text-muted-steel'
           }`}>
-            {Number(customer.calculated_balance || 0) > 0
-              ? `عليـه لينا EGP ${Number(customer.calculated_balance).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
-              : Number(customer.calculated_balance || 0) < 0
-              ? `لـه عندنا EGP ${Number(Math.abs(customer.calculated_balance)).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+            {balance > 0
+              ? `${t('customers.owesUs', 'عليـه لينا')} EGP ${balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+              : balance < 0
+              ? `${t('customers.creditUs', 'لـه عندنا')} EGP ${Math.abs(balance).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
               : '0.00 EGP'}
           </span>
         </div>
@@ -193,12 +194,16 @@ const CustomerCard = memo(function CustomerCard({ customer, onEdit, onDelete }) 
         <div className="flex items-center gap-2 mb-4">
            {customer.total_profit != null && (
             <span className="px-2 py-1 bg-indigo-50 text-indigo-600 rounded text-xs font-medium border border-indigo-100">
-              {t('customers.profit') || 'الربح'}: {Number(customer.total_profit).toLocaleString()} {t('common.currency')}
+              {t('customers.profit', 'الربح')}: {Number(customer.total_profit).toLocaleString()} {t('common.currency')}
             </span>
           )}
-          {customer.payment_status && (
-            <span className={`px-2 py-1 rounded text-xs font-medium border ${customer.payment_status === 'paid' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
-              {customer.payment_status === 'paid' ? 'خالص' : 'عليه مبلغ'}
+          {balance !== 0 && (
+            <span className={`px-2 py-1 rounded text-xs font-medium border ${
+              balance > 0 
+                ? 'bg-amber-50 text-amber-600 border-amber-100' 
+                : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+            }`}>
+              {balance > 0 ? t('customers.hasBalance', 'عليه مبلغ') : t('customers.hasCredit', 'له رصيد')}
             </span>
           )}
         </div>

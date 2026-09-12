@@ -357,9 +357,9 @@ export default function PartyDashboard() {
               <AlertCircle size={20} className={balance > 0 ? 'text-amber-600' : balance < 0 ? 'text-emerald-600' : 'text-muted-steel'} />
               <span className="text-sm font-medium text-charcoal-ink/70">
                 {balance > 0
-                  ? (isCustomer ? 'الرصيد المستحق (عليـه)' : 'الرصيد المستحق (علينـا للمورد)')
+                  ? (isCustomer ? t('partyDashboard.customerReceivable', 'الرصيد المستحق (عليـه)') : t('partyDashboard.supplierPayable', 'الرصيد المستحق (علينـا للمورد)'))
                   : balance < 0
-                  ? (isCustomer ? 'الرصيد لصالح العميل (لـه)' : 'الرصيد لصالحنا لدى المورد (لـنا)')
+                  ? (isCustomer ? t('partyDashboard.customerCredit', 'الرصيد لصالح العميل (لـه)') : t('partyDashboard.supplierCredit', 'الرصيد لصالحنا لدى المورد (لـنا)'))
                   : t('partyDashboard.outstandingBalance', 'الرصيد المتبقي')}
               </span>
             </div>

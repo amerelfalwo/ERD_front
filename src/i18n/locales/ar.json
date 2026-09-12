@@ -312,7 +312,11 @@
     "customerCreated": "تم إنشاء العميل بنجاح",
     "customerDeleted": "تم حذف العميل بنجاح",
     "errorSaving": "خطأ في حفظ العميل",
-    "errorDeleting": "حدث خطأ غير متوقع."
+    "errorDeleting": "حدث خطأ غير متوقع.",
+    "hasBalance": "عليه مبلغ",
+    "hasCredit": "له رصيد",
+    "owesUs": "عليـه لينا",
+    "creditUs": "لـه عندنا"
   },
   "suppliers": {
     "title": "الموردين",
@@ -354,7 +358,12 @@
     "errorDeleting": "حدث خطأ غير متوقع.",
     "activeAccounts": "الحسابات النشطة",
     "sortNameAZ": "ترتيب بالاسم (أ-ي)",
-    "sortNameZA": "ترتيب بالاسم (ي-أ)"
+    "sortNameZA": "ترتيب بالاسم (ي-أ)",
+    "hasBalance": "علينا مبلغ",
+    "hasCredit": "لصالحنا",
+    "weOwe": "عليـنا للمورد",
+    "ourCredit": "لصالحنا لدى المورد",
+    "ourCreditSummary": "لصالحنا"
   },
   "parties": {
     "title": "الأطراف المالية",
@@ -527,6 +536,10 @@
     "finalTotal": "الإجمالي النهائي",
     "totalPaid": "إجمالي المدفوع",
     "outstandingBalance": "الرصيد المتبقي",
+    "customerReceivable": "الرصيد المستحق (عليـه)",
+    "customerCredit": "الرصيد لصالح العميل (لـه)",
+    "supplierPayable": "الرصيد المستحق (علينـا للمورد)",
+    "supplierCredit": "الرصيد لصالحنا لدى المورد (لـنا)",
     "fullySettled": "تمت التسوية",
     "invoices": "الفواتير",
     "printSelected": "طباعة المحدد",

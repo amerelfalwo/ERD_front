@@ -311,7 +311,11 @@
     "customerCreated": "Customer created successfully",
     "customerDeleted": "Customer deleted successfully",
     "errorSaving": "Error saving customer",
-    "errorDeleting": "An unexpected error occurred."
+    "errorDeleting": "An unexpected error occurred.",
+    "hasBalance": "Has balance",
+    "hasCredit": "Has credit",
+    "owesUs": "Owes us",
+    "creditUs": "Credit"
   },
   "suppliers": {
     "title": "Suppliers",
@@ -353,7 +357,12 @@
     "errorDeleting": "An unexpected error occurred.",
     "activeAccounts": "Active Accounts",
     "sortNameAZ": "Sort by Name (A-Z)",
-    "sortNameZA": "Sort by Name (Z-A)"
+    "sortNameZA": "Sort by Name (Z-A)",
+    "hasBalance": "Has balance",
+    "hasCredit": "Has credit",
+    "weOwe": "We owe",
+    "ourCredit": "Credit",
+    "ourCreditSummary": "Our credit"
   },
   "parties": {
     "title": "Financial Parties",
@@ -526,6 +535,10 @@
     "finalTotal": "Final Total",
     "totalPaid": "Total Paid",
     "outstandingBalance": "Outstanding Balance",
+    "customerReceivable": "Outstanding Balance (Owes)",
+    "customerCredit": "Credit Balance (Has credit)",
+    "supplierPayable": "Outstanding Balance (We owe)",
+    "supplierCredit": "Credit Balance (Our credit)",
     "fullySettled": "Fully settled",
     "invoices": "Invoices",
     "printSelected": "Print Selected",

@@ -155,7 +155,8 @@ function SupplierDetailPanel({ supplier }) {
 const SupplierCard = memo(function SupplierCard({ supplier, onEdit, onDelete }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  
+  const balance = Number(supplier.calculated_balance || 0);
+
   return (
     <Card 
       shadow="xs" 
@@ -168,23 +169,35 @@ const SupplierCard = memo(function SupplierCard({ supplier, onEdit, onDelete }) 
         <div className="flex items-start justify-between mb-1 gap-2">
           <h3 className="text-lg font-medium text-charcoal-ink truncate">{supplier.name}</h3>
           <span className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap ${
-            Number(supplier.calculated_balance || 0) > 0
+            balance > 0
               ? 'bg-amber-50 text-amber-700 border border-amber-200'
-              : Number(supplier.calculated_balance || 0) < 0
+              : balance < 0
               ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
               : 'bg-surface-container text-muted-steel'
           }`}>
-            {Number(supplier.calculated_balance || 0) > 0
-              ? `عليـنا للمورد EGP ${Number(supplier.calculated_balance).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
-              : Number(supplier.calculated_balance || 0) < 0
-              ? `لصالحنا لدى المورد EGP ${Number(Math.abs(supplier.calculated_balance)).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+            {balance > 0
+              ? `${t('suppliers.weOwe', 'عليـنا للمورد')} EGP ${balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+              : balance < 0
+              ? `${t('suppliers.ourCredit', 'لصالحنا لدى المورد')} EGP ${Math.abs(balance).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
               : '0.00 EGP'}
           </span>
         </div>
 
-        <div className="flex items-center gap-2 text-muted-steel mb-6 mt-2">
+        <div className="flex items-center gap-2 text-muted-steel mb-3 mt-2">
           <Phone size={14} />
           <span className="text-sm">{supplier.phone || 'N/A'}</span>
+        </div>
+
+        <div className="flex items-center gap-2 mb-4">
+          {balance !== 0 && (
+            <span className={`px-2 py-1 rounded text-xs font-medium border ${
+              balance > 0
+                ? 'bg-amber-50 text-amber-600 border-amber-100'
+                : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+            }`}>
+              {balance > 0 ? t('suppliers.hasBalance', 'علينا مبلغ') : t('suppliers.hasCredit', 'لصالحنا')}
+            </span>
+          )}
         </div>
 
         <div className="mt-auto flex items-center justify-between pt-4 border-t border-outline-variant/30">
@@ -372,7 +385,7 @@ export default function SuppliersView() {
           </div>
           {totalCredits > 0 && (
             <p className="text-xs text-emerald-600 font-medium mt-1">
-              (لصالحنا: EGP {totalCredits.toLocaleString(undefined, { minimumFractionDigits: 2 })})
+              ({t('suppliers.ourCreditSummary', 'لصالحنا')}: EGP {totalCredits.toLocaleString(undefined, { minimumFractionDigits: 2 })})
             </p>
           )}
         </div>
