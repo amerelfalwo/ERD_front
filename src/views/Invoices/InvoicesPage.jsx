@@ -19,23 +19,93 @@ const EditInvoiceModal = lazy(() => import('./components/EditInvoiceModal'));
 const ReturnInvoiceModal = lazy(() => import('./components/ReturnInvoiceModal'));
 
 
+/**
+ * Dynamically computes weighted-average purchase cost and batch breakdown for an item in the cart,
+ * allocating quantity across available stock batches starting from selected_purchase_price (or lowest).
+ */
+function getItemCostInfo(item, inventoryProductsMap) {
+  if (!item || !item.product_id) return { cost: 0, totalCost: 0, tiers: [] };
+
+  const invProd = inventoryProductsMap?.[String(item.product_id)];
+  const rawBatches = invProd?.batches || [];
+  const qty = Number(item.quantity) || 1;
+
+  const available = rawBatches.filter(b => Number(b.remaining_quantity) > 0);
+
+  if (available.length === 0) {
+    const fallback = Number(item.purchase_price) || Number(invProd?.purchase_price) || Number(invProd?.last_purchase_price) || 0;
+    return { cost: fallback, totalCost: fallback * qty, tiers: fallback > 0 ? [{ purchase_price: fallback, qty }] : [] };
+  }
+
+  // Group available batches by purchase_price
+  const priceMap = {};
+  available.forEach(b => {
+    const key = String(b.purchase_price);
+    if (!priceMap[key]) {
+      priceMap[key] = { purchase_price: Number(b.purchase_price), quantity: 0 };
+    }
+    priceMap[key].quantity += Number(b.remaining_quantity);
+  });
+  let sortedBatches = Object.values(priceMap).sort((a, b) => a.purchase_price - b.purchase_price);
+
+  // If item has a preferred/selected purchase price, move that batch price to the front
+  const selPrice = item.selected_purchase_price ?? item.purchase_price;
+  if (selPrice != null) {
+    const selIndex = sortedBatches.findIndex(b => b.purchase_price === Number(selPrice));
+    if (selIndex > 0) {
+      const selBatch = sortedBatches[selIndex];
+      sortedBatches = [selBatch, ...sortedBatches.filter((_, i) => i !== selIndex)];
+    }
+  }
+
+  let remaining = qty;
+  let totalCost = 0;
+  const tiers = [];
+
+  for (const batch of sortedBatches) {
+    if (remaining <= 0) break;
+    const take = Math.min(remaining, batch.quantity);
+    totalCost += take * batch.purchase_price;
+    tiers.push({ purchase_price: batch.purchase_price, qty: take });
+    remaining -= take;
+  }
+
+  // Overflow beyond available stock
+  if (remaining > 0) {
+    const lastPrice = sortedBatches.length > 0
+      ? sortedBatches[sortedBatches.length - 1].purchase_price
+      : (Number(item.purchase_price) || 0);
+    totalCost += remaining * lastPrice;
+    if (tiers.length > 0 && tiers[tiers.length - 1].purchase_price === lastPrice) {
+      tiers[tiers.length - 1].qty += remaining;
+    } else {
+      tiers.push({ purchase_price: lastPrice, qty: remaining });
+    }
+  }
+
+  const effectiveCost = qty > 0 ? totalCost / qty : 0;
+  return { cost: effectiveCost, totalCost, tiers };
+}
+
+
 const InvoiceItemRow = memo(function InvoiceItemRow({ item, products, invoiceType, onQuantityChange, onRemove, onEdit, maxStock, inventoryProductsMap }) {
   const { t } = useTranslation();
   const product = products.find((p) => p.id === item.product_id);
   const displayName = item.product_name || product?.name || `#${item.product_id ?? item.batch_id}`;
 
-  const getSalePrice = () => {
-    if (item.sale_price != null) return item.sale_price;
-    const invProd = inventoryProductsMap?.[String(item.product_id)];
-    const best = invProd?.batches?.filter(b => Number(b.remaining_quantity) > 0)
-      .reduce((acc, b) => (!acc || Number(b.selling_price) > Number(acc.selling_price) ? b : acc), null)
-      ?? invProd?.batches?.reduce((acc, b) => (!acc || Number(b.selling_price) > Number(acc.selling_price) ? b : acc), null);
-    return best?.selling_price || 0;
-  };
-
-  const unitPrice = invoiceType === 'sale' ? Number(getSalePrice()) : Number(item.purchase_price || 0);
+  // Use the explicitly stored sale_price from the item (set when user added it)
+  const unitPrice = invoiceType === 'sale' ? Number(item.sale_price || 0) : Number(item.purchase_price || 0);
   const lineTotal = unitPrice * Number(item.quantity);
-  const costPrice = product?.purchase_price || product?.last_purchase_price || 0;
+
+  const costInfo = useMemo(() => {
+    if (invoiceType !== 'sale') {
+      const cp = item.purchase_price != null ? Number(item.purchase_price) : (product?.purchase_price || product?.last_purchase_price || 0);
+      return { cost: cp, totalCost: cp * Number(item.quantity), tiers: [] };
+    }
+    return getItemCostInfo(item, inventoryProductsMap);
+  }, [invoiceType, item, product, inventoryProductsMap]);
+
+  const costPrice = costInfo.cost;
   const margin = invoiceType === 'sale' && unitPrice > 0 && costPrice > 0 ? (unitPrice - costPrice) * Number(item.quantity) : null;
 
   const handleQtyInput = (e) => {
@@ -71,7 +141,9 @@ const InvoiceItemRow = memo(function InvoiceItemRow({ item, products, invoiceTyp
           <span className="font-mono-tabular text-label-sm text-muted-steel mt-0.5 flex items-center gap-1.5 flex-wrap">
             <span>{t('invoices.price', { defaultValue: 'السعر' })}: <strong className="text-charcoal-ink">{Number(unitPrice).toLocaleString()}</strong></span>
             {costPrice > 0 && (
-              <span className="text-[11px] text-muted-steel/70">({t('invoices.cost', { defaultValue: 'التكلفة' })}: {Number(costPrice).toLocaleString()})</span>
+              <span className="text-[11px] text-muted-steel/70">
+                ({t('invoices.cost', { defaultValue: 'التكلفة' })}: {Number(costPrice).toLocaleString(undefined, { maximumFractionDigits: 2 })})
+              </span>
             )}
           </span>
         )}
@@ -104,8 +176,13 @@ const InvoiceItemRow = memo(function InvoiceItemRow({ item, products, invoiceTyp
       <div className="col-span-3 text-right">
         <span className="font-mono-tabular text-label-md font-bold text-charcoal-ink block">{lineTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {t('common.currency', { defaultValue: 'ج.م' })}</span>
         {margin != null && (
-          <span className={`text-[10px] font-mono-tabular font-medium ${margin >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+          <span className={`text-[10px] font-mono-tabular font-medium block ${margin >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
             {t('invoices.estProfit', { defaultValue: 'الربح' })}: {margin >= 0 ? '+' : ''}{margin.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+          </span>
+        )}
+        {costInfo.tiers.length > 1 && (
+          <span className="text-[9px] text-muted-steel block truncate font-mono-tabular" title={costInfo.tiers.map(t => `${t.qty}×${t.purchase_price}`).join(' + ')}>
+            ({costInfo.tiers.map(t => `${t.qty}×${t.purchase_price}`).join(' + ')})
           </span>
         )}
       </div>
@@ -163,6 +240,9 @@ export default function InvoicesView() {
   const [hasSerials, setHasSerials] = useState(false);
   const [serialNumber, setSerialNumber] = useState('');
   const [autoFetchedCost, setAutoFetchedCost] = useState(null);
+  // Available purchase-price batches for the selected product (sale mode)
+  const [availableBatches, setAvailableBatches] = useState([]);
+  const [selectedBatchIdx, setSelectedBatchIdx] = useState(null);
   const [editingItemId, setEditingItemId] = useState(null);
   const [itemQuantity, setItemQuantity] = useState('1');
   const [submitting, setSubmitting] = useState(false);
@@ -293,6 +373,8 @@ export default function InvoicesView() {
   useEffect(() => {
     if (!selectedProduct) {
       setAutoFetchedCost(null);
+      setAvailableBatches([]);
+      setSelectedBatchIdx(null);
       return;
     }
     const prod = (invoiceType === 'supplier_return' ? supplierProducts : products)
@@ -301,12 +383,41 @@ export default function InvoicesView() {
     if (invoiceType === 'purchase' || invoiceType === 'supplier_return') {
       if (prod.last_purchase_price) setPurchasePrice(prod.last_purchase_price);
     } else if (invoiceType === 'sale') {
-      const cost = prod.purchase_price != null ? prod.purchase_price : prod.last_purchase_price;
-      setAutoFetchedCost(cost != null ? Number(cost) : null);
+      // Build list of available batches (with stock) grouped by purchase_price
+      const invProd = inventoryProductsMap?.[String(selectedProduct)];
+      const rawBatches = invProd?.batches || [];
+      // Group batches by purchase_price, summing remaining_quantity
+      const priceMap = {};
+      rawBatches
+        .filter(b => Number(b.remaining_quantity) > 0)
+        .forEach(b => {
+          const key = String(b.purchase_price);
+          if (!priceMap[key]) {
+            priceMap[key] = { purchase_price: Number(b.purchase_price), quantity: 0 };
+          }
+          priceMap[key].quantity += Number(b.remaining_quantity);
+        });
+      const batches = Object.values(priceMap).sort((a, b) => a.purchase_price - b.purchase_price);
+      setAvailableBatches(batches);
+      // Auto-select if only one unique purchase price
+      if (batches.length === 1) {
+        setSelectedBatchIdx(0);
+        setAutoFetchedCost(batches[0].purchase_price);
+      } else if (batches.length === 0) {
+        // No batches available — fall back to product's purchase_price
+        const cost = prod.purchase_price != null ? prod.purchase_price : prod.last_purchase_price;
+        setAutoFetchedCost(cost != null ? Number(cost) : null);
+        setSelectedBatchIdx(null);
+      } else {
+        // Multiple prices — let user choose; reset cost until chosen
+        setAutoFetchedCost(null);
+        setSelectedBatchIdx(null);
+      }
+      // Pre-fill sell price from product's sell_price if not already set
       const sell = prod.sell_price;
       if (sell != null && !salePrice) setSalePrice(String(sell));
     }
-  }, [selectedProduct, products, supplierProducts, invoiceType]);
+  }, [selectedProduct, products, supplierProducts, invoiceType, inventoryProductsMap]);
 
   const selectedAvailableStock = useMemo(() => {
     if (invoiceType !== 'sale' || !selectedProduct) return null;
@@ -320,6 +431,34 @@ export default function InvoicesView() {
     const stock = supplierStockMap[String(selectedProduct)] ?? supplierStockMap[Number(selectedProduct)];
     return stock != null ? Number(stock) : null;
   }, [invoiceType, selectedProduct, supplierStockMap]);
+
+  /**
+   * Computes weighted-average purchase cost across batches when qty spills over.
+   * Returns { cost: number, tiers: [{purchase_price, qty}] }
+   */
+  const blendedCostInfo = useMemo(() => {
+    if (invoiceType !== 'sale' || availableBatches.length === 0 || selectedBatchIdx === null) {
+      return { cost: autoFetchedCost, tiers: [] };
+    }
+    const qty = parseInt(itemQuantity) || 1;
+    // Build ordered list: selected batch first, then others by purchase_price
+    const ordered = [
+      availableBatches[selectedBatchIdx],
+      ...availableBatches.filter((_, i) => i !== selectedBatchIdx),
+    ];
+    let remaining = qty;
+    let totalCost = 0;
+    const tiers = [];
+    for (const batch of ordered) {
+      if (remaining <= 0) break;
+      const take = Math.min(remaining, batch.quantity);
+      totalCost += take * batch.purchase_price;
+      tiers.push({ purchase_price: batch.purchase_price, qty: take });
+      remaining -= take;
+    }
+    const effectiveCost = qty > 0 ? totalCost / qty : autoFetchedCost;
+    return { cost: effectiveCost, tiers };
+  }, [invoiceType, availableBatches, selectedBatchIdx, itemQuantity, autoFetchedCost]);
 
   const addItem = useCallback(() => {
     if (!selectedProduct) return;
@@ -337,8 +476,12 @@ export default function InvoicesView() {
       }
       if (invoiceType === 'sale') {
         const parsedSalePrice = parseFloat(salePrice);
+        const selPrice = selectedBatchIdx !== null && availableBatches[selectedBatchIdx]
+          ? availableBatches[selectedBatchIdx].purchase_price
+          : (availableBatches[0]?.purchase_price ?? undefined);
         updates.sale_price = !isNaN(parsedSalePrice) ? parsedSalePrice : undefined;
-        updates.purchase_price = autoFetchedCost != null ? autoFetchedCost : undefined;
+        updates.purchase_price = blendedCostInfo.cost != null ? blendedCostInfo.cost : undefined;
+        updates.selected_purchase_price = selPrice;
         updates.serial_number = (hasSerials && serialNumber.trim()) ? serialNumber.trim() : undefined;
       }
       updateItem(editingItemId, updates);
@@ -351,8 +494,12 @@ export default function InvoicesView() {
       }
       if (invoiceType === 'sale') {
         const parsedSalePrice = parseFloat(salePrice);
+        const selPrice = selectedBatchIdx !== null && availableBatches[selectedBatchIdx]
+          ? availableBatches[selectedBatchIdx].purchase_price
+          : (availableBatches[0]?.purchase_price ?? undefined);
         newItem.sale_price = !isNaN(parsedSalePrice) ? parsedSalePrice : undefined;
-        newItem.purchase_price = autoFetchedCost != null ? autoFetchedCost : undefined;
+        newItem.purchase_price = blendedCostInfo.cost != null ? blendedCostInfo.cost : undefined;
+        newItem.selected_purchase_price = selPrice;
         if (hasSerials && serialNumber.trim()) {
           newItem.serial_number = serialNumber.trim();
         }
@@ -367,7 +514,9 @@ export default function InvoicesView() {
     setSerialNumber('');
     setItemQuantity('1');
     setAutoFetchedCost(null);
-  }, [selectedProduct, invoiceType, purchasePrice, sellingPrice, salePrice, itemQuantity, autoFetchedCost, storeAddItem, updateItem, editingItemId, selectedAvailableStock, hasSerials, serialNumber]);
+    setAvailableBatches([]);
+    setSelectedBatchIdx(null);
+  }, [selectedProduct, invoiceType, purchasePrice, sellingPrice, salePrice, itemQuantity, autoFetchedCost, blendedCostInfo, storeAddItem, updateItem, editingItemId, selectedAvailableStock, hasSerials, serialNumber]);
 
   const handleEditItem = useCallback((item) => {
     const prod = products.find(p => p.id === item.product_id);
@@ -381,7 +530,28 @@ export default function InvoicesView() {
     }
     if (invoiceType === 'sale') {
       setSalePrice(String(item.sale_price || ''));
-      setAutoFetchedCost(item.purchase_price != null ? Number(item.purchase_price) : null);
+      if (item.purchase_price != null) {
+        setAutoFetchedCost(Number(item.purchase_price));
+        // Re-build the batches list and mark the matching batch as selected
+        const invProd = inventoryProductsMap?.[String(item.product_id)];
+        const rawBatches = invProd?.batches || [];
+        const priceMap = {};
+        rawBatches
+          .filter(b => Number(b.remaining_quantity) > 0)
+          .forEach(b => {
+            const key = String(b.purchase_price);
+            if (!priceMap[key]) priceMap[key] = { purchase_price: Number(b.purchase_price), quantity: 0 };
+            priceMap[key].quantity += Number(b.remaining_quantity);
+          });
+        const batches = Object.values(priceMap).sort((a, b) => a.purchase_price - b.purchase_price);
+        setAvailableBatches(batches);
+        const idx = batches.findIndex(b => b.purchase_price === Number(item.purchase_price));
+        setSelectedBatchIdx(idx >= 0 ? idx : null);
+      } else {
+        setAutoFetchedCost(null);
+        setAvailableBatches([]);
+        setSelectedBatchIdx(null);
+      }
       if (item.serial_number) {
         setHasSerials(true);
         setSerialNumber(item.serial_number);
@@ -389,7 +559,7 @@ export default function InvoicesView() {
         setSerialNumber('');
       }
     }
-  }, [products, invoiceType]);
+  }, [products, invoiceType, inventoryProductsMap]);
 
 
   const handleCreateNewProduct = useCallback(async () => {
@@ -590,14 +760,17 @@ export default function InvoicesView() {
   const totalProfit = useMemo(() => {
     if (invoiceType !== 'sale') return 0;
     const baseProfit = items.reduce((sum, item) => {
-      if (item.sale_price != null && item.purchase_price != null) {
-        return sum + (Number(item.sale_price) - Number(item.purchase_price)) * Number(item.quantity);
+      const sp = item.sale_price != null ? Number(item.sale_price) : 0;
+      const costInfo = getItemCostInfo(item, inventoryProductsMap);
+      const cp = costInfo.cost;
+      if (sp > 0 && cp > 0) {
+        return sum + (sp - cp) * Number(item.quantity);
       }
       return sum;
     }, 0);
     const parsedDiscount = hasDiscount ? (parseFloat(discountAmount) || 0) : 0;
     return baseProfit - parsedDiscount;
-  }, [invoiceType, items, hasDiscount, discountAmount]);
+  }, [invoiceType, items, inventoryProductsMap, hasDiscount, discountAmount]);
 
   // Removed auto-filling of amountPaid to let the user explicitly decide the payment price.
   // useEffect(() => {
@@ -771,7 +944,8 @@ export default function InvoicesView() {
                   <h3 className="text-h3 text-charcoal-ink">{t('invoices.lineItems')}</h3>
                 </div>
 
-                <div className="flex flex-col sm:flex-row gap-2 mb-4 items-end">
+                {/* ════ Row 1: Product + Qty + Action ════ */}
+                <div className="flex flex-col sm:flex-row gap-2 mb-3 items-end">
                   <div className="relative flex-1">
                     <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">{t('invoices.product')}</label>
                     <input 
@@ -848,71 +1022,16 @@ export default function InvoicesView() {
                       </div>
                     )}
                   </div>
+
+                  {/* ── Purchase price (purchase / supplier_return) — stays inline ── */}
                   {(invoiceType === 'purchase' || invoiceType === 'supplier_return') && (
                     <div className="flex flex-col gap-0">
                       <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">{invoiceType === 'supplier_return' ? t('invoices.unitPrice') : t('invoices.purchasePrice')}</label>
                       <input type="number" value={purchasePrice} onChange={(e) => setPurchasePrice(e.target.value)} placeholder="0" className={`sm:w-28 ${inputClass}`} />
                     </div>
                   )}
-                  {invoiceType === 'sale' && (
-                    <>
-                      <div className="flex flex-col gap-1">
-                        <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">{t('invoices.salePrice')}</label>
-                        <input
-                          type="number"
-                          value={salePrice}
-                          onChange={(e) => setSalePrice(e.target.value)}
-                          placeholder="0"
-                          className={`sm:w-28 ${inputClass}`}
-                        />
-                        {autoFetchedCost != null && (
-                          <span className="text-[10px] text-muted-steel px-1">
-                            {t('invoices.cost')}: <span className="font-mono font-semibold text-charcoal-ink">{autoFetchedCost.toLocaleString()}</span>
-                            {salePrice && parseFloat(salePrice) > 0 && (
-                              <span className={`ml-2 font-bold ${
-                                parseFloat(salePrice) - autoFetchedCost > 0 ? 'text-emerald-600' : 'text-red-500'
-                              }`}>
-                                {parseFloat(salePrice) - autoFetchedCost > 0 ? '+' : ''}
-                                {(parseFloat(salePrice) - autoFetchedCost).toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                              </span>
-                            )}
-                          </span>
-                        )}
-                      </div>
 
-                      {/* Serial Number Toggle & Field */}
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center justify-between mb-1">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setHasSerials(!hasSerials);
-                              if (hasSerials) setSerialNumber('');
-                            }}
-                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-label-sm font-semibold transition-all cursor-pointer btn-tactile ${
-                              hasSerials
-                                ? 'bg-indigo-600 text-white shadow-xs'
-                                : 'bg-surface-container-low text-muted-steel hover:text-charcoal-ink border border-outline-variant/50'
-                            }`}
-                            title={t('invoices.toggleSerials', { defaultValue: 'تفعيل/إلغاء إدخال السيريال' })}
-                          >
-                            <Tag size={13} />
-                            {hasSerials ? t('invoices.serialActive', { defaultValue: 'السيريال مفعل' }) : t('invoices.addSerialBtn', { defaultValue: 'إدخال السيريال' })}
-                          </button>
-                        </div>
-                        {hasSerials && (
-                          <input
-                            type="text"
-                            value={serialNumber}
-                            onChange={(e) => setSerialNumber(e.target.value)}
-                            placeholder={t('invoices.enterSerialPlaceholder', { defaultValue: 'رقم السيريال...' })}
-                            className={`sm:w-36 ${inputClass}`}
-                            autoFocus
-                          />
-                        )}
-                      </div>
-                    </>
-                  )}
+                  {/* ── Qty ── */}
                   <div className="flex flex-col gap-1">
                     <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">{t('invoices.quantity')}</label>
                     <input
@@ -923,17 +1042,11 @@ export default function InvoicesView() {
                         if (invoiceType === 'sale' && selectedProduct) {
                           const stockProd = inventoryProductsMap?.[String(selectedProduct)];
                           const avail = stockProd ? stockProd.batches?.reduce((s, b) => s + Number(b.remaining_quantity || 0), 0) : null;
-                          if (avail != null && parseInt(val) > avail) {
-                            setItemQuantity(String(avail));
-                            return;
-                          }
+                          if (avail != null && parseInt(val) > avail) { setItemQuantity(String(avail)); return; }
                         }
                         if (invoiceType === 'supplier_return' && selectedProduct) {
                           const avail = selectedSupplierStock;
-                          if (avail != null && parseInt(val) > avail) {
-                            setItemQuantity(String(avail));
-                            return;
-                          }
+                          if (avail != null && parseInt(val) > avail) { setItemQuantity(String(avail)); return; }
                         }
                         setItemQuantity(val);
                       }}
@@ -957,6 +1070,8 @@ export default function InvoicesView() {
                       </span>
                     )}
                   </div>
+
+                  {/* ── Add / Update button ── */}
                   <div className="flex items-center gap-2">
                     <button onClick={addItem} disabled={!selectedProduct || (invoiceType === 'sale' && selectedAvailableStock != null && selectedAvailableStock <= 0 && !editingItemId) || (invoiceType === 'supplier_return' && selectedSupplierStock != null && selectedSupplierStock <= 0 && !editingItemId)}
                       className={`h-[46px] px-6 rounded-xl text-white font-semibold shadow-sm transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer active:scale-[0.98] ${
@@ -965,13 +1080,148 @@ export default function InvoicesView() {
                       {editingItemId ? <><Edit size={16} /> {t('common.update')}</> : <><Plus size={18} /> {t('common.add')}</>}
                     </button>
                     {editingItemId && (
-                      <button onClick={() => { setEditingItemId(null); setSelectedProduct(''); setProductSearch(''); setPurchasePrice(''); setSellingPrice(''); setSalePrice(''); setItemQuantity('1'); setAutoFetchedCost(null); }}
+                      <button onClick={() => { setEditingItemId(null); setSelectedProduct(''); setProductSearch(''); setPurchasePrice(''); setSellingPrice(''); setSalePrice(''); setItemQuantity('1'); setAutoFetchedCost(null); setAvailableBatches([]); setSelectedBatchIdx(null); }}
                         className="h-[46px] w-[46px] rounded-2xl text-muted-steel border-2 border-outline-variant/40 hover:border-error/50 hover:bg-error/5 hover:text-error flex items-center justify-center transition-all duration-300 cursor-pointer">
                         <X size={18} strokeWidth={2.5} />
                       </button>
                     )}
                   </div>
                 </div>
+
+                {/* ════ Row 2 (sale only): Cost chips + Sale price + Serial ════ */}
+                {invoiceType === 'sale' && selectedProduct && (
+                  <div className="mb-4 rounded-2xl border border-outline-variant/30 bg-surface-container-low/40 backdrop-blur-sm p-4 flex flex-wrap gap-4 items-start relative z-10">
+
+                    {/* ── Batch cost chip selector ── */}
+                    {availableBatches.length > 0 && (
+                      <div className="flex flex-col gap-1.5 min-w-0">
+                        <label className="text-label-sm text-muted-steel uppercase tracking-wider">
+                          {availableBatches.length > 1
+                            ? t('invoices.selectCostBatch', { defaultValue: 'سعر الشراء' })
+                            : t('invoices.cost', { defaultValue: 'التكلفة' })
+                          }
+                        </label>
+                        <div className="flex flex-wrap gap-1.5">
+                          {availableBatches.map((batch, idx) => {
+                            const isSelected = selectedBatchIdx === idx;
+                            const profit = salePrice && parseFloat(salePrice) > 0
+                              ? parseFloat(salePrice) - batch.purchase_price
+                              : null;
+                            return (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => { setSelectedBatchIdx(idx); setAutoFetchedCost(batch.purchase_price); }}
+                                disabled={availableBatches.length === 1}
+                                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border text-sm font-medium transition-all duration-200 ${
+                                  availableBatches.length === 1
+                                    ? 'bg-surface-container-low border-outline-variant/30 text-charcoal-ink cursor-default'
+                                    : isSelected
+                                      ? 'bg-accent text-on-primary border-accent shadow-sm cursor-pointer'
+                                      : 'bg-surface-container-lowest text-charcoal-ink border-outline-variant/40 hover:border-accent/60 hover:bg-accent-surface/50 cursor-pointer'
+                                }`}
+                              >
+                                <span className="font-mono-tabular font-bold">{batch.purchase_price.toLocaleString()}</span>
+                                <span className={`text-[10px] font-mono ${isSelected ? 'text-on-primary/75' : 'text-muted-steel'}`}>
+                                  ({batch.quantity})
+                                </span>
+                                {profit != null && (
+                                  <span className={`text-[11px] font-bold font-mono-tabular px-1 py-0.5 rounded-md ${
+                                    isSelected
+                                      ? 'bg-white/20 text-on-primary'
+                                      : profit >= 0
+                                        ? 'bg-emerald-50 text-emerald-600'
+                                        : 'bg-red-50 text-red-500'
+                                  }`}>
+                                    {profit >= 0 ? '+' : ''}{profit.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {availableBatches.length > 1 && selectedBatchIdx === null && (
+                          <span className="text-[10px] text-amber-600 font-semibold flex items-center gap-1 mt-0.5">
+                            <span>⚠</span>
+                            {t('invoices.selectCostFirst', { defaultValue: 'اختر سعر الشراء أولاً' })}
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {/* ── Sale price input ── */}
+                    <div className="flex flex-col gap-1 min-w-[110px]">
+                      <label className="text-label-sm text-muted-steel uppercase tracking-wider mb-0.5">{t('invoices.salePrice')}</label>
+                      <input
+                        type="number"
+                        value={salePrice}
+                        onChange={(e) => setSalePrice(e.target.value)}
+                        placeholder="0"
+                        className={`w-[120px] ${inputClass}`}
+                      />
+                      {blendedCostInfo.cost != null && salePrice && parseFloat(salePrice) > 0 && (() => {
+                        const sp = parseFloat(salePrice);
+                        const tiers = blendedCostInfo.tiers;
+                        const isMultiTier = tiers.length > 1;
+
+                        return (
+                          <div className="flex flex-col gap-1 mt-1">
+                            {/* Per-tier profit breakdown */}
+                            {isMultiTier ? (
+                              <div className="flex flex-col gap-0.5">
+                                {tiers.map((tier, i) => {
+                                  const tierProfit = sp - tier.purchase_price;
+                                  const isLoss = tierProfit < 0;
+                                  return (
+                                    <span key={i} className={`text-[11px] font-mono-tabular font-semibold px-1 flex items-center gap-1 ${isLoss ? 'text-red-500' : 'text-emerald-600'}`}>
+                                      {isLoss ? '▼' : '▲'}
+                                      <span>{tier.qty} × ({isLoss ? '' : '+'}{tierProfit.toLocaleString(undefined, { maximumFractionDigits: 2 })})</span>
+                                      <span className="text-muted-steel font-normal text-[10px]">تكلفة {tier.purchase_price.toLocaleString()}</span>
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <span className={`text-[11px] font-mono-tabular font-bold px-1 ${sp - blendedCostInfo.cost > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                                {sp - blendedCostInfo.cost > 0 ? '▲ +' : '▼ '}
+                                {(sp - blendedCostInfo.cost).toLocaleString(undefined, { maximumFractionDigits: 2 })} {t('common.currency', { defaultValue: 'ج.م' })}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
+
+                    </div>
+
+                    {/* ── Serial Number ── */}
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-label-sm text-muted-steel uppercase tracking-wider mb-0.5 opacity-0 select-none">_</label>
+                      <button
+                        type="button"
+                        onClick={() => { setHasSerials(!hasSerials); if (hasSerials) setSerialNumber(''); }}
+                        className={`inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer btn-tactile ${
+                          hasSerials
+                            ? 'bg-indigo-600 text-white shadow-sm'
+                            : 'bg-surface-container-lowest text-muted-steel hover:text-charcoal-ink border border-outline-variant/40 hover:border-indigo-400/60'
+                        }`}
+                        title={t('invoices.toggleSerials', { defaultValue: 'تفعيل/إلغاء إدخال السيريال' })}
+                      >
+                        <Tag size={13} />
+                        {hasSerials ? t('invoices.serialActive', { defaultValue: 'السيريال مفعل' }) : t('invoices.addSerialBtn', { defaultValue: 'إدخال السيريال' })}
+                      </button>
+                      {hasSerials && (
+                        <input
+                          type="text"
+                          value={serialNumber}
+                          onChange={(e) => setSerialNumber(e.target.value)}
+                          placeholder={t('invoices.enterSerialPlaceholder', { defaultValue: 'رقم السيريال...' })}
+                          className={`w-[140px] ${inputClass}`}
+                          autoFocus
+                        />
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 <div className="border border-outline-variant/30 rounded-2xl overflow-hidden bg-surface-container-lowest/50 backdrop-blur-sm shadow-inner relative z-10">
                   <div className="grid grid-cols-12 gap-2 px-5 py-3 bg-surface-container-low/50 border-b border-outline-variant/30 text-xs font-bold text-muted-steel uppercase tracking-widest">
