@@ -168,6 +168,7 @@ export const api = {
   createCustomerPayment: (customerId, data) => request(`/customers/${customerId}/payments`, { method: 'POST', body: JSON.stringify(data) }),
   updateCustomerPayment: (customerId, paymentId, data) => request(`/customers/${customerId}/payments/${paymentId}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteCustomerPayment: (customerId, paymentId) => request(`/customers/${customerId}/payments/${paymentId}`, { method: 'DELETE' }),
+  createCustomerAdvancePayment: (customerId, data) => request(`/customers/${customerId}/advance-payment`, { method: 'POST', body: JSON.stringify(data) }),
   createCustomerStockReturn: (customerId, data) => request(`/customers/${customerId}/stock-return`, { method: 'POST', body: JSON.stringify(data) }),
 
   // Suppliers
@@ -181,6 +182,7 @@ export const api = {
   createSupplierPayment: (supplierId, data) => request(`/suppliers/${supplierId}/payments`, { method: 'POST', body: JSON.stringify(data) }),
   updateSupplierPayment: (supplierId, paymentId, data) => request(`/suppliers/${supplierId}/payments/${paymentId}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteSupplierPayment: (supplierId, paymentId) => request(`/suppliers/${supplierId}/payments/${paymentId}`, { method: 'DELETE' }),
+  createSupplierAdvancePayment: (supplierId, data) => request(`/suppliers/${supplierId}/advance-payment`, { method: 'POST', body: JSON.stringify(data) }),
   createSupplierStockReturn: (supplierId, data) => request(`/suppliers/${supplierId}/stock-return`, { method: 'POST', body: JSON.stringify(data) }),
 
   getProducts: (skip = 0, limit = 100, search = '', status = '') => request(`/products?skip=${skip}&limit=${limit}${search ? `&search=${encodeURIComponent(search)}` : ''}${status && status !== 'all' ? `&status=${encodeURIComponent(status)}` : ''}`),

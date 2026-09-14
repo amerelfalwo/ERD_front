@@ -52,6 +52,13 @@ export default function PartyDashboard() {
   const [isDeletingInvoice, setIsDeletingInvoice] = useState(false);
   const [productToReturn, setProductToReturn] = useState(null);
 
+  // Advance payment (prepayment) modal
+  const [isAdvanceModalOpen, setIsAdvanceModalOpen] = useState(false);
+  const [advanceAmount, setAdvanceAmount] = useState('');
+  const [advanceNotes, setAdvanceNotes] = useState('');
+  const [advanceSubmitting, setAdvanceSubmitting] = useState(false);
+  const [advanceError, setAdvanceError] = useState('');
+
   const toggleRow = useCallback((id) => {
     setExpandedRows(prev => {
       const next = new Set(prev);
@@ -119,6 +126,30 @@ export default function PartyDashboard() {
       setPaymentSubmitting(false);
     }
   }, [paymentAmount, paymentNotes, summary?.financials?.balance, isCustomer, partyId, t, loadSummary]);
+
+  const handleRecordAdvancePayment = useCallback(async () => {
+    setAdvanceError('');
+    const amt = Number(advanceAmount);
+    if (!amt || amt <= 0) {
+      setAdvanceError('أدخل مبلغاً صحيحاً.');
+      return;
+    }
+    setAdvanceSubmitting(true);
+    try {
+      const advFn = isCustomer ? api.createCustomerAdvancePayment : api.createSupplierAdvancePayment;
+      await advFn(partyId, { amount: amt, notes: advanceNotes.trim() || null });
+      setToastMessage('تم تسجيل الدفعة المسبقة بنجاح ✓');
+      setTimeout(() => setToastMessage(''), 3000);
+      setIsAdvanceModalOpen(false);
+      setAdvanceAmount('');
+      setAdvanceNotes('');
+      loadSummary();
+    } catch (err) {
+      setAdvanceError(err.response?.data?.detail || 'فشل تسجيل الدفعة المسبقة.');
+    } finally {
+      setAdvanceSubmitting(false);
+    }
+  }, [advanceAmount, advanceNotes, isCustomer, partyId, loadSummary]);
 
   const handleUpdatePayment = useCallback(async (paymentId) => {
     const amt = Number(editPaymentAmount);
@@ -284,6 +315,21 @@ export default function PartyDashboard() {
                 استرداد الرصيد من المورد (EGP {Math.abs(balance).toLocaleString(undefined, { minimumFractionDigits: 2 })})
               </button>
             )}
+
+            {/* Advance Payment button — always visible */}
+            <button
+              onClick={() => {
+                setAdvanceAmount('');
+                setAdvanceNotes('');
+                setAdvanceError('');
+                setIsAdvanceModalOpen(true);
+              }}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-label-md bg-violet-600 text-white hover:bg-violet-700 shadow-sm transition-all cursor-pointer btn-tactile font-medium"
+              title={isCustomer ? 'تسجيل دفعة مسبقة من العميل' : 'تسجيل دفعة مسبقة للمورد'}
+            >
+              <DollarSign size={18} />
+              دفعة مسبقة
+            </button>
           </div>
         </div>
 
@@ -474,6 +520,109 @@ export default function PartyDashboard() {
                     {financials.balance < 0
                       ? (isCustomer ? 'تأكيد إرجاع الرصيد وتصفير الحساب' : 'تأكيد استرداد الرصيد وتصفير الحساب')
                       : t('partyDashboard.recordPayment')}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Advance Payment Modal ── */}
+        {isAdvanceModalOpen && (
+          <div className="fixed inset-0 z-[100] bg-charcoal-ink/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-surface-container-lowest rounded-2xl shadow-2xl border border-outline-variant/60 w-full max-w-md overflow-hidden animate-fade-in-up">
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 rounded-xl bg-violet-100">
+                      <DollarSign size={20} className="text-violet-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-h3 text-charcoal-ink">
+                        {isCustomer ? 'دفعة مسبقة من العميل' : 'دفعة مسبقة للمورد'}
+                      </h3>
+                      <p className="text-xs text-muted-steel mt-0.5">
+                        {isCustomer
+                          ? 'سيُضاف المبلغ كرصيد دائن في حساب العميل'
+                          : 'سيُضاف المبلغ كرصيد دائن في حساب المورد'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setIsAdvanceModalOpen(false)}
+                    className="p-2 text-muted-steel hover:bg-surface-container-low rounded-xl transition-all btn-tactile"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+
+                {/* Current balance info */}
+                <div className="mb-5 bg-violet-50 border border-violet-200/60 rounded-xl p-4">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-muted-steel font-medium">الرصيد الحالي:</span>
+                    <span className={`font-mono-tabular font-bold ${
+                      balance > 0 ? 'text-amber-600' : balance < 0 ? 'text-emerald-600' : 'text-charcoal-ink'
+                    }`}>
+                      {balance < 0 ? '(له) ' : balance > 0 ? '(عليه) ' : ''}
+                      EGP {Math.abs(balance).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  <p className="text-xs text-violet-600 mt-2">
+                    💡 بعد التسجيل: الرصيد سيبقى لصالح {isCustomer ? 'العميل' : 'المورد'} ويُستهلك تلقائياً بالفواتير القادمة
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-label-sm text-charcoal-ink mb-1.5">
+                      المبلغ (EGP) <span className="text-error">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      value={advanceAmount}
+                      onChange={(e) => {
+                        setAdvanceAmount(e.target.value);
+                        if (advanceError) setAdvanceError('');
+                      }}
+                      placeholder="0.00"
+                      autoFocus
+                      className="w-full px-4 py-2.5 bg-surface-container-lowest border border-outline-variant focus:border-violet-500 focus:ring-1 focus:ring-violet-500 rounded-xl outline-none transition-all text-charcoal-ink font-mono-tabular text-lg"
+                    />
+                    {advanceError && <p className="text-error text-xs mt-1.5">{advanceError}</p>}
+                  </div>
+
+                  <div>
+                    <label className="block text-label-sm text-charcoal-ink mb-1.5">
+                      ملاحظات (اختياري)
+                    </label>
+                    <input
+                      type="text"
+                      value={advanceNotes}
+                      onChange={(e) => setAdvanceNotes(e.target.value)}
+                      placeholder="سبب الدفعة المسبقة..."
+                      className="w-full px-4 py-2.5 bg-surface-container-lowest border border-outline-variant focus:border-violet-500 focus:ring-1 focus:ring-violet-500 rounded-xl outline-none transition-all text-charcoal-ink text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-3 pt-5">
+                  <button
+                    onClick={() => setIsAdvanceModalOpen(false)}
+                    disabled={advanceSubmitting}
+                    className="px-5 py-2.5 rounded-xl text-label-md text-muted-steel hover:bg-surface-container-low transition-all cursor-pointer btn-tactile"
+                  >
+                    إلغاء
+                  </button>
+                  <button
+                    onClick={handleRecordAdvancePayment}
+                    disabled={advanceSubmitting || !advanceAmount || Number(advanceAmount) <= 0}
+                    className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-label-md bg-violet-600 text-white hover:bg-violet-700 shadow-sm transition-all cursor-pointer btn-tactile disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                  >
+                    {advanceSubmitting && <Loader2 size={16} className="animate-spin" />}
+                    <DollarSign size={16} />
+                    تسجيل الدفعة المسبقة
                   </button>
                 </div>
               </div>
