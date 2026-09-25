@@ -88,6 +88,7 @@ export const InvoiceDocument = ({
   // Format party details
   const displayPartyName = dataPartyName || partyName || '';
   const displayPartyPhone = data.partyPhone || data.party_phone || partyPhone || '';
+  const displayPartyAddress = data.partyAddress || data.party_address || partyAddress || '';
   const cleanPartyName = displayPartyName.replace(/^Dr\s*\/?\s*/i, '').trim();
 
   // Determine invoice type title and visual badge
@@ -179,6 +180,7 @@ export const InvoiceDocument = ({
             </p>
           )}
           {displayPartyPhone && <p className={styles.partyPhone}>{displayPartyPhone}</p>}
+          {displayPartyAddress && <p className={styles.partyAddress}>{displayPartyAddress}</p>}
         </div>
       </header>
 

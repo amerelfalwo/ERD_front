@@ -19,21 +19,21 @@
 .sizeA4 {
   max-width: 794px; /* ~210mm at 96dpi */
   padding: 2.5rem 2.25rem;
-  font-size: 1rem;
+  font-size: 1.125rem;
 }
 
 /* A5 — Compact professional layout */
 .sizeA5 {
   max-width: 559px; /* ~148mm at 96dpi */
   padding: 1.5rem 1.25rem;
-  font-size: 0.875rem;
+  font-size: 1rem;
 }
 
 /* 80mm Thermal Receipt — Narrow stacked layout */
 .sizeReceipt {
   max-width: 302px; /* 80mm at 96dpi */
   padding: 0.75rem 0.5rem;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
 }
 
 /* ── Header — Horizontal (A4 / A5) ──────────────────────────────── */
@@ -132,6 +132,15 @@
   color: #4b5563;
   margin: 0.15rem 0 0 0;
   direction: ltr;
+}
+
+.partyAddress {
+  font-size: 0.78em;
+  font-weight: 400;
+  color: #4b5563;
+  margin: 0.1rem 0 0 0;
+  direction: rtl;
+  unicode-bidi: plaintext;
 }
 
 /* ── Header — Receipt (Stacked, no overlap) ─────────────────────── */

@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useQueryClient } from '@tanstack/react-query';
 import { X, Loader2, Plus, Search, Pencil, Trash2, Phone, ArrowRight } from 'lucide-react';
 import { ActionIcon, Flex, Tooltip, SimpleGrid, Card, Pagination, Select } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
@@ -10,9 +11,11 @@ import { SkeletonCard } from '../../components/Skeleton';
 /* ─── Add / Edit Modal ─── */
 function CustomerModal({ isOpen, onClose, customer, onSaved }) {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const isEdit = !!customer;
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState('');
   const [initialBalance, setInitialBalance] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -20,9 +23,10 @@ function CustomerModal({ isOpen, onClose, customer, onSaved }) {
     if (customer) {
       setName(customer.name || '');
       setPhone(customer.phone || '');
+      setAddress(customer.address || '');
       setInitialBalance(customer.initial_balance != null ? String(customer.initial_balance) : '');
     } else {
-      setName(''); setPhone(''); setInitialBalance('');
+      setName(''); setPhone(''); setAddress(''); setInitialBalance('');
     }
   }, [customer]);
 
@@ -35,6 +39,7 @@ function CustomerModal({ isOpen, onClose, customer, onSaved }) {
     const payload = {
       name: name.trim(),
       phone: phone.trim() || null,
+      address: address.trim() || null,
       initial_balance: initialBalance ? parseFloat(initialBalance) : 0,
     };
     try {
@@ -45,6 +50,7 @@ function CustomerModal({ isOpen, onClose, customer, onSaved }) {
         await api.createCustomer(payload);
         notifications.show({ title: t('common.success'), message: t('customers.customerCreated'), color: 'green' });
       }
+      queryClient.invalidateQueries({ queryKey: ['parties'] });
       onSaved();
       onClose();
     } catch (err) {
@@ -76,6 +82,13 @@ function CustomerModal({ isOpen, onClose, customer, onSaved }) {
             <label className="block text-label-sm text-muted-steel mb-1.5 uppercase tracking-wider">{t('customers.phone')}</label>
             <input type="text" value={phone} onChange={e => setPhone(e.target.value)} placeholder={t('customers.phonePlaceholder')}
               className="w-full px-4 py-2.5 rounded-xl border border-outline-variant/60 bg-surface-container-lowest text-sm text-charcoal-ink placeholder:text-outline focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all duration-200"
+            />
+          </div>
+          <div>
+            <label className="block text-label-sm text-muted-steel mb-1.5 uppercase tracking-wider">{t('customers.address', 'العنوان')}</label>
+            <input type="text" value={address} onChange={e => setAddress(e.target.value)} placeholder={t('customers.addressPlaceholder', 'أدخل العنوان (اختياري)')}
+              className="w-full px-4 py-2.5 rounded-xl border border-outline-variant/60 bg-surface-container-lowest text-sm text-charcoal-ink placeholder:text-outline focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all duration-200"
+              dir="rtl"
             />
           </div>
           <div>
@@ -286,6 +299,7 @@ export default function CustomersView() {
     try {
       await api.deleteCustomer(customerToDelete.id);
       notifications.show({ title: t('common.success'), message: t('customers.customerDeleted'), color: 'green' });
+      queryClient.invalidateQueries({ queryKey: ['parties'] });
       setCustomerToDelete(null);
       fetchCustomers();
     } catch (err) {

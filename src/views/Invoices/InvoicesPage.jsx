@@ -272,6 +272,20 @@ export default function InvoicesView() {
   const [newPartyPhone, setNewPartyPhone] = useState('');
   const [newPartyAddress, setNewPartyAddress] = useState('');
 
+  const [partySearch, setPartySearch] = useState('');
+  const [partyDropdownOpen, setPartyDropdownOpen] = useState(false);
+  const partyDropdownRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (partyDropdownRef.current && !partyDropdownRef.current.contains(e.target)) {
+        setPartyDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const { data: supplierSummaryRes } = useQuery({
     queryKey: ['supplierSummary', selectedParty],
     queryFn: () => api.getSupplierSummary(selectedParty),
@@ -360,6 +374,21 @@ export default function InvoicesView() {
     document.title = `${t('common.erbSystem', 'ERB_SYSTEM')} | ${t('invoices.title', 'الفواتير')}`;
   }, [t]);
 
+  useEffect(() => {
+    setPartySearch('');
+  }, [invoiceType]);
+
+  useEffect(() => {
+    if (!selectedParty) {
+      setPartySearch('');
+    } else if (parties.length > 0) {
+      const party = parties.find(p => String(p.id) === selectedParty);
+      if (party && !partySearch) {
+        setPartySearch(party.name);
+      }
+    }
+  }, [selectedParty, parties]);
+
   const filteredParties = useMemo(() => {
     return parties.filter((p) => {
       const pType = String(p.party_type?.value || p.party_type || p.type || '').toLowerCase();
@@ -370,11 +399,22 @@ export default function InvoicesView() {
     });
   }, [parties, invoiceType]);
 
+  const searchedParties = useMemo(() => {
+    const q = partySearch.trim().toLowerCase();
+    const selectedName = filteredParties.find(p => String(p.id) === selectedParty)?.name?.trim()?.toLowerCase();
+    if (!q || q === selectedName) return filteredParties;
+    return filteredParties.filter((p) =>
+      (p.name && p.name.toLowerCase().includes(q)) ||
+      (p.phone && p.phone.includes(q))
+    );
+  }, [filteredParties, partySearch, selectedParty]);
+
   useEffect(() => {
     if (!selectedProduct) {
       setAutoFetchedCost(null);
       setAvailableBatches([]);
       setSelectedBatchIdx(null);
+      setSalePrice('');
       return;
     }
     const prod = (invoiceType === 'supplier_return' ? supplierProducts : products)
@@ -382,6 +422,12 @@ export default function InvoicesView() {
     if (!prod) return;
     if (invoiceType === 'purchase' || invoiceType === 'supplier_return') {
       if (prod.last_purchase_price) setPurchasePrice(prod.last_purchase_price);
+      if (invoiceType === 'purchase') {
+        const defaultSell = prod.sell_price;
+        if (defaultSell != null && Number(defaultSell) > 0) {
+          setSellingPrice(String(defaultSell));
+        }
+      }
     } else if (invoiceType === 'sale') {
       // Build list of available batches (with stock) grouped by purchase_price
       const invProd = inventoryProductsMap?.[String(selectedProduct)];
@@ -413,9 +459,28 @@ export default function InvoicesView() {
         setAutoFetchedCost(null);
         setSelectedBatchIdx(null);
       }
-      // Pre-fill sell price from product's sell_price if not already set
-      const sell = prod.sell_price;
-      if (sell != null && !salePrice) setSalePrice(String(sell));
+      
+      // Determine last used selling price for the product:
+      // 1. From batches (latest batch with current_selling_price > 0)
+      // 2. From product's configured sell_price
+      let lastSellPrice = null;
+      if (rawBatches.length > 0) {
+        const batchWithPrice = [...rawBatches].reverse().find(b => Number(b.current_selling_price || 0) > 0);
+        if (batchWithPrice) {
+          lastSellPrice = Number(batchWithPrice.current_selling_price);
+        }
+      }
+      if (lastSellPrice == null && prod.sell_price != null && Number(prod.sell_price) > 0) {
+        lastSellPrice = Number(prod.sell_price);
+      }
+
+      if (lastSellPrice != null && lastSellPrice > 0) {
+        setSalePrice(String(lastSellPrice));
+      } else if (prod.sell_price != null && Number(prod.sell_price) >= 0) {
+        setSalePrice(String(prod.sell_price));
+      } else {
+        setSalePrice('');
+      }
     }
   }, [selectedProduct, products, supplierProducts, invoiceType, inventoryProductsMap]);
 
@@ -852,8 +917,10 @@ export default function InvoicesView() {
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             <div className="lg:col-span-8 space-y-6">
-              <div className="relative bg-surface-container-lowest/80 backdrop-blur-2xl border border-outline-variant/50 rounded-3xl p-7 shadow-xl shadow-charcoal-ink/5 hover:shadow-2xl hover:shadow-charcoal-ink/10 transition-all duration-500 animate-fade-in-up stagger-1 overflow-hidden group">
-                <div className="absolute -top-32 -right-32 w-64 h-64 bg-accent/5 rounded-full blur-3xl group-hover:bg-accent/10 transition-colors duration-700 pointer-events-none" />
+              <div className="relative z-30 bg-surface-container-lowest/80 backdrop-blur-2xl border border-outline-variant/50 rounded-3xl p-7 shadow-xl shadow-charcoal-ink/5 hover:shadow-2xl hover:shadow-charcoal-ink/10 transition-all duration-500 animate-fade-in-up stagger-1 group">
+                <div className="absolute inset-0 rounded-3xl overflow-hidden pointer-events-none">
+                  <div className="absolute -top-32 -right-32 w-64 h-64 bg-accent/5 rounded-full blur-3xl group-hover:bg-accent/10 transition-colors duration-700" />
+                </div>
                 <div className="flex items-center justify-between mb-4 pb-3 border-b border-outline-variant/30 relative z-10">
                   <div className="flex items-center gap-2.5">
                     <div className="p-1.5 rounded-lg bg-accent-surface text-accent"><UserSquare2 size={18} /></div>
@@ -861,7 +928,7 @@ export default function InvoicesView() {
                   </div>
                   {invoiceType === 'sale' && (
                     <button
-                      onClick={() => { setIsNewParty(!isNewParty); if (!isNewParty) setSelectedParty(''); }}
+                      onClick={() => { setIsNewParty(!isNewParty); if (!isNewParty) { setSelectedParty(''); setPartySearch(''); } }}
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-label-sm transition-all cursor-pointer btn-tactile ${
                         isNewParty
                           ? 'bg-accent text-on-primary shadow-sm'
@@ -875,16 +942,79 @@ export default function InvoicesView() {
                 </div>
 
                 {!isNewParty ? (
-                  <div>
+                  <div ref={partyDropdownRef} className="relative">
                     <label className="text-label-sm text-muted-steel block uppercase tracking-wider mb-1.5">{invoiceType === 'sale' ? t('invoices.selectClient') : t('invoices.selectSupplier')}</label>
-                    <select value={selectedParty} onChange={(e) => setSelectedParty(e.target.value)} className={selectClass}>
-                      <option value="">{invoiceType === 'sale' ? t('invoices.selectClientPlaceholder') : t('invoices.selectSupplierPlaceholder')}</option>
-                      {filteredParties.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name}{p.phone ? ` — ${p.phone}` : ''}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="relative">
+                      <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-steel/50 pointer-events-none" />
+                      <input
+                        type="text"
+                        value={
+                          partyDropdownOpen
+                            ? partySearch
+                            : (selectedParty
+                                ? filteredParties.find(p => String(p.id) === selectedParty)?.name || partySearch
+                                : partySearch)
+                        }
+                        onChange={(e) => {
+                          setPartySearch(e.target.value);
+                          setPartyDropdownOpen(true);
+                          if (!e.target.value) setSelectedParty('');
+                        }}
+                        onFocus={() => {
+                          setPartyDropdownOpen(true);
+                          if (selectedParty && !partySearch) {
+                            const pName = filteredParties.find(p => String(p.id) === selectedParty)?.name;
+                            if (pName) setPartySearch(pName);
+                          }
+                        }}
+                        placeholder={invoiceType === 'sale' ? t('invoices.selectClientPlaceholder') : t('invoices.selectSupplierPlaceholder')}
+                        className={`${inputClass} pr-10 pl-10 cursor-text`}
+                        dir="rtl"
+                        autoComplete="off"
+                      />
+                      {(selectedParty || partySearch) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedParty('');
+                            setPartySearch('');
+                            setPartyDropdownOpen(true);
+                          }}
+                          className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-steel hover:text-charcoal-ink p-1 rounded-full hover:bg-surface-container-low transition-colors"
+                          title={t('common.clear', 'مسح')}
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+
+                    {partyDropdownOpen && (
+                      <div className="absolute z-50 top-full mt-1 w-full bg-surface-container-lowest border border-outline-variant/60 rounded-2xl shadow-2xl max-h-56 overflow-y-auto py-1" style={{ backgroundColor: 'var(--color-surface-container-lowest, #ffffff)' }}>
+                        {searchedParties.length === 0 ? (
+                          <div className="px-4 py-3 text-sm text-muted-steel text-center">
+                            {t('common.noResults', 'لا توجد نتائج')}
+                          </div>
+                        ) : (
+                          searchedParties.map((p) => (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedParty(String(p.id));
+                                setPartySearch(p.name);
+                                setPartyDropdownOpen(false);
+                              }}
+                              className={`w-full text-right px-4 py-2 text-sm hover:bg-surface-container-low transition-colors flex items-center justify-between ${
+                                String(p.id) === selectedParty ? 'bg-accent-surface text-accent font-semibold' : 'text-charcoal-ink'
+                              }`}
+                            >
+                              <span>{p.name}</span>
+                              {p.phone && <span className="text-xs text-muted-steel font-mono-tabular">{p.phone}</span>}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -937,8 +1067,10 @@ export default function InvoicesView() {
                 )}
               </div>
 
-              <div className="relative bg-surface-container-lowest/80 backdrop-blur-2xl border border-outline-variant/50 rounded-3xl p-7 shadow-xl shadow-charcoal-ink/5 hover:shadow-2xl hover:shadow-charcoal-ink/10 transition-all duration-500 animate-fade-in-up stagger-2 overflow-hidden group">
-                <div className="absolute -bottom-32 -left-32 w-64 h-64 bg-accent/5 rounded-full blur-3xl group-hover:bg-accent/10 transition-colors duration-700 pointer-events-none" />
+              <div className="relative z-10 bg-surface-container-lowest/80 backdrop-blur-2xl border border-outline-variant/50 rounded-3xl p-7 shadow-xl shadow-charcoal-ink/5 hover:shadow-2xl hover:shadow-charcoal-ink/10 transition-all duration-500 animate-fade-in-up stagger-2 group">
+                <div className="absolute inset-0 rounded-3xl overflow-hidden pointer-events-none">
+                  <div className="absolute -bottom-32 -left-32 w-64 h-64 bg-accent/5 rounded-full blur-3xl group-hover:bg-accent/10 transition-colors duration-700" />
+                </div>
                 <div className="flex items-center gap-2.5 mb-4 pb-3 border-b border-outline-variant/30 relative z-10">
                   <div className="p-1.5 rounded-lg bg-accent-surface text-accent"><Package size={18} /></div>
                   <h3 className="text-h3 text-charcoal-ink">{t('invoices.lineItems')}</h3>
@@ -1753,36 +1885,46 @@ export default function InvoicesView() {
               </div>
             </div>
             <div className="flex-1 overflow-y-auto py-8 flex flex-col items-center gap-8">
-              {bulkInvoicesToPrint.map((inv) => (
-                <div key={inv.id} className="shadow-2xl rounded-xl overflow-hidden border border-outline-variant/30">
-                  <InvoiceDocument
-                    invoice={inv}
-                    tenantName={tenantName}
-                    partyName={parties.find(p => p.id === inv.party_id)?.name || 'Unknown'}
-                    logoUrl={logoUrl}
-                    defaultFooterText={defaultFooterText}
-                    taxNumber={taxNumber}
-                    paperSize={paperSize}
-                  />
-                </div>
-              ))}
+              {bulkInvoicesToPrint.map((inv) => {
+                const party = parties.find(p => p.id === inv.party_id);
+                return (
+                  <div key={inv.id} className="shadow-2xl rounded-xl overflow-hidden border border-outline-variant/30">
+                    <InvoiceDocument
+                      invoice={inv}
+                      tenantName={tenantName}
+                      partyName={party?.name || inv.party_name || 'Unknown'}
+                      partyPhone={party?.phone || inv.party_phone || null}
+                      partyAddress={party?.address || inv.party_address || null}
+                      logoUrl={logoUrl}
+                      defaultFooterText={defaultFooterText}
+                      taxNumber={taxNumber}
+                      paperSize={paperSize}
+                    />
+                  </div>
+                );
+              })}
             </div>
           </div>
 
           {createPortal(
             <div ref={printPortalRef} className="print-portal" style={{ display: 'none' }}>
-              {bulkInvoicesToPrint.map((inv) => (
-                <InvoiceDocument
-                  key={inv.id}
-                  invoice={inv}
-                  tenantName={tenantName}
-                  partyName={parties.find(p => p.id === inv.party_id)?.name || 'Unknown'}
-                  logoUrl={logoUrl}
-                  defaultFooterText={defaultFooterText}
-                  taxNumber={taxNumber}
-                  paperSize={paperSize}
-                />
-              ))}
+              {bulkInvoicesToPrint.map((inv) => {
+                const party = parties.find(p => p.id === inv.party_id);
+                return (
+                  <InvoiceDocument
+                    key={inv.id}
+                    invoice={inv}
+                    tenantName={tenantName}
+                    partyName={party?.name || inv.party_name || 'Unknown'}
+                    partyPhone={party?.phone || inv.party_phone || null}
+                    partyAddress={party?.address || inv.party_address || null}
+                    logoUrl={logoUrl}
+                    defaultFooterText={defaultFooterText}
+                    taxNumber={taxNumber}
+                    paperSize={paperSize}
+                  />
+                );
+              })}
             </div>,
             document.body
           )}
