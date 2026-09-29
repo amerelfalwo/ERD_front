@@ -86,21 +86,55 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
       .finally(() => setLoadingPayments(false));
   }, [invoice]);
 
+  // Only pre-fetch batches for products that are ALREADY in the invoice items.
+  // Additional batches are loaded on-demand when user selects from the dropdown (onProductSelect).
   useEffect(() => {
-    products.forEach((p) => {
-      if (!batches[p.id]) {
-        api.getBatchesByProduct(p.id)
-          .then((b) => setBatches((prev) => ({ ...prev, [p.id]: b })))
+    if (!items.length) return;
+    const productIds = [...new Set(items.map((it) => it.product_id).filter(Boolean))];
+    productIds.forEach((pid) => {
+      if (!batches[pid]) {
+        api.getBatchesByProduct(pid)
+          .then((b) => setBatches((prev) => ({ ...prev, [pid]: b })))
           .catch(() => {});
       }
     });
-  }, [products]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items.map(it => it.product_id).join(',')]);
 
   const deliveryFee = parseFloat(invoice?.delivery_fee) || 0;
   const subtotal = items.reduce((acc, it) => {
     return acc + (parseFloat(it.quantity) || 0) * (parseFloat(it.unit_price) || 0);
   }, 0);
   const total = subtotal + deliveryFee;
+
+  // For SELL invoices in edit mode, add back the current item quantities to the
+  // batch remaining so the dropdown shows "available if you were to re-set this qty".
+  const _isSell = ['SELL', 'SALE'].includes((invoice?.invoice_type || '').toUpperCase());
+  const batchesForDisplay = (() => {
+    if (!_isSell) return batches;
+    // Build a map of product_id → credited qty from current items
+    const creditByProduct = {};
+    items.forEach((it) => {
+      const pid = it.product_id;
+      if (pid) {
+        creditByProduct[pid] = (creditByProduct[pid] || 0) + (parseFloat(it.quantity) || 0);
+      }
+    });
+    if (!Object.keys(creditByProduct).length) return batches;
+    // Deep-clone only the affected product batch arrays, adding back the credited qty
+    const result = { ...batches };
+    Object.entries(creditByProduct).forEach(([pid, credit]) => {
+      const pBatches = batches[Number(pid)];
+      if (!pBatches?.length) return;
+      // Add the credit to the first (primary/FIFO) batch for display purposes
+      result[Number(pid)] = pBatches.map((b, i) =>
+        i === 0
+          ? { ...b, remaining_quantity: (Number(b.remaining_quantity) || 0) + credit }
+          : b
+      );
+    });
+    return result;
+  })();
 
   const totalPaid = payments.reduce((acc, p) => acc + parseFloat(p.amount), 0);
   const balance = total - totalPaid;
@@ -136,6 +170,7 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
    * SELL invoices: user picks a product from the dropdown.
    * We store product_id (for the save payload) and resolve the active batch
    * only for price look-up purposes.
+   * Batches are loaded on-demand (lazy) if not yet cached.
    */
   function onProductSelect(idx, productId, productObj) {
     if (!productId) {
@@ -146,40 +181,56 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
     }
     const pId = Number(productId);
     const product = products.find((p) => p.id === pId) || productObj;
-    const pBatches = batches[pId] || [];
-    const activeBatch = pBatches.find((b) => Number(b.remaining_quantity) > 0) || pBatches[0];
-    const highestBatch = pBatches.reduce((acc, b) => {
-      if (!acc) return b;
-      const bPrice = Number(b.selling_price ?? b.current_selling_price ?? 0);
-      const aPrice = Number(acc.selling_price ?? acc.current_selling_price ?? 0);
-      return bPrice > aPrice ? b : acc;
-    }, null);
 
-    // Try selling price first
-    const sellingPrice =
-      highestBatch?.selling_price ??
-      highestBatch?.current_selling_price ??
-      activeBatch?.selling_price ??
-      activeBatch?.current_selling_price ??
-      null;
+    function applyBatches(pBatches) {
+      const activeBatch = pBatches.find((b) => Number(b.remaining_quantity) > 0) || pBatches[0];
+      const highestBatch = pBatches.reduce((acc, b) => {
+        if (!acc) return b;
+        const bPrice = Number(b.selling_price ?? b.current_selling_price ?? 0);
+        const aPrice = Number(acc.selling_price ?? acc.current_selling_price ?? 0);
+        return bPrice > aPrice ? b : acc;
+      }, null);
 
-    // Fallback to purchase price if no selling price
-    const purchasePrice = activeBatch?.purchase_price ?? activeBatch?.unit_cost ?? null;
-    const isPurchasePrice = !sellingPrice && !!purchasePrice;
-    const resolvedPrice = sellingPrice ?? purchasePrice ?? '';
+      const sellingPrice =
+        highestBatch?.selling_price ??
+        highestBatch?.current_selling_price ??
+        activeBatch?.selling_price ??
+        activeBatch?.current_selling_price ??
+        null;
 
-    setItems((prev) => prev.map((it, i) =>
-      i === idx
-        ? {
-            ...it,
-            product_id: pId,
-            batch_id: activeBatch ? activeBatch.id : '',
-            unit_price: String(resolvedPrice),
-            product_name: product?.name || '',
-            price_is_purchase: isPurchasePrice,
-          }
-        : it
-    ));
+      const purchasePrice = activeBatch?.purchase_price ?? activeBatch?.unit_cost ?? null;
+      const isPurchasePrice = !sellingPrice && !!purchasePrice;
+      const resolvedPrice = sellingPrice ?? purchasePrice ?? '';
+
+      setItems((prev) => prev.map((it, i) =>
+        i === idx
+          ? {
+              ...it,
+              product_id: pId,
+              batch_id: activeBatch ? activeBatch.id : '',
+              unit_price: String(resolvedPrice),
+              product_name: product?.name || '',
+              price_is_purchase: isPurchasePrice,
+            }
+          : it
+      ));
+    }
+
+    // Use cached batches if available, otherwise fetch on-demand
+    if (batches[pId]) {
+      applyBatches(batches[pId]);
+    } else {
+      // Optimistically update product name while loading batches
+      setItems((prev) => prev.map((it, i) =>
+        i === idx ? { ...it, product_id: pId, product_name: product?.name || '', unit_price: '' } : it
+      ));
+      api.getBatchesByProduct(pId)
+        .then((b) => {
+          setBatches((prev) => ({ ...prev, [pId]: b }));
+          applyBatches(b);
+        })
+        .catch(() => {});
+    }
   }
 
   /** PURCHASE invoices: batch-level dropdown (disabled in UI but kept for completeness) */
@@ -335,7 +386,7 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
                       productName={item.product_name}
                       onChange={(productId, productObj) => onProductSelect(idx, productId, productObj)}
                       products={products}
-                      batches={batches}
+                      batches={batchesForDisplay}
                       placeholder={t('editInvoiceModal.editInvoiceSelectProduct', { defaultValue: 'بحث باسم المنتج...' })}
                       inputClass={inputCls}
                     />

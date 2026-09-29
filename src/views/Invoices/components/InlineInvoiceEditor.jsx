@@ -63,15 +63,20 @@ export default function InlineInvoiceEditor({ invoice, onCancel, onSaved, onPrin
       .finally(() => setLoadingPayments(false));
   }, [invoice]);
 
+  // Only pre-fetch batches for products already in the invoice items.
+  // Additional batches load on-demand when user selects from dropdown.
   useEffect(() => {
-    products.forEach((p) => {
-      if (!batches[p.id]) {
-        api.getBatchesByProduct(p.id)
-          .then((b) => setBatches((prev) => ({ ...prev, [p.id]: b })))
+    if (!items.length) return;
+    const productIds = [...new Set(items.map((it) => it.product_id).filter(Boolean))];
+    productIds.forEach((pid) => {
+      if (!batches[pid]) {
+        api.getBatchesByProduct(pid)
+          .then((b) => setBatches((prev) => ({ ...prev, [pid]: b })))
           .catch(() => {});
       }
     });
-  }, [products]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items.map(it => it.product_id).join(',')]);
 
   const deliveryFee = parseFloat(invoice?.delivery_fee) || 0;
   const subtotal = items.reduce((acc, it) => {
@@ -116,42 +121,57 @@ export default function InlineInvoiceEditor({ invoice, onCancel, onSaved, onPrin
     }
     const pId = Number(productId);
     const product = productObj || products.find((p) => p.id === pId);
-    const pBatches = batches[pId] || [];
-    const activeBatch = pBatches.find((b) => Number(b.remaining_quantity) > 0) || pBatches[0];
-    const highestBatch = pBatches.reduce((acc, b) => {
-      if (!acc) return b;
-      const bPrice = Number(b.selling_price ?? b.current_selling_price ?? 0);
-      const aPrice = Number(acc.selling_price ?? acc.current_selling_price ?? 0);
-      return bPrice > aPrice ? b : acc;
-    }, null);
 
-    // Try selling price first
-    const sellingPrice =
-      highestBatch?.selling_price ??
-      highestBatch?.current_selling_price ??
-      activeBatch?.selling_price ??
-      activeBatch?.current_selling_price ??
-      null;
+    function applyBatches(pBatches) {
+      const activeBatch = pBatches.find((b) => Number(b.remaining_quantity) > 0) || pBatches[0];
+      const highestBatch = pBatches.reduce((acc, b) => {
+        if (!acc) return b;
+        const bPrice = Number(b.selling_price ?? b.current_selling_price ?? 0);
+        const aPrice = Number(acc.selling_price ?? acc.current_selling_price ?? 0);
+        return bPrice > aPrice ? b : acc;
+      }, null);
 
-    // Fallback to purchase price if no selling price
-    const purchasePrice = activeBatch?.purchase_price ?? activeBatch?.unit_cost ?? null;
-    const isPurchasePrice = !sellingPrice && !!purchasePrice;
-    const resolvedPrice = sellingPrice ?? purchasePrice ?? '';
+      const sellingPrice =
+        highestBatch?.selling_price ??
+        highestBatch?.current_selling_price ??
+        activeBatch?.selling_price ??
+        activeBatch?.current_selling_price ??
+        null;
 
-    setItems((prev) =>
-      prev.map((it, i) =>
-        i === idx
-          ? {
-              ...it,
-              product_id: pId,
-              batch_id: activeBatch ? activeBatch.id : '',
-              unit_price: String(resolvedPrice || it.unit_price || ''),
-              product_name: product?.name || it.product_name || '',
-              price_is_purchase: isPurchasePrice,
-            }
-          : it
-      )
-    );
+      const purchasePrice = activeBatch?.purchase_price ?? activeBatch?.unit_cost ?? null;
+      const isPurchasePrice = !sellingPrice && !!purchasePrice;
+      const resolvedPrice = sellingPrice ?? purchasePrice ?? '';
+
+      setItems((prev) =>
+        prev.map((it, i) =>
+          i === idx
+            ? {
+                ...it,
+                product_id: pId,
+                batch_id: activeBatch ? activeBatch.id : '',
+                unit_price: String(resolvedPrice || it.unit_price || ''),
+                product_name: product?.name || it.product_name || '',
+                price_is_purchase: isPurchasePrice,
+              }
+            : it
+        )
+      );
+    }
+
+    if (batches[pId]) {
+      applyBatches(batches[pId]);
+    } else {
+      // Optimistically update name while fetching batches
+      setItems((prev) => prev.map((it, i) =>
+        i === idx ? { ...it, product_id: pId, product_name: product?.name || '', unit_price: '' } : it
+      ));
+      api.getBatchesByProduct(pId)
+        .then((b) => {
+          setBatches((prev) => ({ ...prev, [pId]: b }));
+          applyBatches(b);
+        })
+        .catch(() => {});
+    }
   }
 
   function onBatchSelect(idx, batchId) {
