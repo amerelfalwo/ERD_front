@@ -158,7 +158,7 @@ export const api = {
   createStockReturn: (partyId, data) => request(`/parties/${partyId}/stock-return`, { method: 'POST', body: JSON.stringify(data) }),
 
   // Customers
-  getCustomers: (skip = 0, limit = 100) => request(`/customers?skip=${skip}&limit=${limit}`),
+  getCustomers: (skip = 0, limit = 100, search = '') => request(`/customers?skip=${skip}&limit=${limit}${search ? `&search=${encodeURIComponent(search)}` : ''}`),
   getCustomersSelect: () => request('/customers/select'),
   createCustomer: (data) => request('/customers', { method: 'POST', body: JSON.stringify(data) }),
   updateCustomer: (customerId, data) => request(`/customers/${customerId}`, { method: 'PUT', body: JSON.stringify(data) }),
@@ -172,7 +172,7 @@ export const api = {
   createCustomerStockReturn: (customerId, data) => request(`/customers/${customerId}/stock-return`, { method: 'POST', body: JSON.stringify(data) }),
 
   // Suppliers
-  getSuppliers: (skip = 0, limit = 100) => request(`/suppliers?skip=${skip}&limit=${limit}`),
+  getSuppliers: (skip = 0, limit = 100, search = '') => request(`/suppliers?skip=${skip}&limit=${limit}${search ? `&search=${encodeURIComponent(search)}` : ''}`),
   getSuppliersSelect: () => request('/suppliers/select'),
   createSupplier: (data) => request('/suppliers', { method: 'POST', body: JSON.stringify(data) }),
   updateSupplier: (supplierId, data) => request(`/suppliers/${supplierId}`, { method: 'PUT', body: JSON.stringify(data) }),

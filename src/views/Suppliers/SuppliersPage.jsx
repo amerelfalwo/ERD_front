@@ -271,17 +271,22 @@ export default function SuppliersView() {
     setSupplierToDelete(supplier);
   }, []);
 
+  // Reset page to 1 when search changes
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
+
   const fetchSuppliers = useCallback(async () => {
     setLoading(true);
     try {
       const skip = (page - 1) * LIMIT;
-      const data = await api.getSuppliers(skip, LIMIT);
+      const data = await api.getSuppliers(skip, LIMIT, search);
       const list = Array.isArray(data) ? data : (data?.data || data?.items || []);
       setSuppliers(list);
       setHasMore(list.length === LIMIT);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
-  }, [page]);
+  }, [page, search]);
 
   useEffect(() => { fetchSuppliers(); }, [fetchSuppliers]);
 
@@ -306,18 +311,37 @@ export default function SuppliersView() {
 
   const processedSuppliers = useMemo(() => {
     let result = [...suppliers];
-    if (search) {
-      const lower = search.toLowerCase();
-      result = result.filter(s => s.name.toLowerCase().includes(lower) || (s.phone && s.phone.includes(lower)));
-    }
-    if (sort === 'a-z') {
-      result.sort((a, b) => a.name.localeCompare(b.name));
-    } else if (sort === 'z-a') {
-      result.sort((a, b) => b.name.localeCompare(a.name));
-    } else if (sort === 'balance-high') {
-      result.sort((a, b) => (b.calculated_balance || 0) - (a.calculated_balance || 0));
-    } else if (sort === 'balance-low') {
-      result.sort((a, b) => (a.calculated_balance || 0) - (b.calculated_balance || 0));
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      // Best-match ranking
+      result.sort((a, b) => {
+        const aName = (a.name || '').toLowerCase();
+        const bName = (b.name || '').toLowerCase();
+        const aPhone = (a.phone || '').toLowerCase();
+        const bPhone = (b.phone || '').toLowerCase();
+
+        const getRank = (name, phone) => {
+          if (name === q || phone === q) return 1; // Exact match
+          if (name.startsWith(q) || phone.startsWith(q)) return 2; // Starts with
+          if (name.includes(q) || phone.includes(q)) return 3; // Contains
+          return 4;
+        };
+
+        const rankA = getRank(aName, aPhone);
+        const rankB = getRank(bName, bPhone);
+        if (rankA !== rankB) return rankA - rankB;
+        return aName.localeCompare(bName);
+      });
+    } else {
+      if (sort === 'a-z') {
+        result.sort((a, b) => a.name.localeCompare(b.name));
+      } else if (sort === 'z-a') {
+        result.sort((a, b) => b.name.localeCompare(a.name));
+      } else if (sort === 'balance-high') {
+        result.sort((a, b) => (b.calculated_balance || 0) - (a.calculated_balance || 0));
+      } else if (sort === 'balance-low') {
+        result.sort((a, b) => (a.calculated_balance || 0) - (b.calculated_balance || 0));
+      }
     }
     return result;
   }, [suppliers, search, sort]);
