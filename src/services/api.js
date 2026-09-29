@@ -6,94 +6,205 @@ function buildUrl(endpoint) {
   return `${BASE_URL}${path}`;
 }
 
-const APP_VERSION = 'v1';
-const CACHE_TTL = 600000; // 10 minutes
+const APP_VERSION = 'v2';
 
-// In-memory fallback if localStorage fails or is unavailable
+// ─── TTL map per endpoint prefix (ms) ─────────────────────────────────────────
+const TTL_MAP = {
+  '/products':   10 * 60 * 1000,  // 10 min
+  '/batches':    10 * 60 * 1000,
+  '/customers':  10 * 60 * 1000,
+  '/suppliers':  10 * 60 * 1000,
+  '/parties':    10 * 60 * 1000,
+  '/invoices':    3 * 60 * 1000,  // 3 min — more volatile
+  '/payments':    2 * 60 * 1000,
+  '/expenses':    5 * 60 * 1000,
+  '/reports':     5 * 60 * 1000,
+  '/tenants':    15 * 60 * 1000,
+  '/auth':        0,              // never cache
+  default:        5 * 60 * 1000,
+};
+
+// ─── Invalidation map: mutated prefix → cache prefixes to bust ─────────────────
+const INVALIDATION_MAP = {
+  '/invoices':   ['/invoices', '/reports', '/parties', '/customers', '/suppliers', '/payments', '/batches', '/products'],
+  '/payments':   ['/payments', '/invoices', '/reports', '/parties', '/customers', '/suppliers'],
+  '/expenses':   ['/expenses', '/reports'],
+  '/products':   ['/products', '/batches'],
+  '/batches':    ['/batches', '/products'],
+  '/customers':  ['/customers', '/parties', '/reports'],
+  '/suppliers':  ['/suppliers', '/parties', '/reports'],
+  '/parties':    ['/parties', '/customers', '/suppliers', '/reports'],
+  '/tenants':    ['/tenants'],
+  '/admin':      ['*'],  // admin mutations bust everything
+  default:       ['*'],
+};
+
+// ─── In-memory fallback ────────────────────────────────────────────────────────
 const memoryCache = new Map();
+
+// ─── Token helpers (localStorage with cookie fallback) ────────────────────────
+function getToken() {
+  try {
+    const ls = localStorage.getItem('access_token');
+    if (ls) return ls;
+  } catch (_) {}
+  // Cookie fallback for private/sandboxed browsers
+  const match = document.cookie.match(/(?:^|;\s*)access_token=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function setToken(token) {
+  try {
+    localStorage.setItem('access_token', token);
+  } catch (_) {}
+  // Also persist in a session cookie as fallback (not httpOnly — JS-set)
+  document.cookie = `access_token=${encodeURIComponent(token)}; path=/; SameSite=Lax`;
+}
+
+function removeToken() {
+  try {
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('erp_user');
+  } catch (_) {}
+  document.cookie = 'access_token=; path=/; max-age=0';
+}
 
 function getTenantId() {
   try {
     const user = JSON.parse(localStorage.getItem('erp_user'));
     return user?.tenant_id || user?.id || 'public';
-  } catch (e) {
+  } catch (_) {
     return 'public';
   }
 }
 
+// ─── Cache key helpers ─────────────────────────────────────────────────────────
 function getCacheKey(url) {
   return `erb_${APP_VERSION}_${getTenantId()}_${url}`;
 }
 
+function getTTL(url) {
+  for (const [prefix, ttl] of Object.entries(TTL_MAP)) {
+    if (url.includes(prefix)) return ttl;
+  }
+  return TTL_MAP.default;
+}
+
+// ─── Cache read/write ──────────────────────────────────────────────────────────
 function setCache(url, data) {
   const key = getCacheKey(url);
-  const payload = { data, timestamp: Date.now() };
+  const ttl = getTTL(url);
+  if (ttl === 0) return; // non-cacheable
+  const payload = { data, expiresAt: Date.now() + ttl };
+  // Memory cache always succeeds
+  memoryCache.set(key, payload);
   try {
     localStorage.setItem(key, JSON.stringify(payload));
   } catch (e) {
-    // If quota exceeded or localStorage disabled, fallback to memory
-    memoryCache.set(key, payload);
     if (e.name === 'QuotaExceededError') {
-      console.warn('LocalStorage quota exceeded. Falling back to memory cache.');
+      // Evict old keys to make room
+      evictOldestLocalStorageKeys();
+      try { localStorage.setItem(key, JSON.stringify(payload)); } catch (_) {}
     }
   }
 }
 
 function getCache(url) {
   const key = getCacheKey(url);
-  
-  // Check memory fallback first
-  if (memoryCache.has(key)) {
-    const cached = memoryCache.get(key);
-    if (Date.now() - cached.timestamp < CACHE_TTL) return cached.data;
+  const now = Date.now();
+
+  // Memory cache first (fastest)
+  const mem = memoryCache.get(key);
+  if (mem) {
+    if (now < mem.expiresAt) return mem.data;
     memoryCache.delete(key);
   }
 
-  // Check localStorage
+  // localStorage fallback
   try {
     const raw = localStorage.getItem(key);
     if (raw) {
       const cached = JSON.parse(raw);
-      if (Date.now() - cached.timestamp < CACHE_TTL) return cached.data;
+      if (now < cached.expiresAt) {
+        memoryCache.set(key, cached); // warm memory cache
+        return cached.data;
+      }
       localStorage.removeItem(key);
     }
-  } catch (e) {
-    // Ignore parse errors or disabled localStorage
-  }
+  } catch (_) {}
   return null;
 }
 
-function clearCache() {
-  memoryCache.clear();
-  const prefix = `erb_${APP_VERSION}_${getTenantId()}_`;
+function evictOldestLocalStorageKeys() {
+  const prefix = `erb_${APP_VERSION}_`;
+  const entries = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(prefix)) {
+        try {
+          const parsed = JSON.parse(localStorage.getItem(k));
+          entries.push({ k, expiresAt: parsed?.expiresAt || 0 });
+        } catch (_) {}
+      }
+    }
+    // Remove oldest 30%
+    entries.sort((a, b) => a.expiresAt - b.expiresAt);
+    entries.slice(0, Math.ceil(entries.length * 0.3)).forEach(({ k }) => {
+      localStorage.removeItem(k);
+    });
+  } catch (_) {}
+}
+
+// ─── Smart cache invalidation ──────────────────────────────────────────────────
+function invalidateCacheFor(mutatedUrl) {
+  // Find matching invalidation pattern
+  let prefixesToBust = null;
+  for (const [pattern, busted] of Object.entries(INVALIDATION_MAP)) {
+    if (mutatedUrl.includes(pattern)) {
+      prefixesToBust = busted;
+      break;
+    }
+  }
+  if (!prefixesToBust) prefixesToBust = INVALIDATION_MAP.default;
+
+  const bustAll = prefixesToBust.includes('*');
+  const tenantPrefix = `erb_${APP_VERSION}_${getTenantId()}_`;
+
+  // Bust memory cache
+  for (const key of memoryCache.keys()) {
+    if (!key.startsWith(tenantPrefix)) continue;
+    if (bustAll || prefixesToBust.some((p) => key.includes(p))) {
+      memoryCache.delete(key);
+    }
+  }
+
+  // Bust localStorage
   try {
     const keysToRemove = [];
     for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && key.startsWith(prefix)) {
-        keysToRemove.push(key);
+      const k = localStorage.key(i);
+      if (!k || !k.startsWith(tenantPrefix)) continue;
+      if (bustAll || prefixesToBust.some((p) => k.includes(p))) {
+        keysToRemove.push(k);
       }
     }
-    keysToRemove.forEach(k => localStorage.removeItem(k));
-  } catch (e) {
-    // Ignore if localStorage is disabled
-  }
+    keysToRemove.forEach((k) => localStorage.removeItem(k));
+  } catch (_) {}
 }
 
+// ─── Main request function ─────────────────────────────────────────────────────
 async function request(endpoint, options = {}) {
   const url = buildUrl(endpoint);
-  const method = options.method || 'GET';
-  
-  if (method !== 'GET') {
-    clearCache(); // Invalidate on mutation
-  } else {
-    const cachedData = getCache(url);
-    if (cachedData !== null) {
-      return cachedData;
-    }
+  const method = (options.method || 'GET').toUpperCase();
+
+  if (method === 'GET') {
+    const cached = getCache(url);
+    if (cached !== null) return cached;
   }
 
   const config = {
+    method,
     headers: {
       'Content-Type': 'application/json',
       ...options.headers,
@@ -101,7 +212,7 @@ async function request(endpoint, options = {}) {
     ...options,
   };
 
-  const token = localStorage.getItem('access_token');
+  const token = getToken();
   if (token) {
     config.headers['Authorization'] = `Bearer ${token}`;
   }
@@ -113,9 +224,9 @@ async function request(endpoint, options = {}) {
     console.error('Network/CORS error', error);
     throw error;
   }
+
   if (response.status === 401) {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('erp_user');
+    removeToken();
     throw new Error('Unauthorized');
   }
 
@@ -125,19 +236,24 @@ async function request(endpoint, options = {}) {
     console.error('API error', { status: response.status, message });
     throw new Error(message);
   }
-  if (response.status === 204) {
-    return null;
-  }
-  
+
+  if (response.status === 204) return null;
+
   const data = await response.json();
+
   if (method === 'GET') {
     setCache(url, data);
+  } else {
+    // Smart invalidation — only bust related cache keys
+    invalidateCacheFor(endpoint);
   }
-  
+
   return data;
 }
 
+// ─── Public API surface ────────────────────────────────────────────────────────
 export const api = {
+  // ── Auth ────────────────────────────────────────────────────────────────────
   login: (data) => request('/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -146,6 +262,7 @@ export const api = {
   register: (data) => request('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
   getMe: () => request('/auth/me'),
 
+  // ── Parties ─────────────────────────────────────────────────────────────────
   getParties: (skip = 0, limit = 100) => request(`/parties?skip=${skip}&limit=${limit}`),
   getPartiesSelect: () => request('/parties/select'),
   createParty: (data) => request('/parties', { method: 'POST', body: JSON.stringify(data) }),
@@ -157,7 +274,7 @@ export const api = {
   deletePartyPayment: (partyId, paymentId) => request(`/parties/${partyId}/payments/${paymentId}`, { method: 'DELETE' }),
   createStockReturn: (partyId, data) => request(`/parties/${partyId}/stock-return`, { method: 'POST', body: JSON.stringify(data) }),
 
-  // Customers
+  // ── Customers ───────────────────────────────────────────────────────────────
   getCustomers: (skip = 0, limit = 100, search = '') => request(`/customers?skip=${skip}&limit=${limit}${search ? `&search=${encodeURIComponent(search)}` : ''}`),
   getCustomersSelect: () => request('/customers/select'),
   createCustomer: (data) => request('/customers', { method: 'POST', body: JSON.stringify(data) }),
@@ -171,7 +288,7 @@ export const api = {
   createCustomerAdvancePayment: (customerId, data) => request(`/customers/${customerId}/advance-payment`, { method: 'POST', body: JSON.stringify(data) }),
   createCustomerStockReturn: (customerId, data) => request(`/customers/${customerId}/stock-return`, { method: 'POST', body: JSON.stringify(data) }),
 
-  // Suppliers
+  // ── Suppliers ───────────────────────────────────────────────────────────────
   getSuppliers: (skip = 0, limit = 100, search = '') => request(`/suppliers?skip=${skip}&limit=${limit}${search ? `&search=${encodeURIComponent(search)}` : ''}`),
   getSuppliersSelect: () => request('/suppliers/select'),
   createSupplier: (data) => request('/suppliers', { method: 'POST', body: JSON.stringify(data) }),
@@ -185,15 +302,19 @@ export const api = {
   createSupplierAdvancePayment: (supplierId, data) => request(`/suppliers/${supplierId}/advance-payment`, { method: 'POST', body: JSON.stringify(data) }),
   createSupplierStockReturn: (supplierId, data) => request(`/suppliers/${supplierId}/stock-return`, { method: 'POST', body: JSON.stringify(data) }),
 
-  getProducts: (skip = 0, limit = 100, search = '', status = '') => request(`/products?skip=${skip}&limit=${limit}${search ? `&search=${encodeURIComponent(search)}` : ''}${status && status !== 'all' ? `&status=${encodeURIComponent(status)}` : ''}`),
+  // ── Products ────────────────────────────────────────────────────────────────
+  getProducts: (skip = 0, limit = 100, search = '', status = '') =>
+    request(`/products?skip=${skip}&limit=${limit}${search ? `&search=${encodeURIComponent(search)}` : ''}${status && status !== 'all' ? `&status=${encodeURIComponent(status)}` : ''}`),
   getProductsSelect: () => request('/products/select'),
   createProduct: (data) => request('/products', { method: 'POST', body: JSON.stringify(data) }),
   updateProduct: (productId, data) => request(`/products/${productId}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteProduct: (productId) => request(`/products/${productId}`, { method: 'DELETE' }),
 
+  // ── Batches ─────────────────────────────────────────────────────────────────
   getBatchesByProduct: (productId) => request(`/batches/product/${productId}`),
   updateBatch: (batchId, data) => request(`/batches/${batchId}`, { method: 'PATCH', body: JSON.stringify(data) }),
 
+  // ── Invoices ─────────────────────────────────────────────────────────────────
   getInvoices: (partyOrOptions, skipArg = 0, limitArg = 100) => {
     const options = typeof partyOrOptions === 'object' && partyOrOptions !== null
       ? partyOrOptions
@@ -212,26 +333,20 @@ export const api = {
   getInvoice: (invoiceId) => request(`/invoices/${invoiceId}`),
   downloadInvoicePdf: async (invoiceId, fallbackFileName) => {
     const url = buildUrl(`/invoices/${invoiceId}/pdf`);
-    const token = localStorage.getItem('access_token');
+    const token = getToken();
     const headers = {};
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
+    if (token) headers['Authorization'] = `Bearer ${token}`;
     const response = await fetch(url, { headers });
-    if (!response.ok) {
-      throw new Error(`Failed to download PDF: ${response.status}`);
-    }
+    if (!response.ok) throw new Error(`Failed to download PDF: ${response.status}`);
     let fileName = fallbackFileName;
     const contentDisposition = response.headers.get('Content-Disposition');
     if (contentDisposition) {
       const matchUtf8 = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
-      if (matchUtf8 && matchUtf8[1]) {
+      if (matchUtf8?.[1]) {
         fileName = decodeURIComponent(matchUtf8[1]);
       } else {
         const matchStandard = contentDisposition.match(/filename="?([^";]+)"?/i);
-        if (matchStandard && matchStandard[1]) {
-          fileName = matchStandard[1];
-        }
+        if (matchStandard?.[1]) fileName = matchStandard[1];
       }
     }
     const blob = await response.blob();
@@ -248,21 +363,26 @@ export const api = {
   deleteInvoice: (invoiceId) => request(`/invoices/${invoiceId}`, { method: 'DELETE' }),
   processReturn: (invoiceId, data) => request(`/invoices/${invoiceId}/return`, { method: 'POST', body: JSON.stringify(data) }),
 
+  // ── Payments ─────────────────────────────────────────────────────────────────
   getInvoicePayments: (invoiceId) => request(`/invoices/${invoiceId}/payments`),
   updatePayment: (invoiceId, paymentId, data) => request(`/invoices/${invoiceId}/payments/${paymentId}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deletePayment: (invoiceId, paymentId) => request(`/invoices/${invoiceId}/payments/${paymentId}`, { method: 'DELETE' }),
-
   addPayment: (data) => request('/payments', { method: 'POST', body: JSON.stringify(data) }),
 
+  // ── Templates ────────────────────────────────────────────────────────────────
   getTemplates: () => request('/templates'),
   createTemplate: (data) => request('/templates', { method: 'POST', body: JSON.stringify(data) }),
   getTemplate: (templateId) => request(`/templates/${templateId}`),
   updateTemplate: (templateId, data) => request(`/templates/${templateId}`, { method: 'PATCH', body: JSON.stringify(data) }),
   previewTemplate: (templateId, invoiceId) => request(`/invoices/${invoiceId}`),
 
+  // ── Tenant / Settings ────────────────────────────────────────────────────────
   getMyTenant: () => request('/tenants/me'),
   updateTenantLogo: (logoUrl) => request('/tenants/me/logo', { method: 'PATCH', body: JSON.stringify({ logo_url: logoUrl }) }),
+  getSettings: () => request('/tenants/me'),
+  updateSettings: (data) => request('/tenants/me', { method: 'PATCH', body: JSON.stringify(data) }),
 
+  // ── Reports ──────────────────────────────────────────────────────────────────
   getProfitReport: () => request('/reports/profit'),
   getInventoryReport: () => request('/reports/inventory'),
   getStatement: (partyId) => request(`/reports/statement/${partyId}`),
@@ -281,10 +401,7 @@ export const api = {
     return request(`/reports/party-profits${qs ? `?${qs}` : ''}`);
   },
 
-  getSettings: () => request('/tenants/me'),
-  updateSettings: (data) => request('/tenants/me', { method: 'PATCH', body: JSON.stringify(data) }),
-
-  // Expenses
+  // ── Expenses ─────────────────────────────────────────────────────────────────
   getExpenses: (filters = {}) => {
     const params = new URLSearchParams();
     if (filters.date_from) params.append('date_from', filters.date_from);
@@ -301,6 +418,7 @@ export const api = {
   createExpense: (data) => request('/expenses', { method: 'POST', body: JSON.stringify(data) }),
   deleteExpense: (id) => request(`/expenses/${id}`, { method: 'DELETE' }),
 
+  // ── Net Profit ───────────────────────────────────────────────────────────────
   getNetProfitReport: (date_from, date_to) => {
     const params = new URLSearchParams();
     if (date_from) params.append('start_date', date_from);
@@ -308,7 +426,7 @@ export const api = {
     return request(`/reports/net-profit?${params.toString()}`);
   },
 
-  // Admin Panel
+  // ── Admin ─────────────────────────────────────────────────────────────────────
   getAdminStats: () => request('/admin/stats'),
   getAdminTenants: (statusFilter = null) => {
     const params = new URLSearchParams();
@@ -324,11 +442,9 @@ export const api = {
   getAdminUsers: (skip = 0, limit = 100) => request(`/admin/users?skip=${skip}&limit=${limit}`),
   getAdminUserDetails: (userId) => request(`/admin/users/${userId}`),
   deleteAdminUser: (userId) => request(`/admin/users/${userId}`, { method: 'DELETE' }),
-
   getAdminParties: (tenantId) => request(`/admin/tenants/${tenantId}/parties`),
   getAdminPartySummary: (tenantId, partyId) => request(`/admin/tenants/${tenantId}/parties/${partyId}/summary`),
   updateAdminParty: (tenantId, partyId, data) => request(`/admin/tenants/${tenantId}/parties/${partyId}`, { method: 'PUT', body: JSON.stringify(data) }),
-
   getAdminInvoices: (tenantId, options = {}) => {
     const params = new URLSearchParams();
     if (options.partyId) params.append('party_id', options.partyId);
@@ -339,13 +455,29 @@ export const api = {
   updateAdminInvoice: (tenantId, invoiceId, data) => request(`/admin/tenants/${tenantId}/invoices/${invoiceId}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteAdminInvoice: (tenantId, invoiceId) => request(`/admin/tenants/${tenantId}/invoices/${invoiceId}`, { method: 'DELETE' }),
 
-  // Generic HTTP helpers
+  // ── Generic helpers ───────────────────────────────────────────────────────────
   get: (endpoint) => request(endpoint),
   post: (endpoint, data) => request(endpoint, { method: 'POST', body: data ? JSON.stringify(data) : undefined }),
   put: (endpoint, data) => request(endpoint, { method: 'PUT', body: data ? JSON.stringify(data) : undefined }),
   patch: (endpoint, data) => request(endpoint, { method: 'PATCH', body: data ? JSON.stringify(data) : undefined }),
   delete: (endpoint) => request(endpoint, { method: 'DELETE' }),
 
+  // ── Cache utilities ───────────────────────────────────────────────────────────
+  /** Force-bust all cache for the current tenant */
+  clearAllCache: () => {
+    memoryCache.clear();
+    const prefix = `erb_${APP_VERSION}_${getTenantId()}_`;
+    try {
+      const keys = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith(prefix)) keys.push(k);
+      }
+      keys.forEach((k) => localStorage.removeItem(k));
+    } catch (_) {}
+  },
+
+  /** Warm up critical caches on app load */
   prefetchAll: async () => {
     try {
       await Promise.allSettled([
@@ -357,13 +489,17 @@ export const api = {
         api.getExpenseSummary(),
         api.getDashboardAnalytics(),
         api.getProfitReport(),
-        api.getInventoryReport()
+        api.getInventoryReport(),
       ]);
-      console.log('Cache warmed up successfully!');
     } catch (err) {
-      console.error('Failed to prefetch data', err);
+      console.error('Prefetch error', err);
     }
   },
+
+  // ── Token helpers (exported for auth store) ───────────────────────────────────
+  _setToken: setToken,
+  _removeToken: removeToken,
+  _getToken: getToken,
 };
 
 export default api;

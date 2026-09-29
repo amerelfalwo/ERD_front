@@ -25,7 +25,7 @@ export default function LoginView() {
     try {
       const data = await api.login({ username, password });
       if (data.access_token) {
-        localStorage.setItem('access_token', data.access_token);
+        api._setToken(data.access_token);
         try {
           const profile = await api.getMe();
           localStorage.setItem('erp_user', JSON.stringify(profile));
