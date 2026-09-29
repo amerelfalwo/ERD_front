@@ -211,7 +211,7 @@
 
 .table th {
   padding: 0.4rem 0.4rem 0.7rem; /* top horizontal bottom */
-  font-size: 0.95em;
+  font-size: 1em;
   font-weight: 800;
   color: #000000;
   white-space: nowrap;
@@ -243,7 +243,7 @@
 .table td {
   padding: 0.45rem 0.4rem 0.75rem; /* top horizontal bottom */
   vertical-align: middle;
-  font-size: 0.9em;
+  font-size: 0.95em;
   color: #1a1a1a;
   line-height: 1.5;
 }
@@ -325,7 +325,7 @@
 
 .totalsTable td {
   padding: 0.3rem 0.4rem;
-  font-size: 0.9em;
+  font-size: 0.95em;
   color: #1a1a1a;
 }
 

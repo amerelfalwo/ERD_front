@@ -4,7 +4,8 @@ import { createPortal } from 'react-dom';
 import {
   ShoppingCart, Plus, Minus, Trash2, Printer, Loader2,
   CheckCircle2, Package, UserSquare2, X, Edit, Undo2, Search,
-  Truck, UserPlus, Phone, MapPin, Download, RotateCcw, Tag
+  Truck, UserPlus, Phone, MapPin, Download, RotateCcw, Tag,
+  ChevronDown, Check
 } from 'lucide-react';
 import { notifications } from '@mantine/notifications';
 import api from '../../services/api';
@@ -276,10 +277,33 @@ export default function InvoicesView() {
   const [partyDropdownOpen, setPartyDropdownOpen] = useState(false);
   const partyDropdownRef = useRef(null);
 
+  const [invoiceTypeSearch, setInvoiceTypeSearch] = useState('');
+  const [invoiceTypeDropdownOpen, setInvoiceTypeDropdownOpen] = useState(false);
+  const invoiceTypeDropdownRef = useRef(null);
+
+  const invoiceTypeOptions = useMemo(() => [
+    { key: 'sale', label: t('invoices.saleInvoice') },
+    { key: 'purchase', label: t('invoices.purchaseInvoice') },
+    { key: 'supplier_return', label: t('invoices.supplierReturn') },
+  ], [t]);
+
+  const searchedInvoiceTypes = useMemo(() => {
+    if (!invoiceTypeSearch.trim()) return invoiceTypeOptions;
+    const term = invoiceTypeSearch.toLowerCase();
+    return invoiceTypeOptions.filter(opt => opt.label.toLowerCase().includes(term));
+  }, [invoiceTypeOptions, invoiceTypeSearch]);
+
+  const currentInvoiceTypeLabel = useMemo(() => {
+    return invoiceTypeOptions.find(opt => opt.key === invoiceType)?.label || '';
+  }, [invoiceTypeOptions, invoiceType]);
+
   useEffect(() => {
     function handleClickOutside(e) {
       if (partyDropdownRef.current && !partyDropdownRef.current.contains(e.target)) {
         setPartyDropdownOpen(false);
+      }
+      if (invoiceTypeDropdownRef.current && !invoiceTypeDropdownRef.current.contains(e.target)) {
+        setInvoiceTypeDropdownOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -1674,13 +1698,11 @@ export default function InvoicesView() {
                     <td className="py-4 px-6 font-mono-tabular text-muted-steel text-xs">{inv.created_at ? new Date(inv.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '-'}</td>
                     <td className="py-4 px-6 text-right">
                       <div className="flex items-center justify-end gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
-                        {(inv.invoice_type === 'SALE' || inv.invoice_type === 'PURCHASE') && (
-                          <button onClick={() => setEditingInvoice(inv)}
-                            className="p-2 rounded-xl text-muted-steel hover:bg-accent/10 hover:text-accent transition-all cursor-pointer btn-tactile"
-                            title={t('common.edit', { defaultValue: 'Edit' })}>
-                            <Edit size={16} />
-                          </button>
-                        )}
+                        <button onClick={() => setEditingInvoice(inv)}
+                          className="p-2 rounded-xl text-muted-steel hover:bg-accent/10 hover:text-accent transition-all cursor-pointer btn-tactile"
+                          title={t('common.edit', { defaultValue: 'تعديل الفاتورة' })}>
+                          <Edit size={16} />
+                        </button>
                         {inv.invoice_type?.toLowerCase() === 'sell' && (
                           <button onClick={() => setInvoiceToReturn(inv)}
                             className="p-2 rounded-xl text-muted-steel hover:bg-amber-500/10 hover:text-amber-600 transition-all cursor-pointer btn-tactile"

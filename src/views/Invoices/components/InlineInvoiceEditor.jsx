@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, Plus, Trash2, Save, Loader2, CreditCard, AlertCircle, CheckCircle, Package, Printer } from 'lucide-react';
 import api from '../../../services/api';
+import ProductSearchSelect from '../../../components/invoice/ProductSearchSelect';
 
 export default function InlineInvoiceEditor({ invoice, onCancel, onSaved, onPrint, colSpan = 8 }) {
   const { t } = useTranslation();
@@ -29,12 +30,31 @@ export default function InlineInvoiceEditor({ invoice, onCancel, onSaved, onPrin
       invoice.items.map((it) => ({
         id: it.id,
         batch_id: it.batch_id,
+        product_id: it.product_id ?? null,
         quantity: String(it.quantity),
         unit_price: String(it.unit_price),
-        product_name: it.product_name || `Batch #${it.batch_id}`,
+        product_name: it.product_name || (it.batch_id ? `Batch #${it.batch_id}` : ''),
       }))
     );
-    api.getProducts().then(setProducts).catch(console.error);
+    api.getProducts(0, 1000)
+      .then((res) => {
+        const list = Array.isArray(res) ? res : (res?.data ?? []);
+        setProducts(list);
+        setItems((prevItems) =>
+          prevItems.map((it) => {
+            if (it.product_id) {
+              const found = list.find((p) => String(p.id) === String(it.product_id));
+              if (found && !it.product_name) return { ...it, product_name: found.name };
+            }
+            if (!it.product_id && it.product_name) {
+              const found = list.find((p) => p.name === it.product_name);
+              if (found) return { ...it, product_id: found.id };
+            }
+            return it;
+          })
+        );
+      })
+      .catch(console.error);
     
     setLoadingPayments(true);
     api.getInvoicePayments(invoice.id)
@@ -85,6 +105,55 @@ export default function InlineInvoiceEditor({ invoice, onCancel, onSaved, onPrin
     setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, [field]: value } : it)));
   }
 
+  function onProductSelect(idx, productId, productObj) {
+    if (!productId) {
+      setItems((prev) =>
+        prev.map((it, i) =>
+          i === idx ? { ...it, product_id: '', batch_id: '', unit_price: '', product_name: '', price_is_purchase: false } : it
+        )
+      );
+      return;
+    }
+    const pId = Number(productId);
+    const product = productObj || products.find((p) => p.id === pId);
+    const pBatches = batches[pId] || [];
+    const activeBatch = pBatches.find((b) => Number(b.remaining_quantity) > 0) || pBatches[0];
+    const highestBatch = pBatches.reduce((acc, b) => {
+      if (!acc) return b;
+      const bPrice = Number(b.selling_price ?? b.current_selling_price ?? 0);
+      const aPrice = Number(acc.selling_price ?? acc.current_selling_price ?? 0);
+      return bPrice > aPrice ? b : acc;
+    }, null);
+
+    // Try selling price first
+    const sellingPrice =
+      highestBatch?.selling_price ??
+      highestBatch?.current_selling_price ??
+      activeBatch?.selling_price ??
+      activeBatch?.current_selling_price ??
+      null;
+
+    // Fallback to purchase price if no selling price
+    const purchasePrice = activeBatch?.purchase_price ?? activeBatch?.unit_cost ?? null;
+    const isPurchasePrice = !sellingPrice && !!purchasePrice;
+    const resolvedPrice = sellingPrice ?? purchasePrice ?? '';
+
+    setItems((prev) =>
+      prev.map((it, i) =>
+        i === idx
+          ? {
+              ...it,
+              product_id: pId,
+              batch_id: activeBatch ? activeBatch.id : '',
+              unit_price: String(resolvedPrice || it.unit_price || ''),
+              product_name: product?.name || it.product_name || '',
+              price_is_purchase: isPurchasePrice,
+            }
+          : it
+      )
+    );
+  }
+
   function onBatchSelect(idx, batchId) {
     const allBatches = Object.values(batches).flat();
     const batch = allBatches.find((b) => String(b.id) === String(batchId));
@@ -101,19 +170,38 @@ export default function InlineInvoiceEditor({ invoice, onCancel, onSaved, onPrin
   }
 
   async function handleSaveItems() {
-    if (items.some((it) => !it.batch_id || !it.quantity || !it.unit_price)) {
-      flash('error', t('editInvoiceModal.pleaseFillItemFields'));
-      return;
+    const isSell = ['SELL', 'SALE'].includes((invoice?.invoice_type || '').toUpperCase());
+    if (isSell) {
+      if (items.some((it) => !it.product_id || !it.quantity || !it.unit_price)) {
+        flash('error', t('editInvoiceModal.pleaseFillItemFields'));
+        return;
+      }
+    } else {
+      if (items.some((it) => !it.batch_id || !it.quantity || !it.unit_price)) {
+        flash('error', t('editInvoiceModal.pleaseFillItemFields'));
+        return;
+      }
     }
     setSaving(true);
     try {
-      const payload = {
-        items: items.map((it) => ({
-          batch_id: Number(it.batch_id),
-          quantity: parseFloat(it.quantity),
-          unit_price: parseFloat(it.unit_price),
-        })),
-      };
+      let payload;
+      if (isSell) {
+        payload = {
+          items: items.map((it) => ({
+            product_id: Number(it.product_id),
+            quantity: parseFloat(it.quantity),
+            unit_price: parseFloat(it.unit_price),
+          })),
+        };
+      } else {
+        payload = {
+          items: items.map((it) => ({
+            batch_id: Number(it.batch_id),
+            quantity: parseFloat(it.quantity),
+            unit_price: parseFloat(it.unit_price),
+          })),
+        };
+      }
       const updated = await api.updateInvoice(invoice.id, payload);
       onSaved(updated);
     } catch (err) {
@@ -216,30 +304,16 @@ export default function InlineInvoiceEditor({ invoice, onCancel, onSaved, onPrin
                 <div key={idx} className="grid grid-cols-12 gap-3 items-end p-4 rounded-xl bg-surface-container-low/40 border border-outline-variant/30">
                   <div className="col-span-5">
                     <label className="block text-xs font-semibold text-muted-steel mb-1.5 uppercase tracking-wider">{t('editInvoiceModal.editInvoiceProduct')}</label>
-                    <select
+                    <ProductSearchSelect
+                      value={item.product_id}
+                      productName={item.product_name}
+                      onChange={(productId, productObj) => onProductSelect(idx, productId, productObj)}
+                      products={products}
+                      batches={batches}
                       disabled={invoice.invoice_type === 'PURCHASE'}
-                      value={item.batch_id}
-                      onChange={(e) => onBatchSelect(idx, e.target.value)}
-                      className={`${inputCls} disabled:opacity-50 disabled:bg-surface-container`}
-                    >
-                      <option value="">{t('editInvoiceModal.editInvoiceSelectProduct')}</option>
-                      {products.map((p) => {
-                        const pBatches = batches[p.id] || [];
-                        const totalRemaining = pBatches.reduce((acc, b) => acc + Number(b.remaining_quantity || 0), 0);
-                        const totalInitial = pBatches.reduce((acc, b) => acc + Number(b.initial_quantity || 0), 0);
-                        const totalSold = totalInitial - totalRemaining;
-                        const activeBatch = pBatches.find((b) => Number(b.remaining_quantity) > 0) || pBatches[0];
-                        const batchValue = activeBatch ? activeBatch.id : '';
-
-                        return (
-                          <option key={p.id} value={batchValue}>
-                            {invoice.invoice_type === 'PURCHASE'
-                              ? `${p.name} — (${t('editInvoiceModal.editInvoiceOriginal')} ${totalInitial}, ${t('editInvoiceModal.editInvoiceSold')} ${totalSold.toFixed(2)})`
-                              : `${p.name} — ${t('editInvoiceModal.editInvoiceAvailable')} ${totalRemaining.toFixed(2)}`}
-                          </option>
-                        );
-                      })}
-                    </select>
+                      placeholder={t('editInvoiceModal.editInvoiceSelectProduct', { defaultValue: 'بحث باسم المنتج...' })}
+                      inputClass={inputCls}
+                    />
                   </div>
                   <div className="col-span-2">
                     <label className="block text-xs font-semibold text-muted-steel mb-1.5 uppercase tracking-wider">{t('editInvoiceModal.editInvoiceQuantity')}</label>
@@ -255,9 +329,15 @@ export default function InlineInvoiceEditor({ invoice, onCancel, onSaved, onPrin
                     <input
                       type="number" step="0.01" min="0"
                       value={item.unit_price}
-                      onChange={(e) => updateItem(idx, 'unit_price', e.target.value)}
-                      className={inputCls}
+                      onChange={(e) => { updateItem(idx, 'unit_price', e.target.value); updateItem(idx, 'price_is_purchase', false); }}
+                      className={`${inputCls} ${item.price_is_purchase ? 'border-amber-400 ring-1 ring-amber-200' : ''}`}
                     />
+                    {item.price_is_purchase && (
+                      <p className="text-[11px] text-amber-600 mt-1 flex items-center gap-1">
+                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                        سعر الشراء — لا يوجد سعر بيع
+                      </p>
+                    )}
                   </div>
                   <div className="col-span-2 text-right">
                     <label className="block text-xs font-semibold text-muted-steel mb-1.5 uppercase tracking-wider">{t('editInvoiceModal.editInvoiceTotal').replace(': ', '')}</label>

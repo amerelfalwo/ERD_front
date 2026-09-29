@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear } from 'date-fns';
 import {
   Wallet, FileText, Star, Plus, Trash2, Filter, AlertTriangle,
-  ChevronLeft, ChevronRight, RefreshCw, X, Tag, Calendar, DollarSign
+  ChevronLeft, ChevronRight, RefreshCw, X, Tag, Calendar, DollarSign, Loader2
 } from 'lucide-react';
 
 import api from '../../services/api';
@@ -26,6 +26,8 @@ export default function ExpensesView() {
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Form State
   const [description, setDescription] = useState('');
@@ -102,8 +104,10 @@ export default function ExpensesView() {
 
   const handleAddExpense = async (e) => {
     e.preventDefault();
+    if (submitting) return;
     if (!description.trim() || !amount || parseFloat(amount) <= 0 || !expenseDate) return;
 
+    setSubmitting(true);
     try {
       const newExpense = await createExpense({
         description: description.trim(),
@@ -128,11 +132,14 @@ export default function ExpensesView() {
     } catch (error) {
       console.error('Failed to create expense', error);
       alert(t('expenses.create_error', 'حدث خطأ أثناء إضافة المصروف'));
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const confirmDelete = async () => {
-    if (!deleteTargetId) return;
+    if (!deleteTargetId || deleting) return;
+    setDeleting(true);
     try {
       await deleteExpense(deleteTargetId);
       setExpenses((prev) => prev.filter((item) => item.id !== deleteTargetId));
@@ -143,6 +150,8 @@ export default function ExpensesView() {
       if (updatedSummary) setSummary(updatedSummary);
     } catch (error) {
       console.error('Failed to delete expense', error);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -497,15 +506,18 @@ export default function ExpensesView() {
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2.5 text-label-md text-muted-steel hover:bg-surface-container-high rounded-xl transition-colors cursor-pointer"
+                  disabled={submitting}
+                  className="px-4 py-2.5 text-label-md text-muted-steel hover:bg-surface-container-high rounded-xl transition-colors cursor-pointer disabled:opacity-50"
                 >
                   {t('expenses.cancel', 'إلغاء')}
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 bg-accent text-on-primary font-bold rounded-xl hover:bg-accent-hover transition-all shadow-sm cursor-pointer"
+                  disabled={submitting}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-accent text-on-primary font-bold rounded-xl hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm cursor-pointer"
                 >
-                  حفظ المصروف
+                  {submitting && <Loader2 size={16} className="animate-spin" />}
+                  {submitting ? 'جاري الحفظ...' : 'حفظ المصروف'}
                 </button>
               </div>
             </form>
@@ -530,14 +542,17 @@ export default function ExpensesView() {
             <div className="flex justify-center gap-3 pt-2">
               <button
                 onClick={() => setDeleteTargetId(null)}
-                className="px-4 py-2 text-label-md text-muted-steel hover:bg-surface-container-high rounded-xl transition-colors cursor-pointer"
+                disabled={deleting}
+                className="px-4 py-2 text-label-md text-muted-steel hover:bg-surface-container-high rounded-xl transition-colors cursor-pointer disabled:opacity-50"
               >
                 {t('expenses.cancel', 'إلغاء')}
               </button>
               <button
                 onClick={confirmDelete}
-                className="px-4 py-2 bg-rose-600 text-white font-bold rounded-xl hover:bg-rose-700 transition-all shadow-sm cursor-pointer"
+                disabled={deleting}
+                className="flex items-center gap-2 px-4 py-2 bg-rose-600 text-white font-bold rounded-xl hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm cursor-pointer"
               >
+                {deleting && <Loader2 size={16} className="animate-spin" />}
                 {t('expenses.delete', 'حذف المصروف')}
               </button>
             </div>

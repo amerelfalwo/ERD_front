@@ -3,11 +3,14 @@ import { useTranslation } from 'react-i18next';
 import { X, Plus, Trash2, Save, Loader2, CreditCard, AlertCircle, CheckCircle, Package, Printer } from 'lucide-react';
 import api from '../../../services/api';
 
+import ProductSearchSelect from '../../../components/invoice/ProductSearchSelect';
+
 export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, paperSize, onPaperSizeChange }) {
   const { t } = useTranslation();
   const [items, setItems] = useState([]);
   const [payments, setPayments] = useState([]);
   const [products, setProducts] = useState([]);
+  const [productsLoading, setProductsLoading] = useState(true);
   const [batches, setBatches] = useState({});
   const [saving, setSaving] = useState(false);
   const [loadingPayments, setLoadingPayments] = useState(true);
@@ -45,14 +48,37 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
         product_id: it.product_id ?? null,
         quantity: String(it.quantity),
         unit_price: String(it.unit_price),
-        product_name: it.product_name || `Batch #${it.batch_id}`,
+        product_name: it.product_name || (it.batch_id ? `Batch #${it.batch_id}` : ''),
       }))
     );
     // Fetch all products (high limit so dropdown is complete)
-    api.getProducts(0, 1000).then((res) => {
-      const list = Array.isArray(res) ? res : (res?.data ?? []);
-      setProducts(list);
-    }).catch(console.error);
+    setProductsLoading(true);
+    api.getProducts(0, 1000)
+      .then((res) => {
+        const list = Array.isArray(res) ? res : (res?.data ?? []);
+        setProducts(list);
+        // Backfill product_id or product_name if missing
+        setItems((prevItems) =>
+          prevItems.map((it) => {
+            if (it.product_id) {
+              const found = list.find((p) => String(p.id) === String(it.product_id));
+              if (found && !it.product_name) {
+                return { ...it, product_name: found.name };
+              }
+            }
+            if (!it.product_id && it.product_name) {
+              const found = list.find((p) => p.name === it.product_name);
+              if (found) {
+                return { ...it, product_id: found.id };
+              }
+            }
+            return it;
+          })
+        );
+      })
+      .catch(console.error)
+      .finally(() => setProductsLoading(false));
+
     setLoadingPayments(true);
     api.getInvoicePayments(invoice.id)
       .then(setPayments)
@@ -111,15 +137,15 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
    * We store product_id (for the save payload) and resolve the active batch
    * only for price look-up purposes.
    */
-  function onProductSelect(idx, productId) {
+  function onProductSelect(idx, productId, productObj) {
     if (!productId) {
       setItems((prev) => prev.map((it, i) =>
-        i === idx ? { ...it, product_id: '', batch_id: '', unit_price: '', product_name: '' } : it
+        i === idx ? { ...it, product_id: '', batch_id: '', unit_price: '', product_name: '', price_is_purchase: false } : it
       ));
       return;
     }
     const pId = Number(productId);
-    const product = products.find((p) => p.id === pId);
+    const product = products.find((p) => p.id === pId) || productObj;
     const pBatches = batches[pId] || [];
     const activeBatch = pBatches.find((b) => Number(b.remaining_quantity) > 0) || pBatches[0];
     const highestBatch = pBatches.reduce((acc, b) => {
@@ -128,20 +154,29 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
       const aPrice = Number(acc.selling_price ?? acc.current_selling_price ?? 0);
       return bPrice > aPrice ? b : acc;
     }, null);
-    const latestPrice =
+
+    // Try selling price first
+    const sellingPrice =
       highestBatch?.selling_price ??
       highestBatch?.current_selling_price ??
       activeBatch?.selling_price ??
       activeBatch?.current_selling_price ??
-      '';
+      null;
+
+    // Fallback to purchase price if no selling price
+    const purchasePrice = activeBatch?.purchase_price ?? activeBatch?.unit_cost ?? null;
+    const isPurchasePrice = !sellingPrice && !!purchasePrice;
+    const resolvedPrice = sellingPrice ?? purchasePrice ?? '';
+
     setItems((prev) => prev.map((it, i) =>
       i === idx
         ? {
             ...it,
             product_id: pId,
             batch_id: activeBatch ? activeBatch.id : '',
-            unit_price: String(latestPrice),
+            unit_price: String(resolvedPrice),
             product_name: product?.name || '',
+            price_is_purchase: isPurchasePrice,
           }
         : it
     ));
@@ -166,26 +201,17 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
   }
 
   async function handleSaveItems() {
-    const isSell = invoice.invoice_type === 'SELL' || invoice.invoice_type === 'sell';
+    const isSell = ['SELL', 'SALE'].includes((invoice?.invoice_type || '').toUpperCase());
 
-    // Validate: SELL needs product_id; PURCHASE needs batch_id
-    if (isSell) {
-      if (items.some((it) => !it.product_id || !it.quantity || !it.unit_price)) {
-        flash('error', t('editInvoiceModal.pleaseFillItemFields'));
-        return;
-      }
-    } else {
-      if (items.some((it) => !it.batch_id || !it.quantity || !it.unit_price)) {
-        flash('error', t('editInvoiceModal.pleaseFillItemFields'));
-        return;
-      }
+    if (items.some((it) => (!it.product_id && !it.batch_id) || !it.quantity || !it.unit_price)) {
+      flash('error', t('editInvoiceModal.pleaseFillItemFields'));
+      return;
     }
 
     setSaving(true);
     try {
       let payload;
       if (isSell) {
-        // Send product_id so backend performs FIFO allocation correctly
         payload = {
           items: items.map((it) => ({
             product_id: Number(it.product_id),
@@ -194,10 +220,10 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
           })),
         };
       } else {
-        // PURCHASE: adjust existing batch quantities directly
         payload = {
           items: items.map((it) => ({
-            batch_id: Number(it.batch_id),
+            batch_id: it.batch_id ? Number(it.batch_id) : undefined,
+            product_id: it.product_id ? Number(it.product_id) : undefined,
             quantity: parseFloat(it.quantity),
             unit_price: parseFloat(it.unit_price),
           })),
@@ -262,7 +288,7 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
 
   if (!invoice) return null;
 
-  const isSell = invoice.invoice_type === 'SELL' || invoice.invoice_type === 'sell';
+  const isSell = ['SELL', 'SALE'].includes((invoice?.invoice_type || '').toUpperCase());
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in-up">
@@ -272,7 +298,7 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
           <div>
             <h2 className="text-h2 text-charcoal-ink">{t('editInvoiceModal.editInvoice')}{invoice.id}</h2>
             <p className="text-body-sm text-muted-steel mt-0.5">
-              {invoice.invoice_type === 'SALE' ? t('saleInvoice') : invoice.invoice_type === 'PURCHASE' ? t('purchaseInvoice') : t('returnInvoice')}
+              {['SALE', 'SELL'].includes(invoice.invoice_type?.toUpperCase()) ? t('saleInvoice') : invoice.invoice_type === 'PURCHASE' ? t('purchaseInvoice') : t('returnInvoice')}
             </p>
           </div>
           <button onClick={onClose} className="p-2 rounded-xl hover:bg-surface-container text-muted-steel transition-colors cursor-pointer">
@@ -304,56 +330,15 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
                   <div className="col-span-5">
                     <label className="block text-label-sm text-muted-steel mb-1 uppercase tracking-wider">{t('editInvoiceModal.editInvoiceProduct')}</label>
 
-                    {isSell ? (
-                      /* SELL: value = product_id — fixes name disappearing on edit */
-                      <select
-                        value={item.product_id ?? ''}
-                        onChange={(e) => onProductSelect(idx, e.target.value)}
-                        className={inputCls}
-                      >
-                        <option value="">{t('editInvoiceModal.editInvoiceSelectProduct')}</option>
-                        {products.map((p) => {
-                          const pBatches = batches[p.id] || [];
-                          const totalRemaining = pBatches.reduce((acc, b) => acc + Number(b.remaining_quantity || 0), 0);
-                          return (
-                            <option key={p.id} value={p.id}>
-                              {`${p.name} — ${t('editInvoiceModal.editInvoiceAvailable')} ${totalRemaining.toFixed(2)}`}
-                            </option>
-                          );
-                        })}
-                      </select>
-                    ) : (
-                      /* PURCHASE: disabled — shows current batch, adjusted via qty/price fields */
-                      <select
-                        disabled
-                        value={item.batch_id}
-                        className={`${inputCls} disabled:opacity-50 disabled:bg-surface-container`}
-                      >
-                        <option value="">{t('editInvoiceModal.editInvoiceSelectProduct')}</option>
-                        {products.map((p) => {
-                          const pBatches = batches[p.id] || [];
-                          const totalInitial = pBatches.reduce((acc, b) => acc + Number(b.initial_quantity || 0), 0);
-                          const totalRemaining = pBatches.reduce((acc, b) => acc + Number(b.remaining_quantity || 0), 0);
-                          const totalSold = totalInitial - totalRemaining;
-                          const activeBatch = pBatches.find((b) => Number(b.remaining_quantity) > 0) || pBatches[0];
-                          const batchValue = activeBatch ? activeBatch.id : '';
-                          return (
-                            <option key={p.id} value={batchValue}>
-                              {`${p.name} — (${t('editInvoiceModal.editInvoiceOriginal')} ${totalInitial}, ${t('editInvoiceModal.editInvoiceSold')} ${totalSold.toFixed(2)})`}
-                            </option>
-                          );
-                        })}
-                      </select>
-                    )}
-
-                    {!isSell && (() => {
-                      const allBatches = Object.values(batches).flat();
-                      const b = allBatches.find((x) => String(x.id) === String(item.batch_id));
-                      const sold = b ? Number(b.initial_quantity) - Number(b.remaining_quantity) : 0;
-                      return sold > 0 ? (
-                        <p className="text-[11px] text-amber-600 mt-1">{t('editInvoiceModal.editInvoiceSoldCount')} {sold.toFixed(2)} {t('editInvoiceModal.editInvoiceNewQuantityMustBeGreater')} {sold.toFixed(2)}</p>
-                      ) : null;
-                    })()}
+                    <ProductSearchSelect
+                      value={item.product_id}
+                      productName={item.product_name}
+                      onChange={(productId, productObj) => onProductSelect(idx, productId, productObj)}
+                      products={products}
+                      batches={batches}
+                      placeholder={t('editInvoiceModal.editInvoiceSelectProduct', { defaultValue: 'بحث باسم المنتج...' })}
+                      inputClass={inputCls}
+                    />
                   </div>
                   <div className="col-span-3">
                     <label className="block text-label-sm text-muted-steel mb-1 uppercase tracking-wider">{t('editInvoiceModal.editInvoiceQuantity')}</label>
@@ -369,13 +354,19 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
                     <input
                       type="number" step="0.01" min="0"
                       value={item.unit_price}
-                      onChange={(e) => updateItem(idx, 'unit_price', e.target.value)}
-                      className={inputCls}
+                      onChange={(e) => { updateItem(idx, 'unit_price', e.target.value); updateItem(idx, 'price_is_purchase', false); }}
+                      className={`${inputCls} ${item.price_is_purchase ? 'border-amber-400 ring-1 ring-amber-200' : ''}`}
                     />
+                    {item.price_is_purchase && (
+                      <p className="text-[11px] text-amber-600 mt-1 flex items-center gap-1">
+                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                        سعر الشراء — لا يوجد سعر بيع مسجل
+                      </p>
+                    )}
                   </div>
                   <div className="col-span-1 flex items-end pb-1">
                     <button
-                      disabled={!isSell || items.length <= 1}
+                      disabled={items.length <= 1}
                       onClick={() => removeItem(idx)}
                       title={items.length <= 1 ? 'لا يمكن حذف البند الأخير' : 'حذف البند'}
                       className="p-1.5 rounded-lg text-red-400 hover:bg-red-50 disabled:hover:bg-transparent disabled:opacity-30 transition-colors cursor-pointer btn-tactile"
@@ -392,15 +383,14 @@ export default function EditInvoiceModal({ invoice, onClose, onSaved, onPrint, p
                 </div>
               ))}
 
-              {isSell ? (
-                <button onClick={addItem} className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border-2 border-dashed border-accent/30 text-accent text-label-sm hover:bg-accent-surface transition-colors cursor-pointer">
-                  <Plus size={16} /> {t('editInvoiceModal.editInvoiceAddNewItem')}
-                </button>
-              ) : (
-                <div className="text-center p-3 text-label-sm text-sky-700 bg-sky-50 rounded-xl border border-sky-200">
-                  {t('editInvoiceModal.editInvoicePurchaseEditWarning')}
-                </div>
-              )}
+              <button
+                onClick={addItem}
+                disabled={productsLoading}
+                className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border-2 border-dashed border-accent/30 text-accent text-label-sm hover:bg-accent-surface disabled:opacity-50 transition-colors cursor-pointer"
+              >
+                {productsLoading ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                {t('editInvoiceModal.editInvoiceAddNewItem')}
+              </button>
             </>
           )}
 

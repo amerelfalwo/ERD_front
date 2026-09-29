@@ -68,21 +68,32 @@ export function formatInvoiceData(rawInvoice) {
   if (!rawInvoice) return null;
 
   const rawItems = rawInvoice.items || rawInvoice.invoice_items || [];
-  const items = rawItems.map((item) => {
+  const groupedMap = new Map();
+  rawItems.forEach((item) => {
     const qty = Number(item.quantity ?? item.qty ?? 0);
     const price = Number(
       item.unit_price ?? item.sell_price ?? item.purchase_price ?? item.price ?? 0
     );
-    return {
-      id: item.id,
-      name: item.product_name || item.product?.name || item.name || 'N/A',
-      sku: item.product_sku || item.product?.sku || '',
-      serial_number: item.serial_number || item.serialNumber || item.serial || item.sn || item.serials || item.serial_numbers || '',
-      qty,
-      price,
-      total: Number((qty * price).toFixed(2)),
-    };
+    const name = item.product_name || item.product?.name || item.name || 'N/A';
+    const key = name;
+
+    if (groupedMap.has(key)) {
+      const existing = groupedMap.get(key);
+      existing.qty += qty;
+      existing.total = Number((existing.qty * price).toFixed(2));
+    } else {
+      groupedMap.set(key, {
+        id: item.id,
+        name,
+        sku: item.product_sku || item.product?.sku || '',
+        serial_number: item.serial_number || item.serialNumber || item.serial || item.sn || item.serials || item.serial_numbers || '',
+        qty,
+        price,
+        total: Number((qty * price).toFixed(2)),
+      });
+    }
   });
+  const items = Array.from(groupedMap.values());
 
   const deliveryFee = Number(rawInvoice.delivery_fee ?? 0);
   const discountAmount = Number(rawInvoice.discount_amount ?? rawInvoice.total_discount ?? 0);
