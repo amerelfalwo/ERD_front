@@ -193,23 +193,25 @@ function invalidateCacheFor(mutatedUrl) {
   } catch (_) {}
 }
 
-// ─── Main request function ─────────────────────────────────────────────────────
+// ─── Main request function with retry & signal handling ───────────────────────
 async function request(endpoint, options = {}) {
   const url = buildUrl(endpoint);
   const method = (options.method || 'GET').toUpperCase();
 
-  if (method === 'GET') {
+  if (method === 'GET' && !options.bypassCache) {
     const cached = getCache(url);
     if (cached !== null) return cached;
   }
+
+  const { bypassCache, retries = 2, ...fetchOptions } = options;
 
   const config = {
     method,
     headers: {
       'Content-Type': 'application/json',
-      ...options.headers,
+      ...fetchOptions.headers,
     },
-    ...options,
+    ...fetchOptions,
   };
 
   const token = getToken();
@@ -218,11 +220,30 @@ async function request(endpoint, options = {}) {
   }
 
   let response;
-  try {
-    response = await fetch(url, config);
-  } catch (error) {
-    console.error('Network/CORS error', error);
-    throw error;
+  let attempt = 0;
+  while (attempt <= retries) {
+    try {
+      response = await fetch(url, config);
+      // Retry on transient 502/503/504 server errors
+      if ([502, 503, 504].includes(response.status) && attempt < retries) {
+        attempt++;
+        await new Promise((r) => setTimeout(r, attempt * 300));
+        continue;
+      }
+      break;
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        // Quietly rethrow AbortError so caller can detect request cancellation
+        throw error;
+      }
+      if (attempt < retries) {
+        attempt++;
+        await new Promise((r) => setTimeout(r, attempt * 300));
+        continue;
+      }
+      console.error('Network/CORS error', error);
+      throw error;
+    }
   }
 
   if (response.status === 401) {
@@ -263,8 +284,8 @@ export const api = {
   getMe: () => request('/auth/me'),
 
   // ── Parties ─────────────────────────────────────────────────────────────────
-  getParties: (skip = 0, limit = 100) => request(`/parties?skip=${skip}&limit=${limit}`),
-  getPartiesSelect: () => request('/parties/select'),
+  getParties: (skip = 0, limit = 100, opts = {}) => request(`/parties?skip=${skip}&limit=${limit}`, opts),
+  getPartiesSelect: (opts = {}) => request('/parties/select', opts),
   createParty: (data) => request('/parties', { method: 'POST', body: JSON.stringify(data) }),
   deleteParty: (partyId) => request(`/parties/${partyId}`, { method: 'DELETE' }),
   getPartyBalance: (partyId) => request(`/parties/${partyId}/balance`),
@@ -275,8 +296,8 @@ export const api = {
   createStockReturn: (partyId, data) => request(`/parties/${partyId}/stock-return`, { method: 'POST', body: JSON.stringify(data) }),
 
   // ── Customers ───────────────────────────────────────────────────────────────
-  getCustomers: (skip = 0, limit = 100, search = '') => request(`/customers?skip=${skip}&limit=${limit}${search ? `&search=${encodeURIComponent(search)}` : ''}`),
-  getCustomersSelect: () => request('/customers/select'),
+  getCustomers: (skip = 0, limit = 100, search = '', opts = {}) => request(`/customers?skip=${skip}&limit=${limit}${search ? `&search=${encodeURIComponent(search)}` : ''}`, opts),
+  getCustomersSelect: (opts = {}) => request('/customers/select', opts),
   createCustomer: (data) => request('/customers', { method: 'POST', body: JSON.stringify(data) }),
   updateCustomer: (customerId, data) => request(`/customers/${customerId}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteCustomer: (customerId) => request(`/customers/${customerId}`, { method: 'DELETE' }),
@@ -289,8 +310,8 @@ export const api = {
   createCustomerStockReturn: (customerId, data) => request(`/customers/${customerId}/stock-return`, { method: 'POST', body: JSON.stringify(data) }),
 
   // ── Suppliers ───────────────────────────────────────────────────────────────
-  getSuppliers: (skip = 0, limit = 100, search = '') => request(`/suppliers?skip=${skip}&limit=${limit}${search ? `&search=${encodeURIComponent(search)}` : ''}`),
-  getSuppliersSelect: () => request('/suppliers/select'),
+  getSuppliers: (skip = 0, limit = 100, search = '', opts = {}) => request(`/suppliers?skip=${skip}&limit=${limit}${search ? `&search=${encodeURIComponent(search)}` : ''}`, opts),
+  getSuppliersSelect: (opts = {}) => request('/suppliers/select', opts),
   createSupplier: (data) => request('/suppliers', { method: 'POST', body: JSON.stringify(data) }),
   updateSupplier: (supplierId, data) => request(`/suppliers/${supplierId}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteSupplier: (supplierId) => request(`/suppliers/${supplierId}`, { method: 'DELETE' }),
@@ -303,22 +324,22 @@ export const api = {
   createSupplierStockReturn: (supplierId, data) => request(`/suppliers/${supplierId}/stock-return`, { method: 'POST', body: JSON.stringify(data) }),
 
   // ── Products ────────────────────────────────────────────────────────────────
-  getProducts: (skip = 0, limit = 100, search = '', status = '') =>
-    request(`/products?skip=${skip}&limit=${limit}${search ? `&search=${encodeURIComponent(search)}` : ''}${status && status !== 'all' ? `&status=${encodeURIComponent(status)}` : ''}`),
-  getProductsSelect: () => request('/products/select'),
+  getProducts: (skip = 0, limit = 100, search = '', status = '', opts = {}) =>
+    request(`/products?skip=${skip}&limit=${limit}${search ? `&search=${encodeURIComponent(search)}` : ''}${status && status !== 'all' ? `&status=${encodeURIComponent(status)}` : ''}`, opts),
+  getProductsSelect: (opts = {}) => request('/products/select', opts),
   createProduct: (data) => request('/products', { method: 'POST', body: JSON.stringify(data) }),
   updateProduct: (productId, data) => request(`/products/${productId}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteProduct: (productId) => request(`/products/${productId}`, { method: 'DELETE' }),
 
   // ── Batches ─────────────────────────────────────────────────────────────────
-  getBatchesByProduct: (productId) => request(`/batches/product/${productId}`),
+  getBatchesByProduct: (productId, opts = {}) => request(`/batches/product/${productId}`, opts),
   updateBatch: (batchId, data) => request(`/batches/${batchId}`, { method: 'PATCH', body: JSON.stringify(data) }),
 
   // ── Invoices ─────────────────────────────────────────────────────────────────
-  getInvoices: (partyOrOptions, skipArg = 0, limitArg = 100) => {
+  getInvoices: (partyOrOptions, skipArg = 0, limitArg = 100, extraOpts = {}) => {
     const options = typeof partyOrOptions === 'object' && partyOrOptions !== null
       ? partyOrOptions
-      : { partyId: partyOrOptions, skip: skipArg, limit: limitArg };
+      : { partyId: partyOrOptions, skip: skipArg, limit: limitArg, ...extraOpts };
     const skip = options.skip ?? 0;
     const limit = options.limit ?? 100;
     const params = new URLSearchParams({ skip, limit });
@@ -326,7 +347,7 @@ export const api = {
     if (options.invoiceType) params.append('invoice_type', options.invoiceType);
     if (options.search) params.append('search', options.search);
     if (options.status) params.append('status', options.status);
-    return request(`/invoices?${params.toString()}`);
+    return request(`/invoices?${params.toString()}`, options.signal ? { signal: options.signal } : extraOpts);
   },
   createPurchaseInvoice: (data) => request('/invoices/purchase', { method: 'POST', body: JSON.stringify(data) }),
   createSellInvoice: (data) => request('/invoices/sell', { method: 'POST', body: JSON.stringify(data) }),

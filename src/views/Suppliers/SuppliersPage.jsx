@@ -488,9 +488,9 @@ export default function SuppliersView() {
                 <Trash2 size={24} />
               </div>
               <h3 className="text-h3 text-charcoal-ink mb-2">{t('suppliers.deleteSupplier')}</h3>
-              <p className="text-muted-steel text-sm leading-relaxed mb-6" dir="auto"
-                dangerouslySetInnerHTML={{ __html: t('suppliers.confirmDeleteMessage', { name: supplierToDelete.name }) }}
-              />
+              <p className="text-muted-steel text-sm leading-relaxed mb-6" dir="auto">
+                {t('suppliers.confirmDeleteMessageText', 'هل أنت تأكد من رغبتك في حذف المورد')} <strong className="font-semibold text-charcoal-ink">{supplierToDelete.name}</strong>؟
+              </p>
               <div className="flex items-center gap-3 justify-end">
                 <button onClick={() => setSupplierToDelete(null)}
                   className="px-5 py-2.5 rounded-xl text-label-md text-muted-steel hover:bg-surface-container-low transition-all cursor-pointer btn-tactile">

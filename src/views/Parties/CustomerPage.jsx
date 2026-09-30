@@ -284,6 +284,31 @@ export default function CustomersView() {
     setPage(1);
   }, [search]);
 
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoading(true);
+
+    const skip = (page - 1) * LIMIT;
+    api.getCustomers(skip, LIMIT, search, { signal: controller.signal })
+      .then((data) => {
+        const list = Array.isArray(data) ? data : (data?.data || data?.items || []);
+        setCustomers(list);
+        setHasMore(list.length === LIMIT);
+      })
+      .catch((err) => {
+        if (err.name !== 'AbortError') {
+          console.error(err);
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      });
+
+    return () => controller.abort();
+  }, [page, search]);
+
   const fetchCustomers = useCallback(async () => {
     setLoading(true);
     try {
@@ -292,29 +317,36 @@ export default function CustomersView() {
       const list = Array.isArray(data) ? data : (data?.data || data?.items || []);
       setCustomers(list);
       setHasMore(list.length === LIMIT);
-    } catch (err) { console.error(err); }
-    finally { setLoading(false); }
+    } catch (err) {
+      if (err.name !== 'AbortError') console.error(err);
+    } finally {
+      setLoading(false);
+    }
   }, [page, search]);
 
-  useEffect(() => { fetchCustomers(); }, [fetchCustomers]);
-
+  // Optimistic UI Delete
   async function handleDelete() {
     if (!customerToDelete) return;
-    setDeletingCustomer(true);
+    const target = customerToDelete;
+    const previousCustomers = [...customers];
+
+    // Optimistically update UI immediately (0ms perceived latency)
+    setCustomers(prev => prev.filter(c => c.id !== target.id));
+    setCustomerToDelete(null);
+    notifications.show({ title: t('common.success'), message: t('customers.customerDeleted'), color: 'green' });
+
     try {
-      await api.deleteCustomer(customerToDelete.id);
-      notifications.show({ title: t('common.success'), message: t('customers.customerDeleted'), color: 'green' });
+      await api.deleteCustomer(target.id);
       queryClient.invalidateQueries({ queryKey: ['parties'] });
-      setCustomerToDelete(null);
-      fetchCustomers();
     } catch (err) {
+      // Rollback optimistic state on error
+      setCustomers(previousCustomers);
       notifications.show({
         title: t('common.error'),
         message: err?.response?.data?.detail || err?.message || t('customers.errorDeleting'),
         color: 'red'
       });
     }
-    finally { setDeletingCustomer(false); }
   }
 
   const processedCustomers = useMemo(() => {
@@ -490,9 +522,9 @@ export default function CustomersView() {
                 <Trash2 size={24} />
               </div>
               <h3 className="text-h3 text-charcoal-ink mb-2">{t('customers.deleteCustomer')}</h3>
-              <p className="text-muted-steel text-sm leading-relaxed mb-6" dir="auto"
-                dangerouslySetInnerHTML={{ __html: t('customers.confirmDeleteMessage', { name: customerToDelete.name }) }}
-              />
+              <p className="text-muted-steel text-sm leading-relaxed mb-6" dir="auto">
+                {t('customers.confirmDeleteMessageText', 'هل أنت تأكد من رغبتك في حذف العميل')} <strong className="font-semibold text-charcoal-ink">{customerToDelete.name}</strong>؟
+              </p>
               <div className="flex items-center gap-3 justify-end">
                 <button onClick={() => setCustomerToDelete(null)}
                   className="px-5 py-2.5 rounded-xl text-label-md text-muted-steel hover:bg-surface-container-low transition-all cursor-pointer btn-tactile">

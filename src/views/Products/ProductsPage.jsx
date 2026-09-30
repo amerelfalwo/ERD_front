@@ -275,14 +275,31 @@ export default function ProductsView() {
 
   const deleteMutation = useMutation({
     mutationFn: (id) => api.deleteProduct(id),
-    onSuccess: () => {
+    onMutate: async (deletedId) => {
       setProductToDelete(null);
+      notifications.show({ title: t('common.success'), message: t('products.productDeleted', 'تم حذف المنتج بنجاح'), color: 'green' });
+      await queryClient.cancelQueries({ queryKey: ['products'] });
+      const previousProds = queryClient.getQueryData(['products', { page, limit: LIMIT, search, stockFilter }]);
+      if (previousProds) {
+        queryClient.setQueryData(['products', { page, limit: LIMIT, search, stockFilter }], (old) => {
+          if (!old) return old;
+          if (Array.isArray(old)) return old.filter((p) => p.id !== deletedId);
+          if (old.data) return { ...old, data: old.data.filter((p) => p.id !== deletedId) };
+          return old;
+        });
+      }
+      return { previousProds };
+    },
+    onError: (err, newTodo, context) => {
+      if (context?.previousProds) {
+        queryClient.setQueryData(['products', { page, limit: LIMIT, search, stockFilter }], context.previousProds);
+      }
+      notifications.show({ title: t('common.error'), message: err?.message || t('products.failedDelete'), color: 'red' });
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-    },
-    onError: (err) => {
-      notifications.show({ title: t('common.error'), message: err?.message || t('products.failedDelete'), color: 'red' });
     },
   });
 
@@ -412,7 +429,8 @@ export default function ProductsView() {
                 <Trash2 size={24} />
               </div>
               <h3 className="text-h3 text-charcoal-ink mb-2">{t('products.deleteProduct')}</h3>
-              <p className="text-muted-steel text-sm leading-relaxed mb-6" dir="auto" dangerouslySetInnerHTML={{ __html: t('products.confirmDeleteMessage', { name: productToDelete.name }) }}>
+              <p className="text-muted-steel text-sm leading-relaxed mb-6" dir="auto">
+                {t('products.confirmDeleteMessageText', 'هل أنت تأكد من رغبتك في حذف المنتج')} <strong className="font-semibold text-charcoal-ink">{productToDelete.name}</strong>؟
               </p>
               <div className="flex items-center gap-3 justify-end">
                 <button
