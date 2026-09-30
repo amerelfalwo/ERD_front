@@ -276,6 +276,31 @@ export default function SuppliersView() {
     setPage(1);
   }, [search]);
 
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoading(true);
+
+    const skip = (page - 1) * LIMIT;
+    api.getSuppliers(skip, LIMIT, search, { signal: controller.signal })
+      .then((data) => {
+        const list = Array.isArray(data) ? data : (data?.data || data?.items || []);
+        setSuppliers(list);
+        setHasMore(list.length === LIMIT);
+      })
+      .catch((err) => {
+        if (err.name !== 'AbortError') {
+          console.error(err);
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      });
+
+    return () => controller.abort();
+  }, [page, search]);
+
   const fetchSuppliers = useCallback(async () => {
     setLoading(true);
     try {
@@ -284,29 +309,36 @@ export default function SuppliersView() {
       const list = Array.isArray(data) ? data : (data?.data || data?.items || []);
       setSuppliers(list);
       setHasMore(list.length === LIMIT);
-    } catch (err) { console.error(err); }
-    finally { setLoading(false); }
+    } catch (err) {
+      if (err.name !== 'AbortError') console.error(err);
+    } finally {
+      setLoading(false);
+    }
   }, [page, search]);
 
-  useEffect(() => { fetchSuppliers(); }, [fetchSuppliers]);
-
+  // Optimistic UI Delete for Suppliers
   async function handleDelete() {
     if (!supplierToDelete) return;
-    setDeletingSupplier(true);
+    const target = supplierToDelete;
+    const previousSuppliers = [...suppliers];
+
+    // Optimistically remove supplier immediately (0ms perceived latency)
+    setSuppliers(prev => prev.filter(s => s.id !== target.id));
+    setSupplierToDelete(null);
+    notifications.show({ title: t('common.success'), message: t('suppliers.supplierDeleted'), color: 'green' });
+
     try {
-      await api.deleteSupplier(supplierToDelete.id);
-      notifications.show({ title: t('common.success'), message: t('suppliers.supplierDeleted'), color: 'green' });
+      await api.deleteSupplier(target.id);
       queryClient.invalidateQueries({ queryKey: ['parties'] });
-      setSupplierToDelete(null);
-      fetchSuppliers();
     } catch (err) {
+      // Rollback on error
+      setSuppliers(previousSuppliers);
       notifications.show({
         title: t('common.error'),
         message: err?.response?.data?.detail || err?.message || t('suppliers.errorDeleting'),
         color: 'red'
       });
     }
-    finally { setDeletingSupplier(false); }
   }
 
   const processedSuppliers = useMemo(() => {
