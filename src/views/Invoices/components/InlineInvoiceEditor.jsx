@@ -223,6 +223,8 @@ export default function InlineInvoiceEditor({ invoice, onCancel, onSaved, onPrin
         };
       }
       const updated = await api.updateInvoice(invoice.id, payload);
+      setSaving(false);
+      flash('success', t('editInvoiceModal.modificationsSaved', 'تم حفظ التعديلات بنجاح'));
       onSaved(updated);
     } catch (err) {
       flash('error', err.message || t('editInvoiceModal.errorOccurred'));

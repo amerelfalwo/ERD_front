@@ -96,7 +96,8 @@ export default function ProductSearchSelect({
           ) : (
             filteredProducts.map((p) => {
               const pBatches = batches?.[p.id] || [];
-              const totalRemaining = pBatches.reduce((acc, b) => acc + Number(b.remaining_quantity || 0), 0);
+              const batchStock = pBatches.reduce((acc, b) => acc + Number(b.remaining_quantity || 0), 0);
+              const totalRemaining = p.total_stock != null ? Number(p.total_stock) : batchStock;
               const isSelected = String(p.id) === String(value) || p.name === productName;
 
               return (
