@@ -10,7 +10,7 @@ const RAW_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000
 const API_BASE_URL = RAW_BASE_URL.replace(/\/+$/, '');
 
 export default function SettingsView() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { user, updateTenantContext } = useAuth();
   
   // Initialize from context to prevent emptying data on reload
