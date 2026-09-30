@@ -3,7 +3,7 @@ import { Outlet, NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Package, Users, Truck, FileText, Settings,
   Bell, Menu, X, LogOut, Building2, Globe, Shield, DollarSign,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, WifiOff
 } from 'lucide-react';
 import myLogo from '../assets/logo.webp';
 import { useAuth } from '../context/AuthContext';
@@ -14,9 +14,21 @@ import api from '../services/api';
 export default function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('erp_sidebar_collapsed') === 'true');
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const { user } = useAuth();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const { t, i18n } = useTranslation();
+
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   // Pre-warm the cache when the layout mounts (user logs in)
   useEffect(() => {
@@ -283,6 +295,12 @@ export default function Layout() {
 
       {/* ── Main View Area (Full Screen Height, No Top Header Bar) ── */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden bg-background">
+        {isOffline && (
+          <div className="bg-amber-600 text-white px-4 py-2 text-xs font-semibold flex items-center justify-center gap-2 shadow-sm animate-fade-in" dir="rtl">
+            <WifiOff size={16} />
+            <span>أنت حالياً غير متصل بالشبكة — البيانات المعروضة مأخوذة من الكاش المحلي.</span>
+          </div>
+        )}
         <main className="flex-1 overflow-y-auto p-6 lg:p-8 relative">
           <Outlet />
         </main>
