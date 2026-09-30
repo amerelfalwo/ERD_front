@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Settings as SettingsIcon, Save, Loader2, CheckCircle, FileText, Server, ImageIcon, Upload, Image as ImageIconDefault } from 'lucide-react';
+import { Settings as SettingsIcon, Save, Loader2, CheckCircle, FileText, Server, ImageIcon, Upload, Image as ImageIconDefault, Globe } from 'lucide-react';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { useTranslation } from 'react-i18next';
@@ -269,6 +269,48 @@ export default function SettingsView() {
 
       <section className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl shadow-whisper animate-fade-in-up stagger-3">
         <div className="p-6 border-b border-outline-variant/30 flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-accent-surface text-accent"><Globe size={20} strokeWidth={1.8} /></div>
+          <div>
+            <h3 className="text-h3 text-charcoal-ink">{t('settings.languageSettings', 'لغة النظام (Language)')}</h3>
+            <p className="text-body-sm text-muted-steel mt-0.5">{t('settings.languageDesc', 'اختر اللغة المفضلة للواجهة والنظام')}</p>
+          </div>
+        </div>
+        <div className="p-6 flex flex-wrap gap-4">
+          <button
+            type="button"
+            onClick={() => {
+              i18n.changeLanguage('ar');
+              localStorage.setItem('erp_lang', 'ar');
+            }}
+            className={`flex items-center gap-3 px-6 py-3.5 rounded-xl border text-sm font-semibold transition-all cursor-pointer btn-tactile ${
+              i18n.language === 'ar'
+                ? 'bg-accent text-white border-accent shadow-sm'
+                : 'bg-surface-container-lowest text-charcoal-ink border-outline-variant/60 hover:bg-surface-container-low'
+            }`}
+          >
+            <span className="text-base">🇪🇬</span>
+            <span>العربية (Arabic)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              i18n.changeLanguage('en');
+              localStorage.setItem('erp_lang', 'en');
+            }}
+            className={`flex items-center gap-3 px-6 py-3.5 rounded-xl border text-sm font-semibold transition-all cursor-pointer btn-tactile ${
+              i18n.language === 'en'
+                ? 'bg-accent text-white border-accent shadow-sm'
+                : 'bg-surface-container-lowest text-charcoal-ink border-outline-variant/60 hover:bg-surface-container-low'
+            }`}
+          >
+            <span className="text-base">🇺🇸</span>
+            <span>English</span>
+          </button>
+        </div>
+      </section>
+
+      <section className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl shadow-whisper animate-fade-in-up stagger-4">
+        <div className="p-6 border-b border-outline-variant/30 flex items-center gap-3">
           <div className="p-2 rounded-lg bg-accent-surface text-accent"><FileText size={20} strokeWidth={1.8} /></div>
           <h3 className="text-h3 text-charcoal-ink">{t('settings.printNotes')}</h3>
         </div>
@@ -280,7 +322,7 @@ export default function SettingsView() {
         </div>
       </section>
 
-      <section className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl shadow-whisper animate-fade-in-up stagger-4">
+      <section className="bg-surface-container-lowest border border-outline-variant/60 rounded-2xl shadow-whisper animate-fade-in-up stagger-5">
         <div className="p-6 border-b border-outline-variant/30 flex items-center gap-3">
           <div className="p-2 rounded-lg bg-accent-surface text-accent"><Server size={20} strokeWidth={1.8} /></div>
           <h3 className="text-h3 text-charcoal-ink">{t('settings.system')}</h3>

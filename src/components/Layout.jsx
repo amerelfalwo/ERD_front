@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Package, Users, Truck, FileText, Settings,
-  Bell, Menu, X, LogOut, Building2, Globe, Shield, DollarSign,
+  Menu, X, LogOut, Building2, Shield, DollarSign,
   ChevronLeft, ChevronRight, WifiOff
 } from 'lucide-react';
 import myLogo from '../assets/logo.webp';
@@ -16,7 +16,6 @@ export default function Layout() {
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('erp_sidebar_collapsed') === 'true');
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const { user } = useAuth();
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const { t, i18n } = useTranslation();
 
   useEffect(() => {
@@ -41,12 +40,6 @@ export default function Layout() {
       localStorage.setItem('erp_sidebar_collapsed', String(next));
       return next;
     });
-  };
-
-  const toggleLanguage = () => {
-    const newLang = i18n.language === 'ar' ? 'en' : 'ar';
-    i18n.changeLanguage(newLang);
-    localStorage.setItem('erp_lang', newLang);
   };
 
   const navItems = useMemo(() => [
@@ -115,7 +108,7 @@ export default function Layout() {
         </button>
 
         {/* Company Header */}
-        <div className={`px-5 pt-6 pb-4 border-b border-outline-variant/30 flex items-center ${collapsed ? 'justify-center' : 'justify-between'}`}>
+        <div className={`px-5 py-5 border-b border-outline-variant/30 flex items-center ${collapsed ? 'justify-center' : 'justify-between'}`}>
           <div className="flex items-center gap-3 min-w-0 flex-1">
             <div className={`w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm overflow-hidden border border-outline-variant/30 ${user?.tenant?.logo_url ? 'bg-transparent' : 'bg-accent'}`}>
               {user?.tenant?.logo_url ? (
@@ -138,68 +131,17 @@ export default function Layout() {
 
           <button
             onClick={() => setMobileOpen(false)}
-            className="md:hidden text-muted-steel p-1.5 rounded-xl hover:bg-surface-container-high transition-colors"
+            className="md:hidden text-muted-steel p-1.5 rounded-xl hover:bg-surface-container-high transition-colors cursor-pointer"
           >
             <X size={18} />
           </button>
         </div>
 
-        {/* Quick Action Tools: Language & Notifications */}
-        <div className={`px-3 py-3 border-b border-outline-variant/30 bg-surface-container-low/40 flex items-center ${collapsed ? 'flex-col gap-2 justify-center' : 'justify-between gap-2'}`}>
-          {/* Language Switcher */}
-          <button
-            onClick={toggleLanguage}
-            className={`flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold text-charcoal-ink hover:text-accent bg-surface-container-lowest border border-outline-variant/40 rounded-xl shadow-whisper transition-all btn-tactile cursor-pointer ${collapsed ? 'w-9 h-9 p-0' : 'flex-1'}`}
-            title={i18n.language === 'ar' ? 'English' : 'العربية'}
-          >
-            <Globe size={15} className="text-accent" />
-            {!collapsed && <span>{i18n.language === 'ar' ? t('nav.english') : t('nav.arabic')}</span>}
-          </button>
-
-          {/* Notifications Button & Dropdown */}
-          <div className="relative">
-            <button 
-              onClick={() => setNotificationsOpen(!notificationsOpen)}
-              className="flex items-center justify-center w-9 h-9 bg-surface-container-lowest border border-outline-variant/40 text-muted-steel hover:text-accent rounded-xl shadow-whisper transition-all btn-tactile cursor-pointer relative"
-              title={t('nav.notifications')}
-            >
-              <Bell size={16} />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-error rounded-full ring-2 ring-surface-container-lowest"></span>
-            </button>
-
-            {notificationsOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setNotificationsOpen(false)} />
-                <div className="absolute left-0 rtl:right-0 rtl:left-auto top-full mt-2 w-72 sm:w-80 z-50 animate-scale-in origin-top-left rtl:origin-top-right">
-                  <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/60 shadow-whisper-lg overflow-hidden flex flex-col">
-                    <div className="px-4 py-3 border-b border-outline-variant/40 bg-surface-container-low flex items-center justify-between">
-                      <h3 className="text-label-md font-semibold text-on-surface">{t('nav.notifications')}</h3>
-                      <span className="text-[11px] text-accent hover:underline cursor-pointer">{t('common.markAllAsRead')}</span>
-                    </div>
-                    <div className="max-h-[260px] overflow-y-auto">
-                      <div className="px-4 py-3 border-b border-outline-variant/20 hover:bg-surface-container-high transition-colors cursor-pointer flex gap-3">
-                        <div className="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                          <Bell size={14} className="text-accent" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-label-sm text-on-surface leading-snug">{t('common.welcomeMessage')}</p>
-                          <p className="text-[11px] text-muted-steel mt-0.5 truncate">{t('common.systemReady')}</p>
-                          <p className="text-[10px] text-muted-steel/70 mt-1">{t('common.now')}</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-
         {/* Navigation Items */}
-        <div className="flex flex-col gap-1 px-3 flex-grow overflow-y-auto py-2">
+        <div className="flex flex-col gap-1 px-3 flex-grow overflow-y-auto py-4">
           {!collapsed && (
-            <span className="text-[10px] font-semibold tracking-wider text-muted-steel/70 uppercase px-3 mb-1 animate-fade-in">
-              القائمة الرئيسية
+            <span className="text-[10px] font-semibold tracking-wider text-muted-steel/70 uppercase px-3.5 mb-2 animate-fade-in block">
+              {t('nav.mainMenu', 'القائمة الرئيسية')}
             </span>
           )}
           {navItems.map((item) => {
