@@ -316,7 +316,11 @@
     "hasBalance": "عليه مبلغ",
     "hasCredit": "له رصيد",
     "owesUs": "عليـه لينا",
-    "creditUs": "لـه عندنا"
+    "creditUs": "لـه عندنا",
+    "filterAll": "الكل",
+    "filterHasDebt": "إلّي عليه رصيد",
+    "filterHasCredit": "إلّي ليه رصيد",
+    "filterSettled": "الصافي"
   },
   "suppliers": {
     "title": "الموردين",

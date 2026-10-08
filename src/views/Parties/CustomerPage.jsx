@@ -265,6 +265,7 @@ export default function CustomersView() {
   
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState('a-z'); 
+  const [balanceFilter, setBalanceFilter] = useState('all');
 
   const [showModal, setShowModal] = useState(false);
   const [customerToEdit, setCustomerToEdit] = useState(null);
@@ -351,6 +352,15 @@ export default function CustomersView() {
 
   const processedCustomers = useMemo(() => {
     let result = [...customers];
+
+    if (balanceFilter === 'has_debt') {
+      result = result.filter(c => Number(c.calculated_balance || 0) > 0);
+    } else if (balanceFilter === 'has_credit') {
+      result = result.filter(c => Number(c.calculated_balance || 0) < 0);
+    } else if (balanceFilter === 'settled') {
+      result = result.filter(c => Number(c.calculated_balance || 0) === 0);
+    }
+
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       // Best-match ranking
@@ -384,7 +394,7 @@ export default function CustomersView() {
       }
     }
     return result;
-  }, [customers, search, sort]);
+  }, [customers, search, sort, balanceFilter]);
 
   const { totalCustomers, totalReceivables, customerCredits, overdueAccounts } = useMemo(() => {
     let receivables = 0;
@@ -428,6 +438,20 @@ export default function CustomersView() {
         </div>
         
         <div className="flex items-center gap-3 w-full sm:w-auto">
+          <Select
+            aria-label={t('customers.filter')}
+            data={[
+              { value: 'all', label: t('customers.filterAll', 'الكل') },
+              { value: 'has_debt', label: t('customers.filterHasDebt', 'إلّي عليه رصيد') },
+              { value: 'has_credit', label: t('customers.filterHasCredit', 'إلّي ليه رصيد') },
+              { value: 'settled', label: t('customers.filterSettled', 'الصافي') },
+            ]}
+            value={balanceFilter}
+            onChange={setBalanceFilter}
+            className="flex-1 sm:w-40"
+            radius="md"
+            styles={{ input: { height: '40px', borderRadius: '0.75rem', borderColor: 'rgba(0,0,0,0.1)' } }}
+          />
           <Select
             aria-label={t('customers.sort')}
             data={[

@@ -315,7 +315,11 @@
     "hasBalance": "Has balance",
     "hasCredit": "Has credit",
     "owesUs": "Owes us",
-    "creditUs": "Credit"
+    "creditUs": "Credit",
+    "filterAll": "All",
+    "filterHasDebt": "Has Debt",
+    "filterHasCredit": "Has Credit",
+    "filterSettled": "Settled"
   },
   "suppliers": {
     "title": "Suppliers",
