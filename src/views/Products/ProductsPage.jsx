@@ -255,8 +255,8 @@ export default function ProductsView() {
   const skip = (page - 1) * LIMIT;
 
   const { data: prodsRaw, isLoading: loadingProducts, refetch: fetchProducts } = useQuery({
-    queryKey: ['products', { page, limit: LIMIT, search, stockFilter }],
-    queryFn: () => api.getProducts(skip, LIMIT, search, stockFilter),
+    queryKey: ['products', { page, limit: LIMIT, search, stockFilter, sort: sortBy }],
+    queryFn: () => api.getProducts(skip, LIMIT, search, stockFilter, { sort: sortBy }),
   });
 
   const { data: inventory } = useQuery({
@@ -279,9 +279,9 @@ export default function ProductsView() {
       setProductToDelete(null);
       notifications.show({ title: t('common.success'), message: t('products.productDeleted', 'تم حذف المنتج بنجاح'), color: 'green' });
       await queryClient.cancelQueries({ queryKey: ['products'] });
-      const previousProds = queryClient.getQueryData(['products', { page, limit: LIMIT, search, stockFilter }]);
+      const previousProds = queryClient.getQueryData(['products', { page, limit: LIMIT, search, stockFilter, sort: sortBy }]);
       if (previousProds) {
-        queryClient.setQueryData(['products', { page, limit: LIMIT, search, stockFilter }], (old) => {
+        queryClient.setQueryData(['products', { page, limit: LIMIT, search, stockFilter, sort: sortBy }], (old) => {
           if (!old) return old;
           if (Array.isArray(old)) return old.filter((p) => p.id !== deletedId);
           if (old.data) return { ...old, data: old.data.filter((p) => p.id !== deletedId) };
@@ -292,7 +292,7 @@ export default function ProductsView() {
     },
     onError: (err, newTodo, context) => {
       if (context?.previousProds) {
-        queryClient.setQueryData(['products', { page, limit: LIMIT, search, stockFilter }], context.previousProds);
+        queryClient.setQueryData(['products', { page, limit: LIMIT, search, stockFilter, sort: sortBy }], context.previousProds);
       }
       notifications.show({ title: t('common.error'), message: err?.message || t('products.failedDelete'), color: 'red' });
     },
@@ -323,12 +323,8 @@ export default function ProductsView() {
   }, [inventory]);
 
   const filteredProducts = useMemo(() => {
-    return [...products].sort((a, b) => {
-      if (sortBy === 'name_asc') return a.name.localeCompare(b.name);
-      if (sortBy === 'name_desc') return b.name.localeCompare(a.name);
-      return 0;
-    });
-  }, [products, sortBy]);
+    return products;
+  }, [products]);
 
   const selectClass = "px-4 py-2 rounded-xl border border-outline-variant/60 bg-surface-container-lowest text-sm text-muted-steel focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/10 transition-all duration-200 appearance-none min-w-[120px] cursor-pointer";
 

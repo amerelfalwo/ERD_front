@@ -290,7 +290,7 @@ export default function CustomersView() {
     setLoading(true);
 
     const skip = (page - 1) * LIMIT;
-    api.getCustomers(skip, LIMIT, search, { signal: controller.signal })
+    api.getCustomers(skip, LIMIT, search, { sort, balanceFilter, signal: controller.signal })
       .then((data) => {
         const list = Array.isArray(data) ? data : (data?.data || data?.items || []);
         setCustomers(list);
@@ -308,13 +308,13 @@ export default function CustomersView() {
       });
 
     return () => controller.abort();
-  }, [page, search]);
+  }, [page, search, sort, balanceFilter]);
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true);
     try {
       const skip = (page - 1) * LIMIT;
-      const data = await api.getCustomers(skip, LIMIT, search);
+      const data = await api.getCustomers(skip, LIMIT, search, { sort, balanceFilter });
       const list = Array.isArray(data) ? data : (data?.data || data?.items || []);
       setCustomers(list);
       setHasMore(list.length === LIMIT);
@@ -323,7 +323,7 @@ export default function CustomersView() {
     } finally {
       setLoading(false);
     }
-  }, [page, search]);
+  }, [page, search, sort, balanceFilter]);
 
   // Optimistic UI Delete
   async function handleDelete() {
@@ -351,50 +351,8 @@ export default function CustomersView() {
   }
 
   const processedCustomers = useMemo(() => {
-    let result = [...customers];
-
-    if (balanceFilter === 'has_debt') {
-      result = result.filter(c => Number(c.calculated_balance || 0) > 0);
-    } else if (balanceFilter === 'has_credit') {
-      result = result.filter(c => Number(c.calculated_balance || 0) < 0);
-    } else if (balanceFilter === 'settled') {
-      result = result.filter(c => Number(c.calculated_balance || 0) === 0);
-    }
-
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      // Best-match ranking
-      result.sort((a, b) => {
-        const aName = (a.name || '').toLowerCase();
-        const bName = (b.name || '').toLowerCase();
-        const aPhone = (a.phone || '').toLowerCase();
-        const bPhone = (b.phone || '').toLowerCase();
-
-        const getRank = (name, phone) => {
-          if (name === q || phone === q) return 1; // Exact match
-          if (name.startsWith(q) || phone.startsWith(q)) return 2; // Starts with
-          if (name.includes(q) || phone.includes(q)) return 3; // Contains
-          return 4;
-        };
-
-        const rankA = getRank(aName, aPhone);
-        const rankB = getRank(bName, bPhone);
-        if (rankA !== rankB) return rankA - rankB;
-        return aName.localeCompare(bName);
-      });
-    } else {
-      if (sort === 'a-z') {
-        result.sort((a, b) => a.name.localeCompare(b.name));
-      } else if (sort === 'z-a') {
-        result.sort((a, b) => b.name.localeCompare(a.name));
-      } else if (sort === 'balance-high') {
-        result.sort((a, b) => (b.calculated_balance || 0) - (a.calculated_balance || 0));
-      } else if (sort === 'balance-low') {
-        result.sort((a, b) => (a.calculated_balance || 0) - (b.calculated_balance || 0));
-      }
-    }
-    return result;
-  }, [customers, search, sort, balanceFilter]);
+    return customers;
+  }, [customers]);
 
   const { totalCustomers, totalReceivables, customerCredits, overdueAccounts } = useMemo(() => {
     let receivables = 0;

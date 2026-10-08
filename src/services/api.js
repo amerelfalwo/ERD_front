@@ -296,7 +296,13 @@ export const api = {
   createStockReturn: (partyId, data) => request(`/parties/${partyId}/stock-return`, { method: 'POST', body: JSON.stringify(data) }),
 
   // ── Customers ───────────────────────────────────────────────────────────────
-  getCustomers: (skip = 0, limit = 100, search = '', opts = {}) => request(`/customers?skip=${skip}&limit=${limit}${search ? `&search=${encodeURIComponent(search)}` : ''}`, opts),
+  getCustomers: (skip = 0, limit = 100, search = '', opts = {}) => {
+    const params = new URLSearchParams({ skip, limit });
+    if (search) params.append('search', search);
+    if (opts.sort) params.append('sort', opts.sort);
+    if (opts.balanceFilter) params.append('balance_filter', opts.balanceFilter);
+    return request(`/customers?${params.toString()}`, opts);
+  },
   getCustomersSelect: (opts = {}) => request('/customers/select', opts),
   createCustomer: (data) => request('/customers', { method: 'POST', body: JSON.stringify(data) }),
   updateCustomer: (customerId, data) => request(`/customers/${customerId}`, { method: 'PUT', body: JSON.stringify(data) }),
@@ -310,7 +316,13 @@ export const api = {
   createCustomerStockReturn: (customerId, data) => request(`/customers/${customerId}/stock-return`, { method: 'POST', body: JSON.stringify(data) }),
 
   // ── Suppliers ───────────────────────────────────────────────────────────────
-  getSuppliers: (skip = 0, limit = 100, search = '', opts = {}) => request(`/suppliers?skip=${skip}&limit=${limit}${search ? `&search=${encodeURIComponent(search)}` : ''}`, opts),
+  getSuppliers: (skip = 0, limit = 100, search = '', opts = {}) => {
+    const params = new URLSearchParams({ skip, limit });
+    if (search) params.append('search', search);
+    if (opts.sort) params.append('sort', opts.sort);
+    if (opts.balanceFilter) params.append('balance_filter', opts.balanceFilter);
+    return request(`/suppliers?${params.toString()}`, opts);
+  },
   getSuppliersSelect: (opts = {}) => request('/suppliers/select', opts),
   createSupplier: (data) => request('/suppliers', { method: 'POST', body: JSON.stringify(data) }),
   updateSupplier: (supplierId, data) => request(`/suppliers/${supplierId}`, { method: 'PUT', body: JSON.stringify(data) }),
@@ -324,8 +336,13 @@ export const api = {
   createSupplierStockReturn: (supplierId, data) => request(`/suppliers/${supplierId}/stock-return`, { method: 'POST', body: JSON.stringify(data) }),
 
   // ── Products ────────────────────────────────────────────────────────────────
-  getProducts: (skip = 0, limit = 100, search = '', status = '', opts = {}) =>
-    request(`/products?skip=${skip}&limit=${limit}${search ? `&search=${encodeURIComponent(search)}` : ''}${status && status !== 'all' ? `&status=${encodeURIComponent(status)}` : ''}`, opts),
+  getProducts: (skip = 0, limit = 100, search = '', status = '', opts = {}) => {
+    const params = new URLSearchParams({ skip, limit });
+    if (search) params.append('search', search);
+    if (status && status !== 'all') params.append('status', status);
+    if (opts.sort) params.append('sort', opts.sort);
+    return request(`/products?${params.toString()}`, opts);
+  },
   getProductsSelect: (opts = {}) => request('/products/select', opts),
   createProduct: (data) => request('/products', { method: 'POST', body: JSON.stringify(data) }),
   updateProduct: (productId, data) => request(`/products/${productId}`, { method: 'PUT', body: JSON.stringify(data) }),

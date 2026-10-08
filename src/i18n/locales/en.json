@@ -275,6 +275,10 @@
   },
   "customers": {
     "title": "Customers",
+    "filterAll": "All",
+    "filterHasDebt": "Has Debt",
+    "filterHasCredit": "Has Credit",
+    "filterSettled": "Settled",
     "addCustomer": "Add Customer",
     "editCustomer": "Edit Customer",
     "addNewCustomer": "Add New Customer",
@@ -323,6 +327,10 @@
   },
   "suppliers": {
     "title": "Suppliers",
+    "filterAll": "All",
+    "filterHasDebt": "Owes Us",
+    "filterHasCredit": "We Owe",
+    "filterSettled": "Settled",
     "addSupplier": "Add Supplier",
     "editSupplier": "Edit Supplier",
     "addNewSupplier": "Add New Supplier",

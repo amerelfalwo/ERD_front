@@ -275,6 +275,10 @@
   },
   "customers": {
     "title": "العملاء",
+    "filterAll": "الكل",
+    "filterHasDebt": "إلّي عليه رصيد",
+    "filterHasCredit": "إلّي ليه رصيد",
+    "filterSettled": "الصافي",
     "addCustomer": "إضافة عميل",
     "editCustomer": "تعديل العميل",
     "addNewCustomer": "إضافة عميل جديد",
@@ -324,6 +328,10 @@
   },
   "suppliers": {
     "title": "الموردين",
+    "filterAll": "الكل",
+    "filterHasDebt": "علينا مبلغ",
+    "filterHasCredit": "لصالحنا",
+    "filterSettled": "الصافي",
     "addSupplier": "إضافة مورد",
     "editSupplier": "تعديل المورد",
     "addNewSupplier": "إضافة مورد جديد",
