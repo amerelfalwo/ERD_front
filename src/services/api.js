@@ -347,6 +347,42 @@ export const api = {
   createProduct: (data) => request('/products', { method: 'POST', body: JSON.stringify(data) }),
   updateProduct: (productId, data) => request(`/products/${productId}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteProduct: (productId) => request(`/products/${productId}`, { method: 'DELETE' }),
+  downloadInventoryPdf: async (params = {}) => {
+    const searchParams = new URLSearchParams();
+    if (params.status && params.status !== 'all') searchParams.append('status', params.status);
+    if (params.search) searchParams.append('search', params.search);
+    if (params.sort) searchParams.append('sort', params.sort);
+
+    const url = buildUrl(`/products/export/pdf?${searchParams.toString()}`);
+    const token = getToken();
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const response = await fetch(url, { headers });
+    if (!response.ok) throw new Error(`Failed to download PDF: ${response.status}`);
+
+    let fileName = 'تقرير_المخزون.pdf';
+    const contentDisposition = response.headers.get('Content-Disposition');
+    if (contentDisposition) {
+      const matchUtf8 = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+      if (matchUtf8?.[1]) {
+        fileName = decodeURIComponent(matchUtf8[1]);
+      } else {
+        const matchStandard = contentDisposition.match(/filename="?([^";]+)"?/i);
+        if (matchStandard?.[1]) fileName = matchStandard[1];
+      }
+    }
+
+    const blob = await response.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(blobUrl);
+  },
 
   // ── Batches ─────────────────────────────────────────────────────────────────
   getBatchesByProduct: (productId, opts = {}) => request(`/batches/product/${productId}`, opts),

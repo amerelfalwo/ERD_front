@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Package, ChevronDown, ChevronUp, X, Loader2, Trash2, Pencil } from 'lucide-react';
+import { Plus, Search, Package, ChevronDown, ChevronUp, X, Loader2, Trash2, Pencil, Printer, FileDown, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
 import { Pagination } from '@mantine/core';
 import api from '../../services/api';
 import { notifications } from '@mantine/notifications';
@@ -148,6 +148,203 @@ function EditProductModal({ isOpen, onClose, product, onUpdated }) {
   );
 }
 
+function ExportInventoryModal({ isOpen, onClose, currentSearch }) {
+  const { t } = useTranslation();
+  const [selectedScope, setSelectedScope] = useState('all');
+  const [applySearch, setApplySearch] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setApplySearch(Boolean(currentSearch?.trim()));
+    }
+  }, [isOpen, currentSearch]);
+
+  if (!isOpen) return null;
+
+  async function handleExport() {
+    setExporting(true);
+    try {
+      await api.downloadInventoryPdf({
+        status: selectedScope,
+        search: applySearch && currentSearch ? currentSearch.trim() : undefined,
+      });
+      notifications.show({
+        title: t('common.success'),
+        message: t('products.pdfSuccess', 'تم إنشاء وتحميل ملف الـ PDF بنجاح'),
+        color: 'green',
+      });
+      onClose();
+    } catch (err) {
+      notifications.show({
+        title: t('common.error'),
+        message: err?.message || t('invoices.pdfFailed', 'فشل إنشاء PDF'),
+        color: 'red',
+      });
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  const scopes = [
+    {
+      id: 'all',
+      title: t('products.allProducts', 'جميع الأصناف (جرد شامل)'),
+      desc: 'يشمل كل الأصناف المسجلة بالنظام مع رصيدها وأسعار الشراء والبيع وإجمالي القيمة.',
+      icon: Package,
+      badge: 'شامل',
+      badgeClass: 'bg-accent/10 text-accent border-accent/20',
+    },
+    {
+      id: 'in_stock',
+      title: t('products.inStockOnly', 'المتوفر فقط في المخزون'),
+      desc: 'حصر الأصناف المتوفرة برصيد متبقي أكبر من الصفر فقط مع تقييمها المالي.',
+      icon: CheckCircle2,
+      badge: 'متوفر',
+      badgeClass: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
+    },
+    {
+      id: 'low_stock',
+      title: t('products.lowStockOnly', 'النواقص وحد الطلب (الأصناف الحرجة)'),
+      desc: 'الأصناف التي قاربت أو نفدت من المخزون (الرصيد أقل من أو يساوي الحد الأدنى) لإعادة طلبها.',
+      icon: AlertTriangle,
+      badge: 'نواقص',
+      badgeClass: 'bg-amber-500/10 text-amber-600 border-amber-500/20',
+    },
+    {
+      id: 'out_of_stock',
+      title: t('products.outOfStockOnly', 'الأصناف المنتهية تماماً'),
+      desc: 'حصر الأصناف التي رصيدها صفر تماماً في المستودع.',
+      icon: XCircle,
+      badge: 'نفد',
+      badgeClass: 'bg-rose-500/10 text-rose-600 border-rose-500/20',
+    },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-charcoal-ink/20 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-surface-container-lowest rounded-2xl border border-outline-variant/60 shadow-whisper-lg w-full max-w-lg animate-scale-in overflow-hidden">
+        
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-outline-variant/40 bg-surface-container-low/30">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-accent/10 text-accent">
+              <Printer size={20} strokeWidth={2} />
+            </div>
+            <div>
+              <h3 className="text-h3 text-charcoal-ink tracking-tight font-bold">
+                {t('products.exportModalTitle', 'طباعة وتصدير تقرير المخزون')}
+              </h3>
+              <p className="text-label-sm text-muted-steel mt-0.5">
+                {t('products.exportModalDesc', 'حدد نطاق الأصناف التي تود تضمينها في ملف الـ PDF.')}
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-xl text-muted-steel hover:bg-surface-container-low transition-colors cursor-pointer btn-tactile">
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 space-y-4">
+          <label className="block text-label-sm text-muted-steel uppercase tracking-wider font-semibold">
+            {t('products.exportScope', 'نطاق التقرير المطلوب')}:
+          </label>
+
+          <div className="grid grid-cols-1 gap-2.5">
+            {scopes.map((s) => {
+              const Icon = s.icon;
+              const isSelected = selectedScope === s.id;
+              return (
+                <div
+                  key={s.id}
+                  onClick={() => setSelectedScope(s.id)}
+                  className={`flex items-start gap-3.5 p-3.5 rounded-xl border transition-all cursor-pointer ${
+                    isSelected
+                      ? 'border-accent bg-accent/5 ring-1 ring-accent/20'
+                      : 'border-outline-variant/60 hover:border-outline-variant hover:bg-surface-container-low/50'
+                  }`}
+                >
+                  <div className={`mt-0.5 p-2 rounded-lg ${isSelected ? 'bg-accent text-on-primary' : 'bg-surface-container-high text-muted-steel'}`}>
+                    <Icon size={16} strokeWidth={2} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-label-md font-bold text-charcoal-ink">{s.title}</span>
+                      <span className={`text-[11px] px-2 py-0.5 rounded-full border font-semibold ${s.badgeClass}`}>
+                        {s.badge}
+                      </span>
+                    </div>
+                    <p className="text-body-sm text-muted-steel mt-0.5 leading-snug">{s.desc}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {currentSearch?.trim() && (
+            <div className="pt-2">
+              <label className="flex items-center gap-2.5 p-3 rounded-xl border border-outline-variant/40 bg-surface-container-low/20 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={applySearch}
+                  onChange={(e) => setApplySearch(e.target.checked)}
+                  className="rounded border-outline-variant text-accent focus:ring-accent cursor-pointer"
+                />
+                <span className="text-label-sm text-charcoal-ink">
+                  {t('products.includeCurrentSearch', 'تطبيق البحث الحالي')}: <strong className="text-accent">"{currentSearch}"</strong>
+                </span>
+              </label>
+            </div>
+          )}
+
+          <div className="p-3 rounded-xl bg-surface-container-low/40 border border-outline-variant/30 text-body-sm text-muted-steel space-y-1">
+            <div className="flex items-center gap-1.5 font-semibold text-charcoal-ink text-label-sm">
+              <CheckCircle2 size={15} className="text-emerald-500" />
+              محتويات ملف الـ PDF:
+            </div>
+            <div className="text-[12px] text-muted-steel leading-relaxed">
+              يتضمن التقرير: اسم الصنف، الكمية المتاحة، سعر الشراء، سعر البيع (إن وجد)، إجمالي القيمة التقديرية، ملخص إجمالي رأس المال، وترويسة رسمية ببيانات مؤسستك.
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-2.5 p-5 border-t border-outline-variant/40 bg-surface-container-low/30">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={exporting}
+            className="px-4 py-2 rounded-xl text-label-md text-muted-steel hover:bg-surface-container-low transition-colors cursor-pointer btn-tactile"
+          >
+            {t('common.cancel')}
+          </button>
+          <button
+            type="button"
+            onClick={handleExport}
+            disabled={exporting}
+            className="flex items-center gap-2 px-5 py-2 rounded-xl text-label-md bg-accent text-on-primary hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm cursor-pointer btn-tactile font-bold"
+          >
+            {exporting ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                {t('products.downloadingPdf', 'جاري التجهيز...')}
+              </>
+            ) : (
+              <>
+                <FileDown size={17} strokeWidth={2.2} />
+                {t('products.exportPdf', 'تحميل ملف PDF')}
+              </>
+            )}
+          </button>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
 function BatchRow({ batch }) {
   return (
     <div className="grid grid-cols-5 gap-2 py-2.5 px-6 text-body-sm text-muted-steel bg-surface-container-low/30 hover:bg-surface-container-low/60 transition-colors">
@@ -249,6 +446,7 @@ export default function ProductsView() {
   const [stockFilter, setStockFilter] = useState('all');
   const [sortBy, setSortBy] = useState('name_asc');
   const [showModal, setShowModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [productToDelete, setProductToDelete] = useState(null);
   const [productToEdit, setProductToEdit] = useState(null);
 
@@ -335,10 +533,16 @@ export default function ProductsView() {
           <h2 className="text-h1 text-charcoal-ink">{t('products.title')}</h2>
           <p className="text-body-base text-muted-steel mt-1">{t('products.subtitle')}</p>
         </div>
-        <button onClick={() => setShowModal(true)}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-label-md bg-accent text-on-primary hover:bg-accent-hover transition-all duration-200 shadow-sm cursor-pointer btn-tactile">
-          <Plus size={18} strokeWidth={2.5} /> {t('products.addProduct')}
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowExportModal(true)}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-label-md border border-outline-variant/60 bg-surface-container-lowest text-charcoal-ink hover:bg-surface-container-low hover:border-accent transition-all duration-200 shadow-sm cursor-pointer btn-tactile">
+            <Printer size={18} strokeWidth={2} className="text-accent" /> {t('products.printInventory', 'طباعة تقرير المخزون')}
+          </button>
+          <button onClick={() => setShowModal(true)}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-label-md bg-accent text-on-primary hover:bg-accent-hover transition-all duration-200 shadow-sm cursor-pointer btn-tactile">
+            <Plus size={18} strokeWidth={2.5} /> {t('products.addProduct')}
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3 animate-fade-in-up stagger-1">
@@ -352,6 +556,7 @@ export default function ProductsView() {
           <select aria-label={t('products.inStock')} value={stockFilter} onChange={(e) => { setStockFilter(e.target.value); setPage(1); }} className={selectClass}>
             <option value="all">{t('common.all')}</option>
             <option value="in_stock">{t('products.inStock')}</option>
+            <option value="low_stock">{t('products.lowStock', 'النواقص وحد الطلب')}</option>
             <option value="out_of_stock">{t('products.outOfStock')}</option>
           </select>
           <select aria-label={t('customers.sortAZ')} value={sortBy} onChange={(e) => setSortBy(e.target.value)} className={selectClass}>
@@ -447,6 +652,12 @@ export default function ProductsView() {
           </div>
         </div>
       )}
+
+      <ExportInventoryModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        currentSearch={search}
+      />
     </div>
   );
 }

@@ -125,7 +125,21 @@
     "confirmDelete": "تأكيد الحذف",
     "failedCreate": "فشل في إنشاء المنتج",
     "failedUpdate": "فشل في تحديث المنتج",
-    "failedDelete": "فشل في حذف المنتج"
+    "failedDelete": "فشل في حذف المنتج",
+    "lowStock": "النواقص وحد الطلب",
+    "printInventory": "طباعة تقرير المخزون",
+    "exportPdf": "تصدير PDF",
+    "exportModalTitle": "طباعة وتصدير تقرير المخزون",
+    "exportModalDesc": "حدد نطاق الأصناف التي تود تضمينها في ملف الـ PDF.",
+    "exportScope": "نطاق التقرير",
+    "allProducts": "جميع الأصناف (جرد شامل)",
+    "inStockOnly": "المتوفر فقط في المخزون",
+    "lowStockOnly": "النواقص وحد الطلب (الأصناف الحرجة)",
+    "outOfStockOnly": "الأصناف المنتهية تماماً",
+    "includeCurrentSearch": "تطبيق البحث الحالي",
+    "totalValue": "إجمالي القيمة",
+    "downloadingPdf": "جاري تجهيز وتحميل ملف الـ PDF...",
+    "pdfSuccess": "تم إنشاء وتحميل ملف الـ PDF بنجاح"
   },
   "invoices": {
     "title": "الفواتير",

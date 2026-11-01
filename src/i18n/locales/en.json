@@ -125,7 +125,21 @@
     "confirmDelete": "Confirm Delete",
     "failedCreate": "Failed to create product",
     "failedUpdate": "Failed to update product",
-    "failedDelete": "Failed to delete product"
+    "failedDelete": "Failed to delete product",
+    "lowStock": "Low Stock",
+    "printInventory": "Print Inventory Report",
+    "exportPdf": "Export PDF",
+    "exportModalTitle": "Print & Export Inventory Report",
+    "exportModalDesc": "Select the scope of products you want to include in the printed PDF.",
+    "exportScope": "Report Scope",
+    "allProducts": "All Products (Complete Inventory)",
+    "inStockOnly": "In Stock Only",
+    "lowStockOnly": "Low Stock (Reorder Point)",
+    "outOfStockOnly": "Out of Stock Only",
+    "includeCurrentSearch": "Apply current search filter",
+    "totalValue": "Total Value",
+    "downloadingPdf": "Preparing and downloading PDF...",
+    "pdfSuccess": "PDF generated and downloaded successfully"
   },
   "invoices": {
     "title": "Invoices",
